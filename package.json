@@ -9,9 +9,10 @@
     "build": "npm run fable && tsc && vite build",
     "dev": "npm run fable && vite",
     "preview": "npm run fable && vite preview",
-    "test": "pushd .\\tests\\Wilnaatahl.Core.Tests && dotnet test",
-    "coverage": "pushd .\\tests\\Wilnaatahl.Core.Tests && dotnet test --collect:\"XPlat Code Coverage\"",
-    "report": "pushd .\\tests\\Wilnaatahl.Core.Tests && reportgenerator -reports:%npm_config_coveragefile% -targetdir:coveragereport -reporttypes:Html && start ./coveragereport/index.html",
+    "test": "dotnet test && npm run test:koota",
+    "test:koota": "dotnet fable tests/Wilnaatahl.ECS.Tests --lang typescript --outDir tests/Wilnaatahl.ECS.Tests/out --noCache && npx vite-node tests/Wilnaatahl.ECS.Tests/out/Runner.ts",
+    "coverage": "dotnet test --collect:\"XPlat Code Coverage\"",
+    "report": "reportgenerator -reports:%npm_config_coveragefile% -targetdir:coveragereport -reporttypes:Html && start ./coveragereport/index.html",
     "format": "prettier --write . && fantomas ."
   },
   "devDependencies": {
@@ -21,11 +22,13 @@
     "@vitejs/plugin-react": "^4.4.1",
     "prettier": "^3.6.2",
     "typescript": "~5.7.2",
-    "vite": "^6.3.1"
+    "vite": "^6.3.1",
+    "vite-node": "^6.0.0"
   },
   "dependencies": {
     "@react-three/drei": "^10.0.7",
     "@react-three/fiber": "^9.1.2",
+    "koota": "^0.5.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "three": "^0.176.0"

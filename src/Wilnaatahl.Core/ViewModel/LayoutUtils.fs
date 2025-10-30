@@ -2,6 +2,11 @@ namespace Wilnaatahl.ViewModel
 
 open Wilnaatahl.Model
 
+// MAINTENANCE NOTE: There is a separate vector implementation here with different casing for
+// its fields in order to avoid ambiguity with the other vector types. I tried reusing a
+// units-of-measure based vector for all use cases, but Fable seemed to generate invalid
+// TypeScript code in that case, so I abandoned that approach.
+
 /// Represents a vector in 3D space. The unit is specific to a frame of reference to
 /// help prevent mixing up co-ordinate spaces in layout calculations.
 type LayoutVector<[<Measure>] 'u> = {
@@ -15,6 +20,7 @@ type LayoutVector<[<Measure>] 'u> = {
         // MAINTENANCE NOTE: This won't show up in code coverage reports because it's inline, but don't worry about it.
         { X = lhs.X + rhs.X; Y = lhs.Y + rhs.Y; Z = lhs.Z + rhs.Z }
 
+    /// Represents a zero vector in the given unit of measure.
     static member Zero = {
         X = LanguagePrimitives.FloatWithMeasure<'u> 0.0
         Y = LanguagePrimitives.FloatWithMeasure<'u> 0.0

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -6,12 +6,37 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Wilnaatahl.ECS.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="Model.fs" />
-    <Compile Include="ViewModel/UndoableState.fs" />
-    <Compile Include="ViewModel/LayoutBox.fs" />
+    <Compile Include="ECS/Types.fs" />
+    <Compile Include="ECS/ECS.fs" />
+    <!-- The Mock ECS implementation is for .NET testing only. It's here instead of in the
+         test project so it can show up in code coverage reports for the unit test runs themselves. -->
+    <Compile Condition="'$(FABLE_COMPILER)'!='true'" Include="ECS/Mocks/TestECS.fs" />
+    <Compile Include="ViewModel/LayoutUtils.fs" />
+    <Compile Include="ViewModel/Vector.fs" />
     <Compile Include="ViewModel/Scene.fs" />
-    <Compile Include="ViewModel/NodeState.fs" />
     <Compile Include="ViewModel/ViewModel.fs" />
+    <Compile Include="Traits/Events.fs" />
+    <Compile Include="Traits/SpaceTraits.fs" />
+    <Compile Include="Traits/ConnectorTraits.fs" />
+    <Compile Include="Traits/PeopleTraits.fs" />
+    <Compile Include="Traits/ViewTraits.fs" />
+    <Compile Include="Entities/Line.fs" />
+    <Compile Include="Entities/BoundingBox.fs" />
+    <Compile Include="Entities/Connectors.fs" />
+    <Compile Include="Entities/People.fs" />
+    <Compile Include="Systems/Layout.fs" />
+    <Compile Include="Systems/Animation.fs" />
+    <Compile Include="Systems/Dragging.fs" />
+    <Compile Include="Systems/UndoRedo.fs" />
+    <Compile Include="Systems/Selection.fs" />
+    <Compile Include="Systems/Movement.fs" />
+    <Compile Include="Systems/Runner.fs" />
+    <Compile Include="EntityLifeCycle.fs" />
   </ItemGroup>
 
   <ItemGroup>

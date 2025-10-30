@@ -5,11 +5,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="TestUtils.fs" />
-    <Compile Include="TestData.fs" />
-    <Compile Include="ModelTests.fs" />
-    <Compile Include="ViewModel/LayoutBoxTests.fs" />
-    <Compile Include="ViewModel/SceneTests.fs" />
+    <Compile Include="FableTestInfra.fs" />
+    <Compile Include="ECS/TestInfra.fs" />
+    <Compile Include="ECS/TraitTests.fs" />
+    <Compile Include="ECS/EntityTests.fs" />
+    <Compile Include="ECS/QueryTests.fs" />
+    <Compile Include="ECS/RelationTests.fs" />
+    <Compile Include="ECS/WorldTests.fs" />
+    <Compile Include="ECS/TrackingTests.fs" />
+    <Compile Include="Runner.fs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -17,6 +21,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Fable.Core" Version="4.5.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FABLE_COMPILER)'!='true'">
     <PackageReference Include="coverlet.collector" Version="6.0.4">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

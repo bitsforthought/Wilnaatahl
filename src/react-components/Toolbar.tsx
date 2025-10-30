@@ -1,31 +1,22 @@
 import React from "react";
-import { Msg_ToggleSelection, Msg_Undo, Msg_Redo } from "../generated/ViewModel/ViewModel";
-import { useViewModel } from "../context/viewModelContext";
+import { Entity } from "koota";
+import { useQuery, useTrait } from "koota/react";
+import { ToolButton } from "./ToolButton";
+import { Button } from "../ecs";
+
+function sortByButtonOrder(a: Entity, b: Entity) {
+  const aOrder = useTrait(a, Button)?.sortOrder ?? 0;
+  const bOrder = useTrait(b, Button)?.sortOrder ?? 0;
+  return aOrder - bOrder;
+}
 
 export default function Toolbar() {
-  const { viewModel, state, dispatch } = useViewModel();
-
+  const buttonEntities = useQuery(Button);
   return (
-    <div style={{ margin: "8px" }}>
-      <button onClick={() => dispatch(Msg_Undo())} disabled={!viewModel.CanUndo(state)}>
-        Undo
-      </button>
-      <button
-        onClick={() => dispatch(Msg_Redo())}
-        disabled={!viewModel.CanRedo(state)}
-        style={{ marginLeft: "8px" }}
-      >
-        Redo
-      </button>
-      <button
-        style={{ marginLeft: "8px" }}
-        onClick={() => {
-          const nextMode = viewModel.IsSingleSelectEnabled(state) ? "multiSelect" : "singleSelect";
-          dispatch(Msg_ToggleSelection(nextMode));
-        }}
-      >
-        {viewModel.IsSingleSelectEnabled(state) ? "Multi-select" : "Single-select"}
-      </button>
+    <div style={{ margin: "8px", display: "flex", gap: "8px" }}>
+      {buttonEntities.sort(sortByButtonOrder).map((entity: Entity) => (
+        <ToolButton entity={entity} key={entity.id()} />
+      ))}
     </div>
   );
 }

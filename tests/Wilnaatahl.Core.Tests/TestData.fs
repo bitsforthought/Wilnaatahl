@@ -4,6 +4,13 @@ open System
 open Wilnaatahl.Model
 open Wilnaatahl.ViewModel
 
+type TestFamilyMember(id, person, wilp) =
+    member _.Id: int = id
+
+    interface IFamilyMemberInfo with
+        member _.Person = person
+        member _.RenderedInWilp = wilp
+
 let private person id name shape wilp = {
     Person.Empty with
         Id = PersonId id
@@ -76,15 +83,7 @@ let extendedFamily =
 
 let private treeNode id =
     let person = peopleAndParents |> List.find (fun (p, _) -> p.Id = PersonId id) |> fst
-
-    {
-        Id = NodeId id
-        RenderedInWilp = WilpName "H"
-        Position = float id, float id, 0.0
-        TargetPosition = 0.0, 0.0, 0.0
-        IsAnimating = false
-        Person = person
-    }
+    TestFamilyMember(id, person, WilpName "H")
 
 // Test data is public because they are shared by other tests.
 let node0 = treeNode 0

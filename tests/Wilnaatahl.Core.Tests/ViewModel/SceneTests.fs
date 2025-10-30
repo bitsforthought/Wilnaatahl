@@ -8,19 +8,26 @@ open Wilnaatahl.Model.FamilyGraph
 open Wilnaatahl.Tests.TestData
 open Wilnaatahl.Tests.TestUtils
 
+let private mapFamily (family: RenderedFamily<TestFamilyMember>) =
+    let parent1, parent2 = family.Parents
+
+    {|
+        Parents = parent1.Id, parent2.Id
+        Children = family.Children |> List.map _.Id
+    |}
+
 [<Fact>]
-let ``extractFamilies produces correct results`` () =
+let ``ExtractFamilies produces correct results`` () =
     let graph = createFamilyGraph peopleAndParents
 
     let families =
-        Scene.extractFamilies graph (initialNodes |> Seq.map TreeNodeWrapper)
-        |> Seq.toList
+        Scene.extractFamilies graph initialNodes |> Seq.toList |> List.map mapFamily
 
     families.Length =! 1
     let fam = families.Head
-    fam.Parents =! (NodeId 0, NodeId 1)
+    fam.Parents =! (0, 1)
 
-    Set.ofList fam.Children =! Set.ofList [ NodeId 2; NodeId 3; NodeId 4 ]
+    Set.ofList fam.Children =! Set.ofList [ 2; 3; 4 ]
 
 [<Fact>]
 let ``layoutGraph assigns correct positions`` () =

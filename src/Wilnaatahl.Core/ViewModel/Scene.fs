@@ -3,52 +3,53 @@ namespace Wilnaatahl.ViewModel
 open Wilnaatahl.Model
 open Wilnaatahl.Model.FamilyGraph
 open Wilnaatahl.ViewModel.LayoutBox
-#if FABLE_COMPILER
-open Fable.Core
-#endif
-
-/// Represents a unique identifier for a renderable node.
-/// There can be more than one renderable node per Person, so this is distinct from PersonId.
-#if FABLE_COMPILER
-[<Erase>]
-#endif
-type NodeId =
-    | NodeId of int
-
-    member this.AsInt =
-        let (NodeId nodeId) = this
-        nodeId
 
 /// Represents information needed to render a family member in the context of their Wilp.
 type IFamilyMemberInfo =
-    abstract Id: NodeId
     abstract Person: Person
     abstract RenderedInWilp: WilpName
 
-/// This is a handy data structure for rendering the connectors between members of an
+/// This is a handy data structure for creating the connectors between members of an
 /// immediate family.
-type RenderedFamily = { Parents: NodeId * NodeId; Children: NodeId list }
+type RenderedFamily<'T when 'T :> IFamilyMemberInfo> =
+    // NOTE: Because this indirectly tracks EntityIds, it must be ephemeral and not persist between frames.
+    // This type is only meant to be used while initializing connectors.
+    {
+        Parents: 'T * 'T
+        Children: 'T list
+    }
 
-/// Represents a node in the tree.
-type TreeNode = {
-    Id: NodeId
-    RenderedInWilp: WilpName
-    Position: float * float * float
-    TargetPosition: float * float * float
-    IsAnimating: bool
-    Person: Person
-}
+/// Defines constants that determine the default appearance (size, layout, movement rate) in the family tree scene.
+module SceneConstants =
 
-type TreeNodeWrapper(treeNode: TreeNode) =
-    interface IFamilyMemberInfo with
-        member _.Id = treeNode.Id
-        member _.Person = treeNode.Person
-        member _.RenderedInWilp = treeNode.RenderedInWilp
+    /// Default horizontal spacing between nodes in the family tree layout, measured in world units.
+    let defaultXSpacing = 1.95<w>
+
+    /// Default vertical spacing between nodes in the family tree layout, measured in world units.
+    let defaultYSpacing = 2.0<w>
+
+    /// Default depth spacing between nodes in the family tree layout, measured in world units.
+    let defaultZSpacing = 0.0<w>
+
+    /// Distance between the two parallel lines that represent a parent-to-coparent connector.
+    let parentConnectorOffset = 0.2
+
+    /// Vertical distance between a child node and the "elbow" junction where the child connector meets
+    /// the "branch" connector for the family.
+    let childToJunctionOffset = 0.65
+
+    /// Default radius of a spherical person node in the family tree layout.
+    let defaultSphereRadius = 0.4
+
+    /// Default size of each edge of a cubic person node in the family tree layout.
+    let defaultCubeSize = 0.6
+
+    /// Rate at which animated entities move toward their target position. Lower values result in slower movement.
+    let animationDampRate = 5.0
 
 module Scene =
-    let private defaultXSpacing = 1.95<w>
-    let private defaultYSpacing = 2.0<w>
-    let private defaultZSpacing = 0.0<w>
+    open SceneConstants
+
     let private origin = LayoutVector<w>.Zero
 
     // Used to sort people for layout by comparing Date of Birth (DoB), or birth order if DoB is missing.
@@ -120,6 +121,14 @@ module Scene =
         parentLeafBox
         |> attachAbove descendantsBox { UseUpperConnectX = true; UpperOffset = parentLeftEdge }
 
+    /// Produces a map from WilpName to the people that will render along with that Wilp. Since people can
+    /// play roles in different huwilp, the same Person may appear under different WilpName keys in the result.
+    let enumerateHuwilpToRender familyGraph =
+        // TODO: Extend to support multilple huwilp.
+        let wilp = familyGraph |> huwilp |> Seq.head // ASSUMPTION: At least one Wilp is represented in the input data.
+        let people = familyGraph |> allPeople
+        [ (wilp, people) ] |> Map.ofList
+
     /// Produces a LayoutBox and initial position for the given Wilp. The LayoutBox, along with its nested boxes,
     /// specifies relative offsets that determine the position of every node in the Wilp family tree. The caller
     /// can process the returned LayoutBox using the LayoutBox.visit function.
@@ -148,7 +157,7 @@ module Scene =
 
         rootOffset, rootBox
 
-    /// Organizes the given sequence of family member info into a data structure useful in rendering
+    /// Organizes the given sequence of family member info into a data structure useful in spawning
     /// connectors between immediate family members in the tree scene.
     let extractFamilies<'T when 'T :> IFamilyMemberInfo> familyGraph (nodes: 'T seq) =
         // TODO: Make this a recursive depth-first traversal so that leaf-most families are returned before root-most.
@@ -172,10 +181,9 @@ module Scene =
 
                 for wilp in huwilpToRender do
                     let getNode = personIdToNode wilp
-                    let getNodeId = getNode >> Option.map _.Id
 
-                    match getNode rel.Mother, getNode rel.Father, childrenOfBoth |> List.choose getNodeId with
-                    | Some mother, Some father, (_ :: _ as childrenIds) ->
-                        yield { Parents = mother.Id, father.Id; Children = childrenIds }
+                    match getNode rel.Mother, getNode rel.Father, childrenOfBoth |> List.choose getNode with
+                    | Some mother, Some father, (_ :: _ as children) ->
+                        yield { Parents = mother, father; Children = children }
                     | _ -> () // Nothing to render since we need both parents and at least one child.
         }

@@ -6,4 +6,5 @@
     </Configurations>
     <Project Path="src\Wilnaatahl.Core\Wilnaatahl.Core.fsproj" />
     <Project Path="tests\Wilnaatahl.Core.Tests\Wilnaatahl.Core.Tests.fsproj" />
+    <Project Path="tests\Wilnaatahl.ECS.Tests\Wilnaatahl.ECS.Tests.fsproj" />
 </Solution>
