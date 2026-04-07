@@ -83,16 +83,20 @@ type private TestValueRelation<'T, 'TMutable>(config, freeze, unfreeze, defaultV
             fun relation -> TestValueTrait<'T, 'TMutable>(Some relation, freeze, unfreeze, Some defaultValue)
         )
 
-type private QueryResult<'T, 'TMutable> private (entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient) =
+type private QueryResult<'T, 'TMutable> private (entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient, tryGetReadForEach) =
 
-    static member Create(entities, getRead, getMutable, notifyChanges, hasChangedModifier, ?getReadResilient) =
+    static member Create(entities, getRead, getMutable, notifyChanges, hasChangedModifier, ?getReadResilient, ?tryGetReadForEach) =
         let getReadResilient = defaultArg getReadResilient (fun _ entity -> getRead entity)
-        QueryResult<'T, 'TMutable>(entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient)
+        let tryGetReadForEach = defaultArg tryGetReadForEach (fun entity -> Some(getRead entity))
+        QueryResult<'T, 'TMutable>(entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient, tryGetReadForEach)
 
     interface IQueryResult<'T, 'TMutable> with
         member _.ForEach callback =
             for entity in entities do
-                callback (getRead entity, entity)
+                // Skip entities that lost a queried trait between query time and read time.
+                match tryGetReadForEach entity with
+                | Some value -> callback (value, entity)
+                | None -> ()
 
         member _.UpdateEachWith changeDetectionOption callback =
             let detectChanges =
@@ -656,6 +660,12 @@ type TestWorld() =
             let getRead entity =
                 getMutable entity |> testTrait.FreezeValue
 
+            // Resilient read for ForEach: skips entities that lost the queried trait
+            // between query time and read time (can happen with global change trackers
+            // that pick up entities from initial population even if traits were removed).
+            let tryGetReadForEach entity =
+                world |> getTraitValue someTrait entity
+
             let hasChanged =
                 where
                 |> Array.exists (function
@@ -670,7 +680,8 @@ type TestWorld() =
                 world |> getTraitValue someTrait entity |> Option.defaultValue before
 
             QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
-                getReadResilient = getReadResilient)
+                getReadResilient = getReadResilient,
+                tryGetReadForEach = tryGetReadForEach)
 
         member _.QueryTraits(firstTrait, secondTrait, where) =
             let entities = world |> query [| With firstTrait; With secondTrait; yield! where |]
