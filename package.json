@@ -11,8 +11,8 @@
     "preview": "npm run fable && vite preview",
     "test": "dotnet test && npm run test:koota",
     "test:koota": "dotnet fable tests/Wilnaatahl.ECS.Tests --lang typescript --outDir tests/Wilnaatahl.ECS.Tests/out --noCache && npx vite-node tests/Wilnaatahl.ECS.Tests/out/Runner.ts",
-    "coverage": "dotnet test --collect:\"XPlat Code Coverage\"",
-    "report": "reportgenerator -reports:%npm_config_coveragefile% -targetdir:coveragereport -reporttypes:Html && start ./coveragereport/index.html",
+    "coverage": "dotnet test --collect:\"XPlat Code Coverage\" --results-directory TestResults",
+    "report": "reportgenerator -reports:TestResults/**/coverage.cobertura.xml -targetdir:coveragereport -reporttypes:Html && start ./coveragereport/index.html",
     "format": "prettier --write . && fantomas ."
   },
   "devDependencies": {
