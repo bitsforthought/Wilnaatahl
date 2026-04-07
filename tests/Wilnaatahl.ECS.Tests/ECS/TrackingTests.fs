@@ -596,6 +596,38 @@ type TrackingTests() =
         changedT3 =! 1
         changedT4 =! 1
 
+    [<Fact>]
+    member _.``J13: Removing a queried trait during UpdateEachWith does not crash``() =
+        let T1 = mutableTrait {| X = 0 |} { X = 0 }
+        let T2 = mutableTrait {| X = 0 |} { X = 0 }
+        let e = world.Spawn [| T1.Val {| X = 0 |}; T2.Val {| X = 0 |} |]
+        // The callback removes T2 from the entity during iteration.
+        // UpdateEachWith should not crash even though T2 is gone when it
+        // tries to do the after-read for change detection.
+        world.QueryTraits(T1, T2).UpdateEachWith AlwaysTrack (fun ((m, _), entity) ->
+            m.X <- 42
+            entity |> remove T2)
+        let val1 = (e |> get T1).Value
+        val1.X =! 42
+        (e |> has T2) =! false
+
+    [<Fact>]
+    member _.``J14: Removing a queried value trait during UpdateEachWith does not crash``() =
+        let T1 = mutableTrait {| X = 0 |} { X = 0 }
+        let T2 = mutableTrait {| X = 0 |} { X = 0 }
+        let Changed = createChanged ()
+        let e = world.Spawn [| T1.Val {| X = 5 |}; T2.Val {| X = 10 |} |]
+        // Remove T2 inside the callback — should not crash during the after-read.
+        world.QueryTraits(T1, T2).UpdateEachWith AlwaysTrack (fun ((m1, _), entity) ->
+            m1.X <- 99
+            entity |> remove T2)
+        let val1 = (e |> get T1).Value
+        val1.X =! 99
+        (e |> has T2) =! false
+        // T1 was changed, so the changed tracker should pick it up.
+        let changedT1 = world.Query(Changed <=> [| T1 |]) |> Seq.length
+        changedT1 =! 1
+
     // ================================================================
     // K. Modifier Combinations
     // ================================================================

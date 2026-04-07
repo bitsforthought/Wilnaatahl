@@ -70,3 +70,80 @@ let ``layoutGraph assigns correct positions`` () =
                 actualPersonId = expectedPersonId
                 && areVectorsNearEqual actualOffset expectedOffset
             @>)
+
+[<Fact>]
+let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
+    // Build a family with children that exercise all 3 DateOfBirth comparison paths:
+    //   childA (DoB 2000/6/1)  vs childB (DoB 2005/1/1) → dob1 < dob2
+    //   childB (DoB 2005/1/1)  vs childA (DoB 2000/6/1) → dob1 > dob2
+    //   childC (DoB 2000/6/1, BirthOrder=1) vs childA (DoB 2000/6/1, BirthOrder=0) → equal DoB, fallback to BirthOrder
+    let mother = {
+        Person.Empty with
+            Id = PersonId 100
+            Label = Some "Mother"
+            Shape = Sphere
+            Wilp = Some(WilpName "T")
+    }
+
+    let father = {
+        Person.Empty with
+            Id = PersonId 101
+            Label = Some "Father"
+            Shape = Cube
+    }
+
+    let childA = {
+        Person.Empty with
+            Id = PersonId 102
+            Label = Some "ChildA"
+            Shape = Sphere
+            Wilp = Some(WilpName "T")
+            DateOfBirth = Some(System.DateOnly(2000, 6, 1))
+            BirthOrder = 0
+    }
+
+    let childB = {
+        Person.Empty with
+            Id = PersonId 103
+            Label = Some "ChildB"
+            Shape = Sphere
+            Wilp = Some(WilpName "T")
+            DateOfBirth = Some(System.DateOnly(2005, 1, 1))
+    }
+
+    let childC = {
+        Person.Empty with
+            Id = PersonId 104
+            Label = Some "ChildC"
+            Shape = Sphere
+            Wilp = Some(WilpName "T")
+            DateOfBirth = Some(System.DateOnly(2000, 6, 1))
+            BirthOrder = 1
+    }
+
+    let parents = { Mother = mother.Id; Father = father.Id }
+
+    let family = [
+        mother, None
+        father, None
+        childA, Some parents
+        childB, Some parents
+        childC, Some parents
+    ]
+
+    let graph = createFamilyGraph family
+    let _, rootBox = Scene.layoutGraph (WilpName "T") graph
+
+    // Collect the X positions of children from the layout.
+    let childPositions =
+        setPositions ({ X = 0.0<w>; Y = 0.0<w>; Z = 0.0<w> }, rootBox)
+        |> List.ofSeq
+        |> List.choose (fun (pid, pos) ->
+            match pid with
+            | PersonId 102 | PersonId 103 | PersonId 104 -> Some(pid, pos.X)
+            | _ -> None)
+        |> List.sortBy snd
+
+    // Expected sort order: childA (DoB 2000, order 0), childC (DoB 2000, order 1), childB (DoB 2005)
+    let sortedIds = childPositions |> List.map fst
+    sortedIds =! [ PersonId 102; PersonId 104; PersonId 103 ]

@@ -7,9 +7,25 @@
   <ItemGroup>
     <Compile Include="TestUtils.fs" />
     <Compile Include="TestData.fs" />
+    <Compile Include="EcsTestSupport.fs" />
     <Compile Include="ModelTests.fs" />
     <Compile Include="ViewModel/LayoutBoxTests.fs" />
     <Compile Include="ViewModel/SceneTests.fs" />
+    <Compile Include="ViewModel/VectorTests.fs" />
+    <Compile Include="ViewModel/GraphViewFactoryTests.fs" />
+    <Compile Include="Traits/EventsTests.fs" />
+    <Compile Include="Entities/LineTests.fs" />
+    <Compile Include="Entities/BoundingBoxTests.fs" />
+    <Compile Include="Entities/PeopleTests.fs" />
+    <Compile Include="Entities/ConnectorsTests.fs" />
+    <Compile Include="Systems/AnimationTests.fs" />
+    <Compile Include="Systems/SelectionTests.fs" />
+    <Compile Include="Systems/DraggingTests.fs" />
+    <Compile Include="Systems/UndoRedoTests.fs" />
+    <Compile Include="Systems/MovementTests.fs" />
+    <Compile Include="Systems/LayoutTests.fs" />
+    <Compile Include="Systems/RunnerTests.fs" />
+    <Compile Include="Systems/LifeCycleTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

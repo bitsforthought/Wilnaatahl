@@ -83,10 +83,11 @@ type private TestValueRelation<'T, 'TMutable>(config, freeze, unfreeze, defaultV
             fun relation -> TestValueTrait<'T, 'TMutable>(Some relation, freeze, unfreeze, Some defaultValue)
         )
 
-type private QueryResult<'T, 'TMutable> private (entities, getRead, getMutable, notifyChanges, hasChangedModifier) =
+type private QueryResult<'T, 'TMutable> private (entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient) =
 
-    static member Create(entities, getRead, getMutable, notifyChanges, hasChangedModifier) =
-        QueryResult<'T, 'TMutable>(entities, getRead, getMutable, notifyChanges, hasChangedModifier)
+    static member Create(entities, getRead, getMutable, notifyChanges, hasChangedModifier, ?getReadResilient) =
+        let getReadResilient = defaultArg getReadResilient (fun _ entity -> getRead entity)
+        QueryResult<'T, 'TMutable>(entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient)
 
     interface IQueryResult<'T, 'TMutable> with
         member _.ForEach callback =
@@ -104,7 +105,7 @@ type private QueryResult<'T, 'TMutable> private (entities, getRead, getMutable, 
                 for e in entities do
                     let before = getRead e
                     callback (getMutable e, e)
-                    let after = getRead e
+                    let after = getReadResilient before e
                     notifyChanges changeDetectionOption e before after
             else
                 for e in entities do
@@ -665,7 +666,11 @@ type TestWorld() =
                 if not (obj.Equals(before, after)) then
                     TrackerRegistry.notifyChanged someTrait entity
 
-            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged)
+            let getReadResilient before entity =
+                world |> getTraitValue someTrait entity |> Option.defaultValue before
+
+            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
+                getReadResilient = getReadResilient)
 
         member _.QueryTraits(firstTrait, secondTrait, where) =
             let entities = world |> query [| With firstTrait; With secondTrait; yield! where |]
@@ -702,7 +707,20 @@ type TestWorld() =
 
             let hasChanged = changedTraits.Length > 0
 
-            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged)
+            // Resilient after-read: if a queried trait was removed during UpdateEachWith,
+            // fall back to the before-value for that trait so we don't crash. Traits that
+            // are still present get read normally for proper change detection.
+            let getReadResilient (beforeFirst, beforeSecond) entity =
+                let afterFirst =
+                    world |> getTraitValue firstTrait entity |> Option.defaultValue beforeFirst
+
+                let afterSecond =
+                    world |> getTraitValue secondTrait entity |> Option.defaultValue beforeSecond
+
+                afterFirst, afterSecond
+
+            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
+                getReadResilient = getReadResilient)
 
         member _.QueryTraits3(firstTrait, secondTrait, thirdTrait, where) =
             let entities =
@@ -751,7 +769,14 @@ type TestWorld() =
 
             let hasChanged = changedTraits.Length > 0
 
-            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged)
+            let getReadResilient (b1, b2, b3) entity =
+                let a1 = world |> getTraitValue firstTrait entity |> Option.defaultValue b1
+                let a2 = world |> getTraitValue secondTrait entity |> Option.defaultValue b2
+                let a3 = world |> getTraitValue thirdTrait entity |> Option.defaultValue b3
+                a1, a2, a3
+
+            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
+                getReadResilient = getReadResilient)
 
         member _.QueryTraits4(firstTrait, secondTrait, thirdTrait, fourthTrait, where) =
 
@@ -813,7 +838,15 @@ type TestWorld() =
 
             let hasChanged = changedTraits.Length > 0
 
-            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged)
+            let getReadResilient (b1, b2, b3, b4) entity =
+                let a1 = world |> getTraitValue firstTrait entity |> Option.defaultValue b1
+                let a2 = world |> getTraitValue secondTrait entity |> Option.defaultValue b2
+                let a3 = world |> getTraitValue thirdTrait entity |> Option.defaultValue b3
+                let a4 = world |> getTraitValue fourthTrait entity |> Option.defaultValue b4
+                a1, a2, a3, a4
+
+            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
+                getReadResilient = getReadResilient)
 
         member _.QueryFirst where = world |> queryFirst where
 

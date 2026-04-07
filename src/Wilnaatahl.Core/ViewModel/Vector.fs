@@ -88,3 +88,11 @@ type MutableVector3 = {
     /// Converts this mutable vector to an immutable Vector3.
     member this.ToVector3() =
         Vector3.FromComponents(this.x, this.y, this.z)
+
+    /// Creates an immutable anonymous record from a MutableVector3, used by the TestECS mock.
+    static member FreezeValue(m: MutableVector3) : {| x: float; y: float; z: float |} =
+        {| x = m.x; y = m.y; z = m.z |}
+
+    /// Creates a MutableVector3 from an immutable anonymous record, used by the TestECS mock.
+    static member UnfreezeValue(v: {| x: float; y: float; z: float |}) =
+        { x = v.x; y = v.y; z = v.z }
