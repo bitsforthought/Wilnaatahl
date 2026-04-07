@@ -179,3 +179,50 @@ let ``buttons reflect stack state`` () =
     handleUndoRedo world |> ignore
 
     isButtonDisabled redoBtn =! false
+
+[<Fact>]
+let ``new drag after undo flushes redo stack`` () =
+    use ecs = new EcsWorld()
+    let world = ecs.World
+    spawnUndoRedoControls (0, world) |> ignore
+
+    let node =
+        world.Spawn(
+            Position.Val {| x = 5.0; y = 0.0; z = 0.0 |},
+            Selected.Tag()
+        )
+
+    // Drag: capture at 5, move to 10, end
+    world.Add DragStartEvent
+    handleUndoRedo world |> ignore
+    world.Remove DragStartEvent
+    node |> setValue Position {| x = 10.0; y = 0.0; z = 0.0 |}
+    world.Add DragEndEvent
+    handleUndoRedo world |> ignore
+    world.Remove DragEndEvent
+
+    // Undo: pushes to redo stack
+    let undoBtn = world |> findButton "Undo"
+    undoBtn |> add ClickEvent
+    handleUndoRedo world |> ignore
+    undoBtn |> remove ClickEvent
+
+    // Redo button should be enabled (redo stack non-empty)
+    handleUndoRedo world |> ignore
+    let redoBtn = world |> findButton "Redo"
+    isButtonDisabled redoBtn =! false
+
+    // New drag: should flush the redo stack.
+    // First, simulate that the undo animation completed by removing TargetPosition.
+    node |> remove TargetPosition
+    world.Add DragStartEvent
+    handleUndoRedo world |> ignore
+    world.Remove DragStartEvent
+    node |> setValue Position {| x = 15.0; y = 0.0; z = 0.0 |}
+    world.Add DragEndEvent
+    handleUndoRedo world |> ignore
+    world.Remove DragEndEvent
+
+    // Redo button should now be disabled (redo stack flushed)
+    handleUndoRedo world |> ignore
+    isButtonDisabled redoBtn =! true
