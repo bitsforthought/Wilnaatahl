@@ -639,9 +639,11 @@ type TrackingTests() =
         let results = world.QueryTrait(T1, Changed <=> [| T1 |])
         // Remove the trait before iterating.
         e |> remove T1
-        // Koota still iterates the entity (it reads from a snapshot).
+        // Both Koota and the mock still iterate the entity (count=1).
+        // The returned value is implementation-dependent (Koota returns undefined,
+        // mock returns schema default), so we only assert the count.
         let mutable count = 0
-        results.ForEach(fun _ -> count <- count + 1)
+        results.ForEach(fun (_, _) -> count <- count + 1)
         count =! 1
 
     // ================================================================
