@@ -250,3 +250,29 @@ let ``move handles parallel line on z-axis line`` () =
     let pv1, pv2 = parallelLineId |> Line3.getPositions world
     test <@ abs pv1.y > 0.0 @>
     test <@ abs pv2.y > 0.0 @>
+
+[<Fact>]
+let ``move handles parallel line on nearly-vertical line with z perturbation`` () =
+    use ecs = new EcsWorld()
+    let world = ecs.World
+    let tracker = createChanged ()
+
+    // Nearly vertical line with tiny Z perturbation: dir ≈ (0, 1, 1e-15).
+    // perpUp length ≈ 1e-15 < nearZero, so the fallback path is taken.
+    // abs(dir.x)=0 < abs(dir.z)≈1e-15 → true → alt = (1, 0, 0)
+    let sourceLineId = world |> Line3.spawn zeroPosition zeroPosition
+    let srcEp1, srcEp2 = sourceLineId |> Line3.getEndpoints world
+    srcEp1 |> setValue Position {| x = 0.0; y = 0.0; z = 0.0 |}
+    srcEp2 |> setValue Position {| x = 0.0; y = 1.0; z = 1e-15 |}
+
+    let parallelLineId = world |> Line3.spawnDynamic
+    parallelLineId |> addWith (Parallels => sourceLineId) {| offset = 1.0 |}
+
+    srcEp1 |> touchPosition
+    srcEp2 |> touchPosition
+    move tracker world |> ignore
+
+    // With alt = (1, 0, 0), the perpendicular should be in the X direction.
+    let pv1, pv2 = parallelLineId |> Line3.getPositions world
+    test <@ abs pv1.x > 0.0 @>
+    test <@ abs pv2.x > 0.0 @>

@@ -83,20 +83,16 @@ type private TestValueRelation<'T, 'TMutable>(config, freeze, unfreeze, defaultV
             fun relation -> TestValueTrait<'T, 'TMutable>(Some relation, freeze, unfreeze, Some defaultValue)
         )
 
-type private QueryResult<'T, 'TMutable> private (entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient, tryGetReadForEach) =
+type private QueryResult<'T, 'TMutable> private (entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient) =
 
-    static member Create(entities, getRead, getMutable, notifyChanges, hasChangedModifier, ?getReadResilient, ?tryGetReadForEach) =
+    static member Create(entities, getRead, getMutable, notifyChanges, hasChangedModifier, ?getReadResilient) =
         let getReadResilient = defaultArg getReadResilient (fun _ entity -> getRead entity)
-        let tryGetReadForEach = defaultArg tryGetReadForEach (fun entity -> Some(getRead entity))
-        QueryResult<'T, 'TMutable>(entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient, tryGetReadForEach)
+        QueryResult<'T, 'TMutable>(entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient)
 
     interface IQueryResult<'T, 'TMutable> with
         member _.ForEach callback =
             for entity in entities do
-                // Skip entities that lost a queried trait between query time and read time.
-                match tryGetReadForEach entity with
-                | Some value -> callback (value, entity)
-                | None -> ()
+                callback (getRead entity, entity)
 
         member _.UpdateEachWith changeDetectionOption callback =
             let detectChanges =
@@ -658,13 +654,13 @@ type TestWorld() =
                 world |> forceGetTraitValue someTrait entity :?> 'TMutable
 
             let getRead entity =
-                getMutable entity |> testTrait.FreezeValue
-
-            // Resilient read for ForEach: skips entities that lost the queried trait
-            // between query time and read time (can happen with global change trackers
-            // that pick up entities from initial population even if traits were removed).
-            let tryGetReadForEach entity =
-                world |> getTraitValue someTrait entity
+                match world |> getTraitValue someTrait entity with
+                | Some v -> v
+                | None ->
+                    // Entity lost the trait between query time and read time.
+                    // Return the schema default to match Koota's snapshot behavior.
+                    let testUntypedTrait = someTrait :?> ITestUntypedValueTrait
+                    testUntypedTrait.DefaultMutableValue.Value |> testTrait.FreezeValue
 
             let hasChanged =
                 where
@@ -680,8 +676,7 @@ type TestWorld() =
                 world |> getTraitValue someTrait entity |> Option.defaultValue before
 
             QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
-                getReadResilient = getReadResilient,
-                tryGetReadForEach = tryGetReadForEach)
+                getReadResilient = getReadResilient)
 
         member _.QueryTraits(firstTrait, secondTrait, where) =
             let entities = world |> query [| With firstTrait; With secondTrait; yield! where |]
@@ -730,14 +725,8 @@ type TestWorld() =
 
                 afterFirst, afterSecond
 
-            let tryGetReadForEach entity =
-                match world |> getTraitValue firstTrait entity, world |> getTraitValue secondTrait entity with
-                | Some v1, Some v2 -> Some(v1, v2)
-                | _ -> None
-
             QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
-                getReadResilient = getReadResilient,
-                tryGetReadForEach = tryGetReadForEach)
+                getReadResilient = getReadResilient)
 
         member _.QueryTraits3(firstTrait, secondTrait, thirdTrait, where) =
             let entities =
@@ -792,16 +781,8 @@ type TestWorld() =
                 let a3 = world |> getTraitValue thirdTrait entity |> Option.defaultValue b3
                 a1, a2, a3
 
-            let tryGetReadForEach entity =
-                match world |> getTraitValue firstTrait entity,
-                      world |> getTraitValue secondTrait entity,
-                      world |> getTraitValue thirdTrait entity with
-                | Some v1, Some v2, Some v3 -> Some(v1, v2, v3)
-                | _ -> None
-
             QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
-                getReadResilient = getReadResilient,
-                tryGetReadForEach = tryGetReadForEach)
+                getReadResilient = getReadResilient)
 
         member _.QueryTraits4(firstTrait, secondTrait, thirdTrait, fourthTrait, where) =
 
@@ -870,17 +851,8 @@ type TestWorld() =
                 let a4 = world |> getTraitValue fourthTrait entity |> Option.defaultValue b4
                 a1, a2, a3, a4
 
-            let tryGetReadForEach entity =
-                match world |> getTraitValue firstTrait entity,
-                      world |> getTraitValue secondTrait entity,
-                      world |> getTraitValue thirdTrait entity,
-                      world |> getTraitValue fourthTrait entity with
-                | Some v1, Some v2, Some v3, Some v4 -> Some(v1, v2, v3, v4)
-                | _ -> None
-
             QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
-                getReadResilient = getReadResilient,
-                tryGetReadForEach = tryGetReadForEach)
+                getReadResilient = getReadResilient)
 
         member _.QueryFirst where = world |> queryFirst where
 

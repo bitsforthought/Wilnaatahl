@@ -628,6 +628,22 @@ type TrackingTests() =
         let changedT1 = world.Query(Changed <=> [| T1 |]) |> Seq.length
         changedT1 =! 1
 
+    [<Fact>]
+    member _.``J15: ForEach reads entity even after queried trait is removed``() =
+        let T1 = mutableTrait {| X = 0 |} { X = 0 }
+        let Changed = createChanged ()
+        let e = world.Spawn [| T1.Val {| X = 5 |} |]
+        // Trigger a change so the tracker flags the entity.
+        e |> setValue T1 {| X = 10 |}
+        // Build the query result — the entity is in the result set.
+        let results = world.QueryTrait(T1, Changed <=> [| T1 |])
+        // Remove the trait before iterating.
+        e |> remove T1
+        // Koota still iterates the entity (it reads from a snapshot).
+        let mutable count = 0
+        results.ForEach(fun _ -> count <- count + 1)
+        count =! 1
+
     // ================================================================
     // K. Modifier Combinations
     // ================================================================
