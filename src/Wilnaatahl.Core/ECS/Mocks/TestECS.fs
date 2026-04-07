@@ -730,8 +730,14 @@ type TestWorld() =
 
                 afterFirst, afterSecond
 
+            let tryGetReadForEach entity =
+                match world |> getTraitValue firstTrait entity, world |> getTraitValue secondTrait entity with
+                | Some v1, Some v2 -> Some(v1, v2)
+                | _ -> None
+
             QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
-                getReadResilient = getReadResilient)
+                getReadResilient = getReadResilient,
+                tryGetReadForEach = tryGetReadForEach)
 
         member _.QueryTraits3(firstTrait, secondTrait, thirdTrait, where) =
             let entities =
@@ -786,8 +792,16 @@ type TestWorld() =
                 let a3 = world |> getTraitValue thirdTrait entity |> Option.defaultValue b3
                 a1, a2, a3
 
+            let tryGetReadForEach entity =
+                match world |> getTraitValue firstTrait entity,
+                      world |> getTraitValue secondTrait entity,
+                      world |> getTraitValue thirdTrait entity with
+                | Some v1, Some v2, Some v3 -> Some(v1, v2, v3)
+                | _ -> None
+
             QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
-                getReadResilient = getReadResilient)
+                getReadResilient = getReadResilient,
+                tryGetReadForEach = tryGetReadForEach)
 
         member _.QueryTraits4(firstTrait, secondTrait, thirdTrait, fourthTrait, where) =
 
@@ -856,8 +870,17 @@ type TestWorld() =
                 let a4 = world |> getTraitValue fourthTrait entity |> Option.defaultValue b4
                 a1, a2, a3, a4
 
+            let tryGetReadForEach entity =
+                match world |> getTraitValue firstTrait entity,
+                      world |> getTraitValue secondTrait entity,
+                      world |> getTraitValue thirdTrait entity,
+                      world |> getTraitValue fourthTrait entity with
+                | Some v1, Some v2, Some v3, Some v4 -> Some(v1, v2, v3, v4)
+                | _ -> None
+
             QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
-                getReadResilient = getReadResilient)
+                getReadResilient = getReadResilient,
+                tryGetReadForEach = tryGetReadForEach)
 
         member _.QueryFirst where = world |> queryFirst where
 

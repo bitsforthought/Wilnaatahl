@@ -5,6 +5,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="TestUtils.fs" />
     <Compile Include="TestData.fs" />
     <Compile Include="EcsTestSupport.fs" />
