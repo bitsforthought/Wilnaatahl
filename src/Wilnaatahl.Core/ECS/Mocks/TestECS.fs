@@ -85,13 +85,15 @@ type private TestValueRelation<'T, 'TMutable>(config, freeze, unfreeze, defaultV
 
 type private QueryResult<'T, 'TMutable> private (entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient) =
 
-    /// Creates a QueryResult with a resilient after-read function for change detection.
-    static member Create(entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient) =
+    static member Create
+        (entities: seq<EntityId>,
+         getRead: EntityId -> 'T,
+         getMutable: EntityId -> 'TMutable,
+         notifyChanges: ChangeDetectionOption -> EntityId -> 'T -> 'T -> unit,
+         hasChangedModifier: bool,
+         getReadResilient: 'T -> EntityId -> 'T)
+        =
         QueryResult<'T, 'TMutable>(entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient)
-
-    /// Creates a QueryResult using getRead as the after-read function (no resilience needed).
-    static member Create(entities, getRead, getMutable, notifyChanges, hasChangedModifier) =
-        QueryResult<'T, 'TMutable>(entities, getRead, getMutable, notifyChanges, hasChangedModifier, fun _ entity -> getRead entity)
 
     interface IQueryResult<'T, 'TMutable> with
         member _.ForEach callback =
@@ -648,7 +650,7 @@ type TestWorld() =
 
         member _.Query where =
             let entities = world |> query where
-            QueryResult.Create(entities, (fun _ -> ()), (fun _ -> ()), (fun _ _ _ _ -> ()), false)
+            QueryResult.Create(entities, (fun _ -> ()), (fun _ -> ()), (fun _ _ _ _ -> ()), false, fun _ _ -> ())
 
         member _.QueryTrait(someTrait, where) =
             let entities = world |> query [| With someTrait; yield! where |]

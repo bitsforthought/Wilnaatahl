@@ -8,6 +8,7 @@ open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.Model
 open Wilnaatahl.Model.FamilyGraph
 open Wilnaatahl.ViewModel.Vector
+open Wilnaatahl.System.Layout
 open Wilnaatahl.Traits.Events
 open Wilnaatahl.Traits.PeopleTraits
 open Wilnaatahl.Traits.SpaceTraits
@@ -15,12 +16,7 @@ open Wilnaatahl.Traits.ViewTraits
 open Wilnaatahl.Systems.LifeCycle
 open Wilnaatahl.Systems.Runner
 open Wilnaatahl.Tests.EcsTestSupport
-
-let private mother = { Person.Empty with Id = PersonId 0; Shape = Sphere; Wilp = Some(WilpName "T") }
-let private father = { Person.Empty with Id = PersonId 1; Shape = Cube }
-let private child = { Person.Empty with Id = PersonId 2; Shape = Sphere; Wilp = Some(WilpName "T") }
-let private coParents = { Mother = mother.Id; Father = father.Id }
-let private testFamily = [ mother, None; father, None; child, Some coParents ]
+open Wilnaatahl.Tests.TestData
 
 [<Fact>]
 let ``runSystems with no events completes without error`` () =
@@ -52,19 +48,25 @@ let ``runSystems animates entities toward target`` () =
             Position.Val zeroPosition,
             TargetPosition.Val {| x = 10.0; y = 0.0; z = 0.0 |}
         )
+
+    // Position starts at origin (0,0,0), so any movement toward target is progress.
+    let posBefore = (entity |> get Position).Value.x
     runSystems world 0.5
-    let p = (entity |> get Position).Value
-    p.x >! 0.0
+    let posAfter = (entity |> get Position).Value.x
+    posAfter >! posBefore
 
 [<Fact>]
 let ``integration: select, drag, and undo on scene nodes`` () =
     use ecs = new EcsWorld()
     let world = ecs.World
-    let graph = createFamilyGraph testFamily
+    let graph = createFamilyGraph testPeopleAndParents
+
+    // 0.016 seconds ≈ one frame at 60 FPS
+    let frameDelta = 0.016
 
     spawnControls world
     spawnScene world graph
-    Wilnaatahl.System.Layout.layoutNodes world graph
+    layoutNodes world graph
 
     // Animate to settled positions
     for _ in 1..50 do runSystems world 0.1
@@ -77,26 +79,28 @@ let ``integration: select, drag, and undo on scene nodes`` () =
     // Click to select
     handlePointerDown nodeEntity
     handleClick nodeEntity
-    runSystems world 0.016
+    runSystems world frameDelta
     (nodeEntity |> has Selected) =! true
 
     // Drag
     handleDragStart world |> ignore
     handleDrag world (origX + 2.0) originalPos.y originalPos.z |> ignore
-    runSystems world 0.016
+    runSystems world frameDelta
 
     // End drag
     handleDragEnd world |> ignore
-    runSystems world 0.016
+    runSystems world frameDelta
 
     // Position should have changed
     let movedPos = (nodeEntity |> get Position).Value
     movedPos.x <>! origX
 
-    // Undo — find undo button and click it
-    let undoBtn = world.Query(With Button) |> Seq.find (fun e -> (e |> get Button).Value.label = "Undo")
+    // Undo — find undo button using QueryTrait
+    let _, undoBtn =
+        world.QueryTrait(Button).ToSequence()
+        |> Seq.find (fun (buttonData, _) -> buttonData.label = "Undo")
     handleClick undoBtn
-    runSystems world 0.016
+    runSystems world frameDelta
 
     // Should have TargetPosition set (animating back)
     (nodeEntity |> has TargetPosition) =! true

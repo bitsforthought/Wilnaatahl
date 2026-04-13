@@ -12,17 +12,12 @@ open Wilnaatahl.Traits.ConnectorTraits
 open Wilnaatahl.Traits.PeopleTraits
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Tests.EcsTestSupport
-
-let private mother = { Person.Empty with Id = PersonId 0; Shape = Sphere; Wilp = Some(WilpName "T") }
-let private father = { Person.Empty with Id = PersonId 1; Shape = Cube }
-let private child = { Person.Empty with Id = PersonId 2; Shape = Sphere; Wilp = Some(WilpName "T") }
-let private coParents = { Mother = mother.Id; Father = father.Id }
-let private testFamily = [ mother, None; father, None; child, Some coParents ]
+open Wilnaatahl.Tests.TestData
 
 let private spawnTestScene (world: IWorld) =
-    let graph = createFamilyGraph testFamily
-    let wilpId = world |> People.spawnWilpBox (WilpName "T")
-    for person, _ in testFamily do
+    let graph = createFamilyGraph testPeopleAndParents
+    let wilpId = world |> People.spawnWilpBox testWilp.Value
+    for person, _ in testPeopleAndParents do
         world |> People.spawnTreeNode person wilpId
     graph
 
@@ -55,5 +50,6 @@ let ``spawnAllConnectors creates elbow entities`` () =
     let world = ecs.World
     let graph = spawnTestScene world
     world |> Connectors.spawnAllConnectors graph
+    // With 3 children, we expect at least 1 branch elbow + 3 child junction elbows = 4.
     let elbowCount = world.Query(With Elbow) |> Seq.length
-    elbowCount >=! 1
+    elbowCount >=! 4

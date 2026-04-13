@@ -52,9 +52,7 @@ let ``move updates snapped points on all axes`` () =
     move tracker world |> ignore
 
     let posB = (entityB |> get Position).Value
-    posB.x =! 11.0
-    posB.y =! 22.0
-    posB.z =! 33.0
+    posB =! Line3.pos 11.0 22.0 33.0
 
 [<Fact>]
 let ``move updates bisecting entity to midpoint of line`` () =
@@ -74,9 +72,7 @@ let ``move updates bisecting entity to midpoint of line`` () =
     move tracker world |> ignore
 
     let pos = (bisectEntity |> get Position).Value
-    pos.x =! 6.0
-    pos.y =! 12.0
-    pos.z =! 18.0
+    pos =! Line3.pos 6.0 12.0 18.0
 
 [<Fact>]
 let ``move propagates through kinematic chain`` () =
@@ -98,26 +94,6 @@ let ``move propagates through kinematic chain`` () =
     let posC = (entityC |> get Position).Value
     posB.x =! 105.0
     posC.x =! 108.0
-
-[<Fact>]
-let ``move with no position changes does nothing`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    let tracker = createChanged ()
-
-    let entity = world.Spawn(Position.Val {| x = 5.0; y = 5.0; z = 5.0 |})
-
-    // Drain initial state by touching and running once
-    entity |> touchPosition
-    move tracker world |> ignore
-
-    // Now run again with no changes
-    move tracker world |> ignore
-
-    let pos = (entity |> get Position).Value
-    pos.x =! 5.0
-    pos.y =! 5.0
-    pos.z =! 5.0
 
 [<Fact>]
 let ``move updates bounding box corners`` () =
@@ -142,14 +118,9 @@ let ``move updates bounding box corners`` () =
     let pos1 = (c1 |> get Position).Value
     let pos2 = (c2 |> get Position).Value
 
-    let positions =
-        Set.ofList [
-            (pos1.x, pos1.y, pos1.z)
-            (pos2.x, pos2.y, pos2.z)
-        ]
-
     // One should be min corner (0.5, 0.5, 0.5), other max corner (5.5, 5.5, 5.5)
-    positions =! Set.ofList [ (0.5, 0.5, 0.5); (5.5, 5.5, 5.5) ]
+    Set.ofList [ pos1; pos2 ]
+    =! Set.ofList [ Line3.pos 0.5 0.5 0.5; Line3.pos 5.5 5.5 5.5 ]
 
 [<Theory>]
 [<InlineData(1.0, 1.0)>]

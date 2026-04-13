@@ -6,6 +6,7 @@ open Wilnaatahl.ECS
 open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.ViewModel.Vector
+open Wilnaatahl.Entities
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Systems.Animation
 open Wilnaatahl.Tests.EcsTestSupport
@@ -47,9 +48,7 @@ let ``animate snaps to target and removes TargetPosition when close`` () =
     animate 0.5 world |> ignore
 
     let pos = (entity |> get Position).Value
-    pos.x =! 0.0
-    pos.y =! 0.0
-    pos.z =! 0.0
+    pos =! Line3.pos 0.0 0.0 0.0
     (entity |> has TargetPosition) =! false
 
 [<Fact>]
@@ -66,9 +65,7 @@ let ``animate does nothing with zero delta`` () =
     animate 0.0 world |> ignore
 
     let pos = (entity |> get Position).Value
-    pos.x =! 5.0
-    pos.y =! 5.0
-    pos.z =! 5.0
+    pos =! Line3.pos 5.0 5.0 5.0
 
 [<Fact>]
 let ``animate ignores entities without TargetPosition`` () =
@@ -80,9 +77,7 @@ let ``animate ignores entities without TargetPosition`` () =
     animate 0.1 world |> ignore
 
     let pos = (entity |> get Position).Value
-    pos.x =! 3.0
-    pos.y =! 4.0
-    pos.z =! 5.0
+    pos =! Line3.pos 3.0 4.0 5.0
 
 [<Fact>]
 let ``animate handles multiple entities`` () =
@@ -104,13 +99,9 @@ let ``animate handles multiple entities`` () =
     animate 0.1 world |> ignore
 
     let pos1 = (e1 |> get Position).Value
-    pos1.x <! 10.0
-    pos1.x >! 0.0
+    test <@ pos1.x < 10.0 && pos1.x > 0.0 @>
 
     let pos2 = (e2 |> get Position).Value
-    pos2.x >! 0.0
-    pos2.x <! 10.0
-    pos2.y >! 0.0
-    pos2.y <! 10.0
-    pos2.z >! 0.0
-    pos2.z <! 10.0
+    test <@ pos2.x > 0.0 && pos2.x < 10.0 @>
+    test <@ pos2.y > 0.0 && pos2.y < 10.0 @>
+    test <@ pos2.z > 0.0 && pos2.z < 10.0 @>

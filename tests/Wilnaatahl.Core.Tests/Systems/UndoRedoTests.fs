@@ -6,6 +6,7 @@ open Wilnaatahl.ECS
 open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.ViewModel.Vector
+open Wilnaatahl.Entities
 open Wilnaatahl.Traits.Events
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Traits.ViewTraits
@@ -98,9 +99,7 @@ let ``undo restores original position via TargetPosition`` () =
 
     // Node should have TargetPosition set to original position
     let targetPos = (node |> get TargetPosition).Value
-    targetPos.x =! 5.0
-    targetPos.y =! 0.0
-    targetPos.z =! 0.0
+    targetPos =! Line3.pos 5.0 0.0 0.0
 
 [<Fact>]
 let ``undo then redo re-applies moved position`` () =
@@ -137,7 +136,7 @@ let ``undo then redo re-applies moved position`` () =
     // The node should now have a TargetPosition set to the position
     // that was saved before the undo (which was 10.0)
     let targetPos = (node |> get TargetPosition).Value
-    targetPos.x =! 10.0
+    targetPos =! Line3.pos 10.0 0.0 0.0
 
 [<Fact>]
 let ``buttons reflect stack state`` () =

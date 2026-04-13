@@ -86,5 +86,5 @@ let ``updateCorners can modify corner positions`` () =
     // so check both possibilities)
     let pos1 = (boxPosId |> get Position).Value
     let pos2 = (boundPosId |> get Position).Value
-    let positions = Set.ofList [ (pos1.x, pos1.y, pos1.z); (pos2.x, pos2.y, pos2.z) ]
-    positions =! Set.ofList [ (-1.0, -1.0, -1.0); (10.0, 10.0, 10.0) ]
+    Set.ofList [ pos1; pos2 ]
+    =! Set.ofList [ Line3.pos -1.0 -1.0 -1.0; Line3.pos 10.0 10.0 10.0 ]

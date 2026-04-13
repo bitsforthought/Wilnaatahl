@@ -45,7 +45,7 @@ let p4 = {
 
 let coParents = { Mother = p0.Id; Father = p1.Id }
 
-let peopleAndParents = [
+let testPeopleAndParents = [
     p0, None
     p1, None
     p2, Some coParents
@@ -71,7 +71,7 @@ let p9 = {
 let p10 = person 10 "GrandChild3" Cube testWilp
 
 let extendedFamily =
-    peopleAndParents
+    testPeopleAndParents
     @ [
         p5, Some coParents
         p6, None
@@ -82,7 +82,7 @@ let extendedFamily =
     ]
 
 let private treeNode id =
-    let person = peopleAndParents |> List.find (fun (p, _) -> p.Id = PersonId id) |> fst
+    let person = testPeopleAndParents |> List.find (fun (p, _) -> p.Id = PersonId id) |> fst
     TestFamilyMember(id, person, WilpName "H")
 
 // Test data is public because they are shared by other tests.

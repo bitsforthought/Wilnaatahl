@@ -7,6 +7,7 @@ open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.Model
 open Wilnaatahl.ViewModel.Vector
+open Wilnaatahl.Entities
 open Wilnaatahl.Traits.Events
 open Wilnaatahl.Traits.PeopleTraits
 open Wilnaatahl.Traits.SpaceTraits
@@ -53,7 +54,7 @@ let ``full drag flow moves selected entity position`` () =
     dragNodes world |> ignore
 
     let pos = (node |> get Position).Value
-    (pos.x, pos.y, pos.z) =! (12.0, 0.0, 0.0)
+    pos =! Line3.pos 12.0 0.0 0.0
 
 [<Fact>]
 let ``sequential drag events accumulate correctly`` () =
@@ -79,7 +80,7 @@ let ``sequential drag events accumulate correctly`` () =
     dragNodes world |> ignore
 
     let pos1 = (node |> get Position).Value
-    (pos1.x, pos1.y, pos1.z) =! (8.0, 0.0, 0.0)
+    pos1 =! Line3.pos 8.0 0.0 0.0
 
     // Second drag (no drag end in between): origin = {5,0,0}, move = {7,0,0}
     // delta = origin + move - oldPosition = {5,0,0} + {7,0,0} - {8,0,0} = {4,0,0}
@@ -88,7 +89,7 @@ let ``sequential drag events accumulate correctly`` () =
     dragNodes world |> ignore
 
     let pos2 = (node |> get Position).Value
-    (pos2.x, pos2.y, pos2.z) =! (12.0, 0.0, 0.0)
+    pos2 =! Line3.pos 12.0 0.0 0.0
 
 [<Fact>]
 let ``drag end cleans up click events`` () =

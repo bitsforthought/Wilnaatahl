@@ -18,7 +18,7 @@ let private mapFamily (family: RenderedFamily<TestFamilyMember>) =
 
 [<Fact>]
 let ``ExtractFamilies produces correct results`` () =
-    let graph = createFamilyGraph peopleAndParents
+    let graph = createFamilyGraph testPeopleAndParents
 
     let families =
         Scene.extractFamilies graph initialNodes |> Seq.toList |> List.map mapFamily

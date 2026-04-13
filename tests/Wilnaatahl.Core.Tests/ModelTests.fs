@@ -9,7 +9,7 @@ open Wilnaatahl.Tests.TestData
 
 [<Fact>]
 let ``findPerson returns correct person for all ids`` () =
-    let graph = createFamilyGraph peopleAndParents
+    let graph = createFamilyGraph testPeopleAndParents
     let expectedPeople = [| p0; p1; p2; p3; p4 |]
 
     [ 0..4 ]
@@ -17,7 +17,7 @@ let ``findPerson returns correct person for all ids`` () =
 
 [<Fact>]
 let ``findChildren returns correct children set for each parent`` () =
-    let graph = createFamilyGraph peopleAndParents
+    let graph = createFamilyGraph testPeopleAndParents
 
     findChildren (PersonId 0) graph
     =! Set.ofList [ PersonId 2; PersonId 3; PersonId 4 ]
@@ -40,13 +40,13 @@ let ``createFamilyGraph handles empty input`` () =
 
 [<Fact>]
 let ``coparents returns all co-parent relationships`` () =
-    let graph = createFamilyGraph peopleAndParents
+    let graph = createFamilyGraph testPeopleAndParents
     let coParentsSet = coparents graph
     coParentsSet =! Set.ofList [ coParents ]
 
 [<Fact>]
 let ``huwilp returns all unique huwilp`` () =
-    let graph = createFamilyGraph peopleAndParents
+    let graph = createFamilyGraph testPeopleAndParents
     let huwilpSet = huwilp graph
     huwilpSet =! Set.ofList [ WilpName "H"; WilpName "L" ]
 
@@ -135,7 +135,7 @@ let ``visitWilpForest computes correct tree statistics`` () =
 
 [<Fact>]
 let ``allPeople returns all people in the graph`` () =
-    let graph = createFamilyGraph peopleAndParents
+    let graph = createFamilyGraph testPeopleAndParents
     let people = allPeople graph |> Seq.toList
 
     // Should contain all test data people, regardless of parentage
@@ -143,7 +143,7 @@ let ``allPeople returns all people in the graph`` () =
 
 [<Fact>]
 let ``visitWilpForest returns empty sequence for missing Wilp`` () =
-    let graph = createFamilyGraph peopleAndParents
+    let graph = createFamilyGraph testPeopleAndParents
     let missingWilp = WilpName "Nonexistent"
 
     let results =
