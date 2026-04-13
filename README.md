@@ -77,6 +77,6 @@ The following terminal commands are your dev inner loop:
 - To collect Code Coverage data and generate a Code Coverage report:
 
 ```powershell
-npm run coverage                                               # Will output link to coverage .xml file
-npm run report --coveragefile=<path-to-coverage-xml-file>  # Pass link to coverage .xml file
+npm run coverage
+npm run report
 ```

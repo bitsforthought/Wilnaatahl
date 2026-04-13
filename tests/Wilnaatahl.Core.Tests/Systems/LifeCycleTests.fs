@@ -12,7 +12,12 @@ open Wilnaatahl.Traits.PeopleTraits
 open Wilnaatahl.Traits.ViewTraits
 open Wilnaatahl.Systems.LifeCycle
 open Wilnaatahl.Tests.EcsTestSupport
-open Wilnaatahl.Tests.TestData
+
+let private mother = { Person.Empty with Id = PersonId 0; Shape = Sphere; Wilp = Some(WilpName "T") }
+let private father = { Person.Empty with Id = PersonId 1; Shape = Cube }
+let private child = { Person.Empty with Id = PersonId 2; Shape = Sphere; Wilp = Some(WilpName "T") }
+let private coParents = { Mother = mother.Id; Father = father.Id }
+let private testFamily = [ mother, None; father, None; child, Some coParents ]
 
 [<Fact>]
 let ``spawnControls creates button entities`` () =
@@ -27,19 +32,23 @@ let ``spawnControls creates button entities`` () =
 let ``spawnScene creates tree nodes and connectors`` () =
     use ecs = new EcsWorld()
     let world = ecs.World
-    let graph = createFamilyGraph peopleAndParents
+    let graph = createFamilyGraph testFamily
     spawnScene world graph
     let personCount = world.Query(With PersonRef) |> Seq.length
     let connectorCount = world.Query(With Connector) |> Seq.length
-    personCount =! 5
-    test <@ connectorCount > 0 @>
+    personCount =! 3
+    connectorCount >! 0
 
 [<Fact>]
 let ``destroyScene removes all scene entities`` () =
     use ecs = new EcsWorld()
     let world = ecs.World
-    let graph = createFamilyGraph peopleAndParents
+    let graph = createFamilyGraph testFamily
     spawnScene world graph
+    let personCountBefore = world.Query(With PersonRef) |> Seq.length
+    personCountBefore >! 0
+    let connectorCountBefore = world.Query(With Connector) |> Seq.length
+    connectorCountBefore >! 0
     destroyScene world |> ignore
     let personCount = world.Query(With PersonRef) |> Seq.length
     let connectorCount = world.Query(With Connector) |> Seq.length
@@ -51,7 +60,7 @@ let ``destroyScene after spawnScene leaves controls intact`` () =
     use ecs = new EcsWorld()
     let world = ecs.World
     spawnControls world
-    let graph = createFamilyGraph peopleAndParents
+    let graph = createFamilyGraph testFamily
     spawnScene world graph
     destroyScene world |> ignore
     let buttonCount = world.Query(With Button) |> Seq.length

@@ -13,24 +13,6 @@ open Wilnaatahl.Traits.ConnectorTraits
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Tests.EcsTestSupport
 
-/// Helper to create a position record in the Core assembly's type.
-let private pos x y z =
-    let p = Position.Val {| x = x; y = y; z = z |}
-    // Extract the value back so we get the Core assembly's anonymous record type
-    ignore p
-    // Actually, use Entity.setValue pattern to set positions after spawn
-    x, y, z
-
-/// Spawns a line using Position.Val to avoid cross-assembly anonymous record issues.
-let private spawnLine (world: IWorld) (x1, y1, z1) (x2, y2, z2) =
-    // Spawn endpoints manually using Position.Val which resolves the type correctly
-    let ep1 = world.Spawn(Position.Val {| x = x1; y = y1; z = z1 |}, Hidden.Tag(), Connector.Tag())
-    let ep2 = world.Spawn(Position.Val {| x = x2; y = y2; z = z2 |}, Hidden.Tag(), Connector.Tag())
-    let lineId = world.Spawn(Line.Tag(), Connector.Tag())
-    ep1 |> add (EndpointOf => lineId)
-    ep2 |> add (EndpointOf => lineId)
-    lineId
-
 [<Fact>]
 let ``spawn creates line entity with Line and Connector traits`` () =
     use ecs = new EcsWorld()
@@ -40,6 +22,15 @@ let ``spawn creates line entity with Line and Connector traits`` () =
 
     lineId |> has Line =! true
     lineId |> has Connector =! true
+
+[<Fact>]
+let ``spawn creates lines that are not Hidden by default`` () =
+    use ecs = new EcsWorld()
+    let world = ecs.World
+
+    let lineId = world |> Line3.spawn zeroPosition zeroPosition
+
+    lineId |> has Hidden =! false
 
 [<Fact>]
 let ``spawn creates two endpoints with Position Hidden Connector and EndpointOf`` () =
@@ -61,7 +52,7 @@ let ``spawn sets endpoint positions correctly`` () =
     use ecs = new EcsWorld()
     let world = ecs.World
 
-    let lineId = spawnLine world (1.0, 2.0, 3.0) (4.0, 5.0, 6.0)
+    let lineId = world |> Line3.spawn (Line3.pos 1.0 2.0 3.0) (Line3.pos 4.0 5.0 6.0)
     let v1, v2 = lineId |> Line3.getPositions world
 
     v1 =! Vector3.FromComponents(1.0, 2.0, 3.0)
@@ -96,7 +87,7 @@ let ``getEndpoints returns exactly two endpoints`` () =
     let lineId = world |> Line3.spawn zeroPosition zeroPosition
     let ep1, ep2 = lineId |> Line3.getEndpoints world
 
-    (ep1 <> ep2) =! true
+    ep1 <>! ep2
 
 [<Fact>]
 let ``snapToWithOffset adds SnapTo relations`` () =
@@ -110,13 +101,16 @@ let ``snapToWithOffset adds SnapTo relations`` () =
     subject |> targetFor SnapToX =! Some target
     subject |> targetFor SnapToY =! Some target
     subject |> targetFor SnapToZ =! Some target
+    (subject |> get (SnapToX => target)).Value =! {| x = 1.0 |}
+    (subject |> get (SnapToY => target)).Value =! {| y = 2.0 |}
+    (subject |> get (SnapToZ => target)).Value =! {| z = 3.0 |}
 
 [<Fact>]
 let ``snapTo snaps both endpoints to targets with zero offset`` () =
     use ecs = new EcsWorld()
     let world = ecs.World
-    let target1 = world.Spawn(Position.Val {| x = 10.0; y = 0.0; z = 0.0 |})
-    let target2 = world.Spawn(Position.Val {| x = 20.0; y = 0.0; z = 0.0 |})
+    let target1 = world.Spawn(Position.Val(Line3.pos 10.0 0.0 0.0))
+    let target2 = world.Spawn(Position.Val(Line3.pos 20.0 0.0 0.0))
 
     let lineId = world |> Line3.spawn zeroPosition zeroPosition
     lineId |> Line3.snapTo world target1 target2 |> ignore
@@ -129,7 +123,7 @@ let ``snapTo snaps both endpoints to targets with zero offset`` () =
 let ``updateEndpoints calls functions on each endpoint position`` () =
     use ecs = new EcsWorld()
     let world = ecs.World
-    let lineId = spawnLine world (1.0, 0.0, 0.0) (2.0, 0.0, 0.0)
+    let lineId = world |> Line3.spawn (Line3.pos 1.0 0.0 0.0) (Line3.pos 2.0 0.0 0.0)
     let mutable calls = 0
 
     lineId |> Line3.updateEndpoints world AlwaysTrack

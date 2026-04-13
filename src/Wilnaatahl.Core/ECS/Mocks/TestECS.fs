@@ -85,9 +85,13 @@ type private TestValueRelation<'T, 'TMutable>(config, freeze, unfreeze, defaultV
 
 type private QueryResult<'T, 'TMutable> private (entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient) =
 
-    static member Create(entities, getRead, getMutable, notifyChanges, hasChangedModifier, ?getReadResilient) =
-        let getReadResilient = defaultArg getReadResilient (fun _ entity -> getRead entity)
+    /// Creates a QueryResult with a resilient after-read function for change detection.
+    static member Create(entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient) =
         QueryResult<'T, 'TMutable>(entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient)
+
+    /// Creates a QueryResult using getRead as the after-read function (no resilience needed).
+    static member Create(entities, getRead, getMutable, notifyChanges, hasChangedModifier) =
+        QueryResult<'T, 'TMutable>(entities, getRead, getMutable, notifyChanges, hasChangedModifier, fun _ entity -> getRead entity)
 
     interface IQueryResult<'T, 'TMutable> with
         member _.ForEach callback =
@@ -676,7 +680,7 @@ type TestWorld() =
                 world |> getTraitValue someTrait entity |> Option.defaultValue before
 
             QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
-                getReadResilient = getReadResilient)
+                getReadResilient)
 
         member _.QueryTraits(firstTrait, secondTrait, where) =
             let entities = world |> query [| With firstTrait; With secondTrait; yield! where |]
@@ -726,7 +730,7 @@ type TestWorld() =
                 afterFirst, afterSecond
 
             QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
-                getReadResilient = getReadResilient)
+                getReadResilient)
 
         member _.QueryTraits3(firstTrait, secondTrait, thirdTrait, where) =
             let entities =
@@ -782,7 +786,7 @@ type TestWorld() =
                 a1, a2, a3
 
             QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
-                getReadResilient = getReadResilient)
+                getReadResilient)
 
         member _.QueryTraits4(firstTrait, secondTrait, thirdTrait, fourthTrait, where) =
 
@@ -852,7 +856,7 @@ type TestWorld() =
                 a1, a2, a3, a4
 
             QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
-                getReadResilient = getReadResilient)
+                getReadResilient)
 
         member _.QueryFirst where = world |> queryFirst where
 

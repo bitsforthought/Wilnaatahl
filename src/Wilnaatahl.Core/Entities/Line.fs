@@ -11,6 +11,9 @@ open Wilnaatahl.ViewModel.Vector
 open Wilnaatahl.Traits.ConnectorTraits
 open Wilnaatahl.Traits.SpaceTraits
 
+/// Creates an anonymous record with x, y, z fields for use as a position value.
+let pos x y z = {| x = x; y = y; z = z |}
+
 let spawn firstPos secondPos (world: IWorld) =
     let firstEndpointId =
         world.Spawn(Position.Val firstPos, Hidden.Tag(), Connector.Tag())

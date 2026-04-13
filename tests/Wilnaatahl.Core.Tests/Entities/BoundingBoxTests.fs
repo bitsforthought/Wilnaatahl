@@ -41,9 +41,9 @@ let ``spawn returns three distinct entity ids`` () =
 
     let boxId, boxPosId, boundPosId = world |> BoundingBox.spawn zeroPosition
 
-    (boxId <> boxPosId) =! true
-    (boxId <> boundPosId) =! true
-    (boxPosId <> boundPosId) =! true
+    boxId <>! boxPosId
+    boxId <>! boundPosId
+    boxPosId <>! boundPosId
 
 [<Fact>]
 let ``getCorners returns the two corner entities`` () =

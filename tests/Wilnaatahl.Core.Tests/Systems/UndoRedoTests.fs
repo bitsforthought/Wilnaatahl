@@ -21,9 +21,7 @@ let private findButton label (world: IWorld) =
     world.Query(With Button) |> Seq.find (fun e -> getButtonLabel e = label)
 
 let private isButtonDisabled entity =
-    match entity |> get Button with
-    | Some b -> b.disabled
-    | None -> true
+    (entity |> get Button).Value.disabled
 
 [<Fact>]
 let ``spawnUndoRedoControls creates undo and redo buttons`` () =

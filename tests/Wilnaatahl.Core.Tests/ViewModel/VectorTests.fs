@@ -81,8 +81,12 @@ let ``lerp at boundary and midpoint alphas`` (alpha: float) =
 let ``damp approaches target`` () =
     let result = Vector.damp (vec 0.0 0.0 0.0) (vec 10.0 10.0 10.0) 5.0 1.0
     // With lambda=5.0 and delta=1.0, alpha = 1 - exp(-5) ≈ 0.9933
-    test <@ result.x > 9.0 && result.y > 9.0 && result.z > 9.0 @>
-    test <@ result.x < 10.0 && result.y < 10.0 && result.z < 10.0 @>
+    result.x >! 9.0
+    result.y >! 9.0
+    result.z >! 9.0
+    result.x <! 10.0
+    result.y <! 10.0
+    result.z <! 10.0
 
 // --- MutableVector3 ---
 

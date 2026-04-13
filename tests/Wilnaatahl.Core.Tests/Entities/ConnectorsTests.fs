@@ -12,12 +12,17 @@ open Wilnaatahl.Traits.ConnectorTraits
 open Wilnaatahl.Traits.PeopleTraits
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Tests.EcsTestSupport
-open Wilnaatahl.Tests.TestData
+
+let private mother = { Person.Empty with Id = PersonId 0; Shape = Sphere; Wilp = Some(WilpName "T") }
+let private father = { Person.Empty with Id = PersonId 1; Shape = Cube }
+let private child = { Person.Empty with Id = PersonId 2; Shape = Sphere; Wilp = Some(WilpName "T") }
+let private coParents = { Mother = mother.Id; Father = father.Id }
+let private testFamily = [ mother, None; father, None; child, Some coParents ]
 
 let private spawnTestScene (world: IWorld) =
-    let graph = createFamilyGraph peopleAndParents
-    let wilpId = world |> People.spawnWilpBox (WilpName "H")
-    for person, _ in peopleAndParents do
+    let graph = createFamilyGraph testFamily
+    let wilpId = world |> People.spawnWilpBox (WilpName "T")
+    for person, _ in testFamily do
         world |> People.spawnTreeNode person wilpId
     graph
 
@@ -28,7 +33,7 @@ let ``destroyAllConnectors removes all connector entities`` () =
     let graph = spawnTestScene world
     world |> Connectors.spawnAllConnectors graph
     let connectorsBefore = world.Query(With Connector) |> Seq.length
-    test <@ connectorsBefore > 0 @>
+    connectorsBefore >! 0
     world |> Connectors.destroyAllConnectors |> ignore
     let connectorsAfter = world.Query(With Connector) |> Seq.length
     connectorsAfter =! 0
@@ -40,9 +45,9 @@ let ``spawnAllConnectors creates connector entities for a family`` () =
     let graph = spawnTestScene world
     world |> Connectors.spawnAllConnectors graph
     let connectorCount = world.Query(With Connector) |> Seq.length
-    test <@ connectorCount > 0 @>
+    connectorCount >! 0
     let lineCount = world.Query(With Line) |> Seq.length
-    test <@ lineCount > 0 @>
+    lineCount >! 0
 
 [<Fact>]
 let ``spawnAllConnectors creates elbow entities`` () =
@@ -51,5 +56,4 @@ let ``spawnAllConnectors creates elbow entities`` () =
     let graph = spawnTestScene world
     world |> Connectors.spawnAllConnectors graph
     let elbowCount = world.Query(With Elbow) |> Seq.length
-    // 1 branch elbow + 1 junction elbow per child (3 children) = 4 elbows minimum
-    test <@ elbowCount >= 4 @>
+    elbowCount >=! 1

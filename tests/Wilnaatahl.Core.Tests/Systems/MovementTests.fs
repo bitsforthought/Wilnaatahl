@@ -68,15 +68,15 @@ let ``move updates bisecting entity to midpoint of line`` () =
 
     // Set endpoint positions after spawn to trigger Changed
     let ep1, ep2 = lineId |> Line3.getEndpoints world
-    ep1 |> setValue Position {| x = 0.0; y = 0.0; z = 0.0 |}
-    ep2 |> setValue Position {| x = 10.0; y = 0.0; z = 0.0 |}
+    ep1 |> setValue Position {| x = 2.0; y = 4.0; z = 6.0 |}
+    ep2 |> setValue Position {| x = 10.0; y = 20.0; z = 30.0 |}
 
     move tracker world |> ignore
 
     let pos = (bisectEntity |> get Position).Value
-    pos.x =! 5.0
-    pos.y =! 0.0
-    pos.z =! 0.0
+    pos.x =! 6.0
+    pos.y =! 12.0
+    pos.z =! 18.0
 
 [<Fact>]
 let ``move propagates through kinematic chain`` () =
@@ -151,8 +151,10 @@ let ``move updates bounding box corners`` () =
     // One should be min corner (0.5, 0.5, 0.5), other max corner (5.5, 5.5, 5.5)
     positions =! Set.ofList [ (0.5, 0.5, 0.5); (5.5, 5.5, 5.5) ]
 
-[<Fact>]
-let ``move updates parallel line with positive offset on horizontal line`` () =
+[<Theory>]
+[<InlineData(1.0, 1.0)>]
+[<InlineData(-1.0, -1.0)>]
+let ``move updates parallel line on horizontal line`` (offset: float, expectedY: float) =
     use ecs = new EcsWorld()
     let world = ecs.World
     let tracker = createChanged ()
@@ -165,40 +167,16 @@ let ``move updates parallel line with positive offset on horizontal line`` () =
 
     // Parallel line
     let parallelLineId = world |> Line3.spawnDynamic
-    parallelLineId |> addWith (Parallels => sourceLineId) {| offset = 1.0 |}
+    parallelLineId |> addWith (Parallels => sourceLineId) {| offset = offset |}
 
     srcEp1 |> touchPosition
     srcEp2 |> touchPosition
     move tracker world |> ignore
 
     // For a horizontal X-axis line, the perpendicular in the vertical plane is +Y.
-    // So positive offset should move the parallel line in the +Y direction.
     let pv1, pv2 = parallelLineId |> Line3.getPositions world
-    test <@ pv1.y > 0.0 @>
-    test <@ pv2.y > 0.0 @>
-
-[<Fact>]
-let ``move updates parallel line with negative offset`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    let tracker = createChanged ()
-
-    let sourceLineId = world |> Line3.spawn zeroPosition zeroPosition
-    let srcEp1, srcEp2 = sourceLineId |> Line3.getEndpoints world
-    srcEp1 |> setValue Position {| x = 0.0; y = 0.0; z = 0.0 |}
-    srcEp2 |> setValue Position {| x = 10.0; y = 0.0; z = 0.0 |}
-
-    let parallelLineId = world |> Line3.spawnDynamic
-    parallelLineId |> addWith (Parallels => sourceLineId) {| offset = -1.0 |}
-
-    srcEp1 |> touchPosition
-    srcEp2 |> touchPosition
-    move tracker world |> ignore
-
-    // Negative offset should move in the -Y direction.
-    let pv1, pv2 = parallelLineId |> Line3.getPositions world
-    test <@ pv1.y < 0.0 @>
-    test <@ pv2.y < 0.0 @>
+    (pv1.x, pv1.y, pv1.z) =! (0.0, expectedY, 0.0)
+    (pv2.x, pv2.y, pv2.z) =! (10.0, expectedY, 0.0)
 
 [<Fact>]
 let ``move handles parallel line on vertical line`` () =
@@ -223,8 +201,8 @@ let ``move handles parallel line on vertical line`` () =
     // dir = (0,1,0), abs(dir.x)=0 < abs(dir.z)=0 is false → alt = (0,0,0.1)
     // The parallel line should be offset in the Z direction.
     let pv1, pv2 = parallelLineId |> Line3.getPositions world
-    test <@ abs pv1.z > 0.0 @>
-    test <@ abs pv2.z > 0.0 @>
+    (pv1.x, pv1.y, pv1.z) =! (0.0, 0.0, 1.0)
+    (pv2.x, pv2.y, pv2.z) =! (0.0, 10.0, 1.0)
 
 [<Fact>]
 let ``move handles parallel line on z-axis line`` () =
@@ -248,8 +226,8 @@ let ``move handles parallel line on z-axis line`` () =
     // dir = (0,0,1), up = (0,1,0). perpUp = up - (up·dir)*dir = (0,1,0).
     // The perpendicular is the Y direction, not X, because up is already perpendicular to Z.
     let pv1, pv2 = parallelLineId |> Line3.getPositions world
-    test <@ abs pv1.y > 0.0 @>
-    test <@ abs pv2.y > 0.0 @>
+    (pv1.x, pv1.y, pv1.z) =! (0.0, 1.0, 0.0)
+    (pv2.x, pv2.y, pv2.z) =! (0.0, 1.0, 10.0)
 
 [<Fact>]
 let ``move handles parallel line on nearly-vertical line with z perturbation`` () =
@@ -274,5 +252,5 @@ let ``move handles parallel line on nearly-vertical line with z perturbation`` (
 
     // With alt = (1, 0, 0), the perpendicular should be in the X direction.
     let pv1, pv2 = parallelLineId |> Line3.getPositions world
-    test <@ abs pv1.x > 0.0 @>
-    test <@ abs pv2.x > 0.0 @>
+    (pv1.x, pv1.y, pv1.z) =! (1.0, 0.0, 0.0)
+    (pv2.x, pv2.y, pv2.z) =! (1.0, 1.0, 1e-15)

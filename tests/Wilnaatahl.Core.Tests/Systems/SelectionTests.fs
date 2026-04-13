@@ -39,7 +39,7 @@ let ``clicking node in single-select mode selects it`` () =
 
     selectNodes world |> ignore
 
-    test <@ node |> has Selected @>
+    (node |> has Selected) =! true
 
 [<Fact>]
 let ``clicking selected node deselects it`` () =
@@ -53,7 +53,7 @@ let ``clicking selected node deselects it`` () =
 
     selectNodes world |> ignore
 
-    test <@ not (node |> has Selected) @>
+    (node |> has Selected) =! false
 
 [<Fact>]
 let ``single-select mode clears previous selection on new click`` () =
@@ -68,8 +68,8 @@ let ``single-select mode clears previous selection on new click`` () =
 
     selectNodes world |> ignore
 
-    test <@ not (node1 |> has Selected) @>
-    test <@ node2 |> has Selected @>
+    (node1 |> has Selected) =! false
+    (node2 |> has Selected) =! true
 
 [<Fact>]
 let ``background click deselects all`` () =
@@ -83,7 +83,7 @@ let ``background click deselects all`` () =
 
     selectNodes world |> ignore
 
-    test <@ not (node |> has Selected) @>
+    (node |> has Selected) =! false
 
 [<Fact>]
 let ``clicking select mode button toggles multi-select`` () =
@@ -101,7 +101,7 @@ let ``clicking select mode button toggles multi-select`` () =
     let node1 = spawnNode world
     node1 |> add ClickEvent
     selectNodes world |> ignore
-    test <@ node1 |> has Selected @>
+    (node1 |> has Selected) =! true
     cleanupEvents world |> ignore
 
     // Click second node — first should remain selected
@@ -109,8 +109,8 @@ let ``clicking select mode button toggles multi-select`` () =
     node2 |> add ClickEvent
     selectNodes world |> ignore
 
-    test <@ node1 |> has Selected @>
-    test <@ node2 |> has Selected @>
+    (node1 |> has Selected) =! true
+    (node2 |> has Selected) =! true
 
 [<Fact>]
 let ``clicking button clears selection and updates label`` () =
@@ -126,7 +126,7 @@ let ``clicking button clears selection and updates label`` () =
 
     selectNodes world |> ignore
 
-    test <@ not (node |> has Selected) @>
+    (node |> has Selected) =! false
 
     let buttonData = (buttonEntity |> get Button).Value
     buttonData.label =! "Single-select"

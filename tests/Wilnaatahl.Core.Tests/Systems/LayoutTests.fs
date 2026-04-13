@@ -15,12 +15,17 @@ open Wilnaatahl.Traits.PeopleTraits
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.System.Layout
 open Wilnaatahl.Tests.EcsTestSupport
-open Wilnaatahl.Tests.TestData
+
+let private mother = { Person.Empty with Id = PersonId 0; Shape = Sphere; Wilp = Some(WilpName "T") }
+let private father = { Person.Empty with Id = PersonId 1; Shape = Cube }
+let private child = { Person.Empty with Id = PersonId 2; Shape = Sphere; Wilp = Some(WilpName "T") }
+let private coParents = { Mother = mother.Id; Father = father.Id }
+let private testFamily = [ mother, None; father, None; child, Some coParents ]
 
 let private spawnTestScene (world: IWorld) =
-    let graph = createFamilyGraph peopleAndParents
-    let wilpId = world |> People.spawnWilpBox (WilpName "H")
-    for person, _ in peopleAndParents do
+    let graph = createFamilyGraph testFamily
+    let wilpId = world |> People.spawnWilpBox (WilpName "T")
+    for person, _ in testFamily do
         world |> People.spawnTreeNode person wilpId
     graph
 
@@ -30,11 +35,9 @@ let ``layoutNodes sets TargetPosition on all tree nodes`` () =
     let world = ecs.World
     let graph = spawnTestScene world
     layoutNodes world graph
-    let treeNodes =
-        world.QueryTrait(PersonRef).ToSequence() |> Seq.toList
-    for _, entityId in treeNodes do
-        let hasTarget = entityId |> has TargetPosition
-        hasTarget =! true
+    let personEntities = world.Query(With PersonRef) |> Set.ofSeq
+    let animatingEntities = world.Query(With PersonRef, With TargetPosition) |> Set.ofSeq
+    personEntities =! animatingEntities
 
 [<Fact>]
 let ``layoutNodes assigns distinct positions to each person`` () =

@@ -24,10 +24,11 @@ let ``animate moves position toward target`` () =
     animate 0.1 world |> ignore
 
     let pos = (entity |> get Position).Value
-    test <@ pos.x < 10.0 && pos.x > 0.0 @>
+    pos.x <! 10.0
+    pos.x >! 0.0
     pos.y =! 0.0
     pos.z =! 0.0
-    test <@ entity |> has TargetPosition @>
+    (entity |> has TargetPosition) =! true
 
 [<Fact>]
 let ``animate snaps to target and removes TargetPosition when close`` () =
@@ -103,9 +104,13 @@ let ``animate handles multiple entities`` () =
     animate 0.1 world |> ignore
 
     let pos1 = (e1 |> get Position).Value
-    test <@ pos1.x < 10.0 && pos1.x > 0.0 @>
+    pos1.x <! 10.0
+    pos1.x >! 0.0
 
     let pos2 = (e2 |> get Position).Value
-    test <@ pos2.x > 0.0 && pos2.x < 10.0 @>
-    test <@ pos2.y > 0.0 && pos2.y < 10.0 @>
-    test <@ pos2.z > 0.0 && pos2.z < 10.0 @>
+    pos2.x >! 0.0
+    pos2.x <! 10.0
+    pos2.y >! 0.0
+    pos2.y <! 10.0
+    pos2.z >! 0.0
+    pos2.z <! 10.0

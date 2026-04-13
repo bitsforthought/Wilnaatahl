@@ -53,9 +53,42 @@ let ``full drag flow moves selected entity position`` () =
     dragNodes world |> ignore
 
     let pos = (node |> get Position).Value
-    pos.x =! 12.0
-    pos.y =! 0.0
-    pos.z =! 0.0
+    (pos.x, pos.y, pos.z) =! (12.0, 0.0, 0.0)
+
+[<Fact>]
+let ``sequential drag events accumulate correctly`` () =
+    use ecs = new EcsWorld()
+    let world = ecs.World
+    let node =
+        world.Spawn(
+            PersonRef.Val Person.Empty,
+            Position.Val {| x = 5.0; y = 0.0; z = 0.0 |},
+            Selected.Tag()
+        )
+
+    // Touch + drag start
+    node |> add PointerDownEvent
+    dragNodes world |> ignore
+    world.Add DragStartEvent
+    dragNodes world |> ignore
+
+    // First drag: origin = {5,0,0}, move = {3,0,0}
+    // delta = origin + move - oldPosition = {5,0,0} + {3,0,0} - {5,0,0} = {3,0,0}
+    // new position = {5,0,0} + {3,0,0} = {8,0,0}
+    world.AddWith DragEvent {| x = 3.0; y = 0.0; z = 0.0 |}
+    dragNodes world |> ignore
+
+    let pos1 = (node |> get Position).Value
+    (pos1.x, pos1.y, pos1.z) =! (8.0, 0.0, 0.0)
+
+    // Second drag (no drag end in between): origin = {5,0,0}, move = {7,0,0}
+    // delta = origin + move - oldPosition = {5,0,0} + {7,0,0} - {8,0,0} = {4,0,0}
+    // new position = {8,0,0} + {4,0,0} = {12,0,0}
+    world.AddWith DragEvent {| x = 7.0; y = 0.0; z = 0.0 |}
+    dragNodes world |> ignore
+
+    let pos2 = (node |> get Position).Value
+    (pos2.x, pos2.y, pos2.z) =! (12.0, 0.0, 0.0)
 
 [<Fact>]
 let ``drag end cleans up click events`` () =
