@@ -1,5 +1,6 @@
 module Wilnaatahl.Tests.Systems.RunnerTests
 
+open System
 open Xunit
 open Swensen.Unquote
 open Wilnaatahl.ECS
@@ -18,89 +19,85 @@ open Wilnaatahl.Systems.Runner
 open Wilnaatahl.Tests.EcsTestSupport
 open Wilnaatahl.Tests.TestData
 
-[<Fact>]
-let ``runSystems with no events completes without error`` () =
-    use ecs = new EcsWorld()
+type Tests() =
+    let ecs = new EcsWorld()
     let world = ecs.World
-    spawnControls world
-    runSystems world 0.016
+    do spawnControls world
 
-[<Fact>]
-let ``runSystems cleans up events at end of frame`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    spawnControls world
-    handlePointerMissed world |> ignore
-    handleDragStart world |> ignore
-    world.Has PointerMissedEvent =! true
-    world.Has DragStartEvent =! true
-    runSystems world 0.016
-    world.Has PointerMissedEvent =! false
-    world.Has DragStartEvent =! false
-
-[<Fact>]
-let ``runSystems animates entities toward target`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    spawnControls world
-    let entity =
-        world.Spawn(
-            Position.Val zeroPosition,
-            TargetPosition.Val {| x = 10.0; y = 0.0; z = 0.0 |}
-        )
-
-    // Position starts at origin (0,0,0), so any movement toward target is progress.
-    let posBefore = (entity |> get Position).Value.x
-    runSystems world 0.5
-    let posAfter = (entity |> get Position).Value.x
-    posAfter >! posBefore
-
-[<Fact>]
-let ``integration: select, drag, and undo on scene nodes`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    let graph = createFamilyGraph testPeopleAndParents
-
-    // 0.016 seconds ≈ one frame at 60 FPS
+    /// Simulates one frame at 60 FPS.
     let frameDelta = 0.016
 
-    spawnControls world
-    spawnScene world graph
-    layoutNodes world graph
+    interface IDisposable with
+        member _.Dispose() = (ecs :> IDisposable).Dispose()
 
-    // Animate to settled positions
-    for _ in 1..50 do runSystems world 0.1
+    [<Fact>]
+    member _.``runSystems with no events completes without error``() =
+        runSystems world frameDelta
 
-    // Find a person node
-    let nodeEntity = world.Query(With PersonRef) |> Seq.head
-    let originalPos = (nodeEntity |> get Position).Value
-    let origX = originalPos.x
+    [<Fact>]
+    member _.``runSystems cleans up events at end of frame``() =
+        handlePointerMissed world |> ignore
+        handleDragStart world |> ignore
+        world.Has PointerMissedEvent =! true
+        world.Has DragStartEvent =! true
+        runSystems world frameDelta
+        world.Has PointerMissedEvent =! false
+        world.Has DragStartEvent =! false
 
-    // Click to select
-    handlePointerDown nodeEntity
-    handleClick nodeEntity
-    runSystems world frameDelta
-    (nodeEntity |> has Selected) =! true
+    [<Fact>]
+    member _.``runSystems animates entities toward target``() =
+        let entity =
+            world.Spawn(
+                Position.Val zeroPosition,
+                TargetPosition.Val {| x = 10.0; y = 0.0; z = 0.0 |}
+            )
 
-    // Drag
-    handleDragStart world |> ignore
-    handleDrag world (origX + 2.0) originalPos.y originalPos.z |> ignore
-    runSystems world frameDelta
+        // Position starts at origin (0,0,0), so any movement toward target is progress.
+        let posBefore = (entity |> get Position).Value.x
+        runSystems world 0.5
+        let posAfter = (entity |> get Position).Value.x
+        posAfter >! posBefore
 
-    // End drag
-    handleDragEnd world |> ignore
-    runSystems world frameDelta
+    [<Fact>]
+    member _.``integration: select, drag, and undo on scene nodes``() =
+        let graph = createFamilyGraph testPeopleAndParents
 
-    // Position should have changed
-    let movedPos = (nodeEntity |> get Position).Value
-    movedPos.x <>! origX
+        spawnScene world graph
+        layoutNodes world graph
 
-    // Undo — find undo button using QueryTrait
-    let _, undoBtn =
-        world.QueryTrait(Button).ToSequence()
-        |> Seq.find (fun (buttonData, _) -> buttonData.label = "Undo")
-    handleClick undoBtn
-    runSystems world frameDelta
+        // Animate to settled positions
+        for _ in 1..50 do runSystems world 0.1
 
-    // Should have TargetPosition set (animating back)
-    (nodeEntity |> has TargetPosition) =! true
+        // Find a person node
+        let nodeEntity = world.Query(With PersonRef) |> Seq.head
+        let originalPos = (nodeEntity |> get Position).Value
+        let origX = originalPos.x
+
+        // Click to select
+        handlePointerDown nodeEntity
+        handleClick nodeEntity
+        runSystems world frameDelta
+        (nodeEntity |> has Selected) =! true
+
+        // Drag
+        handleDragStart world |> ignore
+        handleDrag world (origX + 2.0) originalPos.y originalPos.z |> ignore
+        runSystems world frameDelta
+
+        // End drag
+        handleDragEnd world |> ignore
+        runSystems world frameDelta
+
+        // Position should have changed
+        let movedPos = (nodeEntity |> get Position).Value
+        movedPos.x <>! origX
+
+        // Undo — find undo button using QueryTrait
+        let _, undoBtn =
+            world.QueryTrait(Button).ToSequence()
+            |> Seq.find (fun (buttonData, _) -> buttonData.label = "Undo")
+        handleClick undoBtn
+        runSystems world frameDelta
+
+        // Should have TargetPosition set (animating back)
+        (nodeEntity |> has TargetPosition) =! true

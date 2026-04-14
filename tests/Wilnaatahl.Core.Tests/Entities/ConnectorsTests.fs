@@ -1,5 +1,6 @@
 module Wilnaatahl.Tests.Entities.ConnectorsTests
 
+open System
 open Xunit
 open Swensen.Unquote
 open Wilnaatahl.ECS
@@ -21,35 +22,36 @@ let private spawnTestScene (world: IWorld) =
         world |> People.spawnTreeNode person wilpId
     graph
 
-[<Fact>]
-let ``destroyAllConnectors removes all connector entities`` () =
-    use ecs = new EcsWorld()
+type Tests() =
+    let ecs = new EcsWorld()
     let world = ecs.World
-    let graph = spawnTestScene world
-    world |> Connectors.spawnAllConnectors graph
-    let connectorsBefore = world.Query(With Connector) |> Seq.length
-    connectorsBefore >! 0
-    world |> Connectors.destroyAllConnectors |> ignore
-    let connectorsAfter = world.Query(With Connector) |> Seq.length
-    connectorsAfter =! 0
 
-[<Fact>]
-let ``spawnAllConnectors creates connector entities for a family`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    let graph = spawnTestScene world
-    world |> Connectors.spawnAllConnectors graph
-    let connectorCount = world.Query(With Connector) |> Seq.length
-    connectorCount >! 0
-    let lineCount = world.Query(With Line) |> Seq.length
-    lineCount >! 0
+    interface IDisposable with
+        member _.Dispose() = (ecs :> IDisposable).Dispose()
 
-[<Fact>]
-let ``spawnAllConnectors creates elbow entities`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    let graph = spawnTestScene world
-    world |> Connectors.spawnAllConnectors graph
-    // With 3 children, we expect at least 1 branch elbow + 3 child junction elbows = 4.
-    let elbowCount = world.Query(With Elbow) |> Seq.length
-    elbowCount >=! 4
+    [<Fact>]
+    member _.``destroyAllConnectors removes all connector entities`` () =
+        let graph = spawnTestScene world
+        world |> Connectors.spawnAllConnectors graph
+        let connectorsBefore = world.Query(With Connector) |> Seq.length
+        connectorsBefore >! 0
+        world |> Connectors.destroyAllConnectors |> ignore
+        let connectorsAfter = world.Query(With Connector) |> Seq.length
+        connectorsAfter =! 0
+
+    [<Fact>]
+    member _.``spawnAllConnectors creates connector entities for a family`` () =
+        let graph = spawnTestScene world
+        world |> Connectors.spawnAllConnectors graph
+        let connectorCount = world.Query(With Connector) |> Seq.length
+        connectorCount >! 0
+        let lineCount = world.Query(With Line) |> Seq.length
+        lineCount >! 0
+
+    [<Fact>]
+    member _.``spawnAllConnectors creates elbow entities`` () =
+        let graph = spawnTestScene world
+        world |> Connectors.spawnAllConnectors graph
+        // With 3 children, we expect at least 1 branch elbow + 3 child junction elbows = 4.
+        let elbowCount = world.Query(With Elbow) |> Seq.length
+        elbowCount >=! 4

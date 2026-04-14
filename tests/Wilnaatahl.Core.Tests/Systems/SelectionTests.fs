@@ -1,5 +1,6 @@
 module Wilnaatahl.Tests.Systems.SelectionTests
 
+open System
 open Xunit
 open Swensen.Unquote
 open Wilnaatahl.ECS
@@ -16,117 +17,96 @@ open Wilnaatahl.Tests.EcsTestSupport
 let private spawnNode (world: IWorld) =
     world.Spawn(PersonRef.Val Person.Empty, Position.Val {| x = 0.0; y = 0.0; z = 0.0 |})
 
-[<Fact>]
-let ``spawnSelectControls creates button entity`` () =
-    use ecs = new EcsWorld()
+type Tests() =
+    let ecs = new EcsWorld()
     let world = ecs.World
-
     let sortOrder, _ = spawnSelectControls (0, world)
 
-    sortOrder =! 1
+    interface IDisposable with
+        member _.Dispose() = (ecs :> IDisposable).Dispose()
 
-    let buttons = world.Query(With Button) |> Seq.toList
-    buttons.Length =! 1
+    [<Fact>]
+    member _.``spawnSelectControls creates button entity``() =
+        sortOrder =! 1
 
-[<Fact>]
-let ``clicking node in single-select mode selects it`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    spawnSelectControls (0, world) |> ignore
+        let buttons = world.Query(With Button) |> Seq.toList
+        buttons.Length =! 1
 
-    let node = spawnNode world
-    node |> add ClickEvent
+    [<Fact>]
+    member _.``clicking node in single-select mode selects it``() =
+        let node = spawnNode world
+        node |> add ClickEvent
 
-    selectNodes world |> ignore
+        selectNodes world |> ignore
 
-    (node |> has Selected) =! true
+        (node |> has Selected) =! true
 
-[<Fact>]
-let ``clicking selected node deselects it`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    spawnSelectControls (0, world) |> ignore
+    [<Fact>]
+    member _.``clicking selected node deselects it``() =
+        let node = spawnNode world
+        node |> add Selected
+        node |> add ClickEvent
 
-    let node = spawnNode world
-    node |> add Selected
-    node |> add ClickEvent
+        selectNodes world |> ignore
 
-    selectNodes world |> ignore
+        (node |> has Selected) =! false
 
-    (node |> has Selected) =! false
+    [<Fact>]
+    member _.``single-select mode clears previous selection on new click``() =
+        let node1 = spawnNode world
+        let node2 = spawnNode world
+        node1 |> add Selected
+        node2 |> add ClickEvent
 
-[<Fact>]
-let ``single-select mode clears previous selection on new click`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    spawnSelectControls (0, world) |> ignore
+        selectNodes world |> ignore
 
-    let node1 = spawnNode world
-    let node2 = spawnNode world
-    node1 |> add Selected
-    node2 |> add ClickEvent
+        (node1 |> has Selected) =! false
+        (node2 |> has Selected) =! true
 
-    selectNodes world |> ignore
+    [<Fact>]
+    member _.``background click deselects all``() =
+        let node = spawnNode world
+        node |> add Selected
+        world.Add PointerMissedEvent
 
-    (node1 |> has Selected) =! false
-    (node2 |> has Selected) =! true
+        selectNodes world |> ignore
 
-[<Fact>]
-let ``background click deselects all`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    spawnSelectControls (0, world) |> ignore
+        (node |> has Selected) =! false
 
-    let node = spawnNode world
-    node |> add Selected
-    world.Add PointerMissedEvent
+    [<Fact>]
+    member _.``clicking select mode button toggles multi-select``() =
+        // Toggle to multi-select by clicking the button
+        let buttonEntity = world.Query(With Button) |> Seq.head
+        buttonEntity |> add ClickEvent
+        selectNodes world |> ignore
+        cleanupEvents world |> ignore
 
-    selectNodes world |> ignore
+        // Now in multi-select mode: select first node
+        let node1 = spawnNode world
+        node1 |> add ClickEvent
+        selectNodes world |> ignore
+        (node1 |> has Selected) =! true
+        cleanupEvents world |> ignore
 
-    (node |> has Selected) =! false
+        // Click second node — first should remain selected
+        let node2 = spawnNode world
+        node2 |> add ClickEvent
+        selectNodes world |> ignore
 
-[<Fact>]
-let ``clicking select mode button toggles multi-select`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    spawnSelectControls (0, world) |> ignore
+        (node1 |> has Selected) =! true
+        (node2 |> has Selected) =! true
 
-    // Toggle to multi-select by clicking the button
-    let buttonEntity = world.Query(With Button) |> Seq.head
-    buttonEntity |> add ClickEvent
-    selectNodes world |> ignore
-    cleanupEvents world |> ignore
+    [<Fact>]
+    member _.``clicking button clears selection and updates label``() =
+        let node = spawnNode world
+        node |> add Selected
 
-    // Now in multi-select mode: select first node
-    let node1 = spawnNode world
-    node1 |> add ClickEvent
-    selectNodes world |> ignore
-    (node1 |> has Selected) =! true
-    cleanupEvents world |> ignore
+        let buttonEntity = world.Query(With Button) |> Seq.head
+        buttonEntity |> add ClickEvent
 
-    // Click second node — first should remain selected
-    let node2 = spawnNode world
-    node2 |> add ClickEvent
-    selectNodes world |> ignore
+        selectNodes world |> ignore
 
-    (node1 |> has Selected) =! true
-    (node2 |> has Selected) =! true
+        (node |> has Selected) =! false
 
-[<Fact>]
-let ``clicking button clears selection and updates label`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    spawnSelectControls (0, world) |> ignore
-
-    let node = spawnNode world
-    node |> add Selected
-
-    let buttonEntity = world.Query(With Button) |> Seq.head
-    buttonEntity |> add ClickEvent
-
-    selectNodes world |> ignore
-
-    (node |> has Selected) =! false
-
-    let buttonData = (buttonEntity |> get Button).Value
-    buttonData.label =! "Single-select"
+        let buttonData = (buttonEntity |> get Button).Value
+        buttonData.label =! "Single-select"

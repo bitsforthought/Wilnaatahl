@@ -1,5 +1,6 @@
 module Wilnaatahl.Tests.Systems.UndoRedoTests
 
+open System
 open Xunit
 open Swensen.Unquote
 open Wilnaatahl.ECS
@@ -24,202 +25,181 @@ let private findButton label (world: IWorld) =
 let private isButtonDisabled entity =
     (entity |> get Button).Value.disabled
 
-[<Fact>]
-let ``spawnUndoRedoControls creates undo and redo buttons`` () =
-    use ecs = new EcsWorld()
+type Tests() =
+    let ecs = new EcsWorld()
     let world = ecs.World
-
     let sortOrder, _ = spawnUndoRedoControls (0, world)
 
-    sortOrder =! 2
-    let buttons = world.Query(With Button) |> Seq.toList
-    buttons.Length =! 2
-    let labels = buttons |> List.map getButtonLabel |> List.sort
-    labels =! [ "Redo"; "Undo" ]
+    interface IDisposable with
+        member _.Dispose() = (ecs :> IDisposable).Dispose()
 
-[<Fact>]
-let ``undo and redo buttons start disabled`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    spawnUndoRedoControls (0, world) |> ignore
+    [<Fact>]
+    member _.``spawnUndoRedoControls creates undo and redo buttons``() =
+        sortOrder =! 2
+        let buttons = world.Query(With Button) |> Seq.toList
+        buttons.Length =! 2
+        let labels = buttons |> List.map getButtonLabel |> List.sort
+        labels =! [ "Redo"; "Undo" ]
 
-    let undoBtn = world |> findButton "Undo"
-    let redoBtn = world |> findButton "Redo"
+    [<Fact>]
+    member _.``undo and redo buttons start disabled``() =
+        let undoBtn = world |> findButton "Undo"
+        let redoBtn = world |> findButton "Redo"
 
-    isButtonDisabled undoBtn =! true
-    isButtonDisabled redoBtn =! true
+        isButtonDisabled undoBtn =! true
+        isButtonDisabled redoBtn =! true
 
-[<Fact>]
-let ``drag start captures positions and enables undo button`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    spawnUndoRedoControls (0, world) |> ignore
+    [<Fact>]
+    member _.``drag start captures positions and enables undo button``() =
+        let _ =
+            world.Spawn(
+                Position.Val {| x = 5.0; y = 0.0; z = 0.0 |},
+                Selected.Tag()
+            )
 
-    let _ =
-        world.Spawn(
-            Position.Val {| x = 5.0; y = 0.0; z = 0.0 |},
-            Selected.Tag()
-        )
+        world.Add DragStartEvent
+        handleUndoRedo world |> ignore
 
-    world.Add DragStartEvent
-    handleUndoRedo world |> ignore
+        let undoBtn = world |> findButton "Undo"
+        isButtonDisabled undoBtn =! false
 
-    let undoBtn = world |> findButton "Undo"
-    isButtonDisabled undoBtn =! false
+    [<Fact>]
+    member _.``undo restores original position via TargetPosition``() =
+        let node =
+            world.Spawn(
+                Position.Val {| x = 5.0; y = 0.0; z = 0.0 |},
+                Selected.Tag()
+            )
 
-[<Fact>]
-let ``undo restores original position via TargetPosition`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    spawnUndoRedoControls (0, world) |> ignore
+        // Capture position on drag start
+        world.Add DragStartEvent
+        handleUndoRedo world |> ignore
+        world.Remove DragStartEvent
 
-    let node =
-        world.Spawn(
-            Position.Val {| x = 5.0; y = 0.0; z = 0.0 |},
-            Selected.Tag()
-        )
+        // Simulate moving the node
+        node |> setValue Position {| x = 10.0; y = 0.0; z = 0.0 |}
 
-    // Capture position on drag start
-    world.Add DragStartEvent
-    handleUndoRedo world |> ignore
-    world.Remove DragStartEvent
+        // End the drag
+        world.Add DragEndEvent
+        handleUndoRedo world |> ignore
+        world.Remove DragEndEvent
 
-    // Simulate moving the node
-    node |> setValue Position {| x = 10.0; y = 0.0; z = 0.0 |}
+        // Click undo
+        let undoBtn = world |> findButton "Undo"
+        undoBtn |> add ClickEvent
+        handleUndoRedo world |> ignore
 
-    // End the drag
-    world.Add DragEndEvent
-    handleUndoRedo world |> ignore
-    world.Remove DragEndEvent
+        // Node should have TargetPosition set to original position
+        let targetPos = (node |> get TargetPosition).Value
+        targetPos =! Line3.pos 5.0 0.0 0.0
 
-    // Click undo
-    let undoBtn = world |> findButton "Undo"
-    undoBtn |> add ClickEvent
-    handleUndoRedo world |> ignore
+    [<Fact>]
+    member _.``undo then redo re-applies moved position``() =
+        let node =
+            world.Spawn(
+                Position.Val {| x = 5.0; y = 0.0; z = 0.0 |},
+                Selected.Tag()
+            )
 
-    // Node should have TargetPosition set to original position
-    let targetPos = (node |> get TargetPosition).Value
-    targetPos =! Line3.pos 5.0 0.0 0.0
+        // Drag: capture, move, end
+        world.Add DragStartEvent
+        handleUndoRedo world |> ignore
+        world.Remove DragStartEvent
+        node |> setValue Position {| x = 10.0; y = 0.0; z = 0.0 |}
+        world.Add DragEndEvent
+        handleUndoRedo world |> ignore
+        world.Remove DragEndEvent
 
-[<Fact>]
-let ``undo then redo re-applies moved position`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    spawnUndoRedoControls (0, world) |> ignore
+        // Undo
+        let undoBtn = world |> findButton "Undo"
+        undoBtn |> add ClickEvent
+        handleUndoRedo world |> ignore
+        undoBtn |> remove ClickEvent
 
-    let node =
-        world.Spawn(
-            Position.Val {| x = 5.0; y = 0.0; z = 0.0 |},
-            Selected.Tag()
-        )
+        // Redo should re-apply the position we were at before undo
+        let redoBtn = world |> findButton "Redo"
+        redoBtn |> add ClickEvent
+        handleUndoRedo world |> ignore
 
-    // Drag: capture, move, end
-    world.Add DragStartEvent
-    handleUndoRedo world |> ignore
-    world.Remove DragStartEvent
-    node |> setValue Position {| x = 10.0; y = 0.0; z = 0.0 |}
-    world.Add DragEndEvent
-    handleUndoRedo world |> ignore
-    world.Remove DragEndEvent
+        // The node should now have a TargetPosition set to the position
+        // that was saved before the undo (which was 10.0)
+        let targetPos = (node |> get TargetPosition).Value
+        targetPos =! Line3.pos 10.0 0.0 0.0
 
-    // Undo
-    let undoBtn = world |> findButton "Undo"
-    undoBtn |> add ClickEvent
-    handleUndoRedo world |> ignore
-    undoBtn |> remove ClickEvent
+    [<Fact>]
+    member _.``buttons reflect stack state``() =
+        let _ =
+            world.Spawn(
+                Position.Val {| x = 5.0; y = 3.0; z = 1.0 |},
+                Selected.Tag()
+            )
 
-    // Redo should re-apply the position we were at before undo
-    let redoBtn = world |> findButton "Redo"
-    redoBtn |> add ClickEvent
-    handleUndoRedo world |> ignore
+        // Initially both disabled
+        let undoBtn = world |> findButton "Undo"
+        let redoBtn = world |> findButton "Redo"
+        isButtonDisabled undoBtn =! true
+        isButtonDisabled redoBtn =! true
 
-    // The node should now have a TargetPosition set to the position
-    // that was saved before the undo (which was 10.0)
-    let targetPos = (node |> get TargetPosition).Value
-    targetPos =! Line3.pos 10.0 0.0 0.0
+        // After drag start+end, undo is enabled
+        world.Add DragStartEvent
+        handleUndoRedo world |> ignore
+        world.Remove DragStartEvent
+        world.Add DragEndEvent
+        handleUndoRedo world |> ignore
+        world.Remove DragEndEvent
 
-[<Fact>]
-let ``buttons reflect stack state`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    spawnUndoRedoControls (0, world) |> ignore
+        isButtonDisabled undoBtn =! false
+        isButtonDisabled redoBtn =! true
 
-    let _ =
-        world.Spawn(
-            Position.Val {| x = 5.0; y = 3.0; z = 1.0 |},
-            Selected.Tag()
-        )
+        // After undo, redo is enabled (button state updates on next frame)
+        undoBtn |> add ClickEvent
+        handleUndoRedo world |> ignore
+        undoBtn |> remove ClickEvent
 
-    // Initially both disabled
-    let undoBtn = world |> findButton "Undo"
-    let redoBtn = world |> findButton "Redo"
-    isButtonDisabled undoBtn =! true
-    isButtonDisabled redoBtn =! true
+        // Run again with no events to update button states via the else branch
+        handleUndoRedo world |> ignore
 
-    // After drag start+end, undo is enabled
-    world.Add DragStartEvent
-    handleUndoRedo world |> ignore
-    world.Remove DragStartEvent
-    world.Add DragEndEvent
-    handleUndoRedo world |> ignore
-    world.Remove DragEndEvent
+        isButtonDisabled redoBtn =! false
 
-    isButtonDisabled undoBtn =! false
-    isButtonDisabled redoBtn =! true
+    [<Fact>]
+    member _.``new drag after undo flushes redo stack``() =
+        let node =
+            world.Spawn(
+                Position.Val {| x = 5.0; y = 0.0; z = 0.0 |},
+                Selected.Tag()
+            )
 
-    // After undo, redo is enabled (button state updates on next frame)
-    undoBtn |> add ClickEvent
-    handleUndoRedo world |> ignore
-    undoBtn |> remove ClickEvent
+        // Drag: capture at 5, move to 10, end
+        world.Add DragStartEvent
+        handleUndoRedo world |> ignore
+        world.Remove DragStartEvent
+        node |> setValue Position {| x = 10.0; y = 0.0; z = 0.0 |}
+        world.Add DragEndEvent
+        handleUndoRedo world |> ignore
+        world.Remove DragEndEvent
 
-    // Run again with no events to update button states via the else branch
-    handleUndoRedo world |> ignore
+        // Undo: pushes to redo stack
+        let undoBtn = world |> findButton "Undo"
+        undoBtn |> add ClickEvent
+        handleUndoRedo world |> ignore
+        undoBtn |> remove ClickEvent
 
-    isButtonDisabled redoBtn =! false
+        // Redo button should be enabled (redo stack non-empty)
+        handleUndoRedo world |> ignore
+        let redoBtn = world |> findButton "Redo"
+        isButtonDisabled redoBtn =! false
 
-[<Fact>]
-let ``new drag after undo flushes redo stack`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    spawnUndoRedoControls (0, world) |> ignore
+        // New drag: should flush the redo stack.
+        // First, simulate that the undo animation completed by removing TargetPosition.
+        node |> remove TargetPosition
+        world.Add DragStartEvent
+        handleUndoRedo world |> ignore
+        world.Remove DragStartEvent
+        node |> setValue Position {| x = 15.0; y = 0.0; z = 0.0 |}
+        world.Add DragEndEvent
+        handleUndoRedo world |> ignore
+        world.Remove DragEndEvent
 
-    let node =
-        world.Spawn(
-            Position.Val {| x = 5.0; y = 0.0; z = 0.0 |},
-            Selected.Tag()
-        )
-
-    // Drag: capture at 5, move to 10, end
-    world.Add DragStartEvent
-    handleUndoRedo world |> ignore
-    world.Remove DragStartEvent
-    node |> setValue Position {| x = 10.0; y = 0.0; z = 0.0 |}
-    world.Add DragEndEvent
-    handleUndoRedo world |> ignore
-    world.Remove DragEndEvent
-
-    // Undo: pushes to redo stack
-    let undoBtn = world |> findButton "Undo"
-    undoBtn |> add ClickEvent
-    handleUndoRedo world |> ignore
-    undoBtn |> remove ClickEvent
-
-    // Redo button should be enabled (redo stack non-empty)
-    handleUndoRedo world |> ignore
-    let redoBtn = world |> findButton "Redo"
-    isButtonDisabled redoBtn =! false
-
-    // New drag: should flush the redo stack.
-    // First, simulate that the undo animation completed by removing TargetPosition.
-    node |> remove TargetPosition
-    world.Add DragStartEvent
-    handleUndoRedo world |> ignore
-    world.Remove DragStartEvent
-    node |> setValue Position {| x = 15.0; y = 0.0; z = 0.0 |}
-    world.Add DragEndEvent
-    handleUndoRedo world |> ignore
-    world.Remove DragEndEvent
-
-    // Redo button should now be disabled (redo stack flushed)
-    handleUndoRedo world |> ignore
-    isButtonDisabled redoBtn =! true
+        // Redo button should now be disabled (redo stack flushed)
+        handleUndoRedo world |> ignore
+        isButtonDisabled redoBtn =! true
