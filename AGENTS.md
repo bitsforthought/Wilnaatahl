@@ -68,12 +68,21 @@ These reflect the owner's priorities, learned from prior sessions.
 - **TDD is strict.** Write failing tests first, observe the failure, then implement. Don't skip the red phase — it validates the test itself.
 - **Tests should be portable by default.** ECS tests should run against both the .NET mock and real Koota unless technically impossible (e.g., Fable doesn't support quotations).
 - **Test the lowest common denominator.** When the mock is more permissive than Koota, constrain tests to what Koota supports (e.g., object schemas instead of primitive values for traits).
+- **Use xUnit class fixtures** for tests with repetitive setup. Shared setup goes in the constructor; cleanup via `IDisposable`. See `TrackingTests` and `PeopleTests` for the pattern. Module-level functions are fine for tests with minimal shared setup.
+- **Tests must be strong.** Every assertion should verify observable behavior that would fail if the code-under-test were broken. Avoid tautological tests (e.g., checking a value didn't change when nothing could have changed it).
+- **Use Unquote operators** (`=!`, `<>!`, `>!`, `<!`, `>=!`, `<=!`) for single-operator assertions. Use `test <@ expr @>` only for complex multi-operator boolean expressions where splitting into individual assertions would reduce readability. Never use `test <@` in portable ECS tests (Fable doesn't support quotations).
+- **Use F# structural equality** for assertions. Compare records, tuples, and other structured types as whole values rather than deconstructing them into components. For `Vector3` (returned by `Line3.getPositions`), use `=! Vector3.FromComponents(x, y, z)`. For frozen Position values (anonymous records from `get Position`), use `=! Line3.pos x y z`. Do not deconstruct structured data into a tuple only to compare the tuple.
+- **No magic numbers in tests.** Extract constants with descriptive names and comments explaining the chosen value (e.g., `let frameDelta = 0.016 // one frame at 60 FPS`).
+- **Test data independence.** Tests in `Wilnaatahl.Core.Tests` should use `TestData.testPeopleAndParents` (stable test data), not `Initial.peopleAndParents` (app seed data that may change).
 
 ### Code Style
 - **Use F# idioms, not workarounds.** Prefer bare `_` discards over `_prefixed` names where the language allows. Use tuple-style `TryRemove` returns instead of `&` out-params. Don't over-qualify record constructors when the type can be inferred.
 - **Don't use `emitJsExpr` when F# works.** Default to pure F#; only use JS interop when the F# standard library can't express it.
-- **Avoid optional parameters in internal APIs.** If backcompat isn't a concern, make all parameters required and update call sites.
+- **No optional parameters.** Optional parameters are an OOP/C#-interop feature, not idiomatic F#. Make all parameters required. If F# type inference fails without an overload, add type annotations at the point of declaration rather than introducing optional parameters or leaving dead overloads.
 - **Don't introduce unnecessary abstractions.** Avoid over-generalizing (e.g., predicate callbacks when a concrete parameter suffices).
+- **Don't leave dead code.** Remove unused overloads, unreachable branches, and orphaned helpers. If removing code causes a compile error, fix the root cause (e.g., add type annotations) rather than keeping the dead code as a workaround.
+- **Avoid unnecessary type annotations.** F# infers types well in most cases. Only add annotations when needed for disambiguation or to fix inference failures.
+- **Cross-assembly anonymous records.** Anonymous records created in one assembly are a different type from those in another. Use helper functions in the source assembly (e.g., `Line3.pos`) to create anonymous records that can be used in test assertions.
 
 ### Process
 - **Don't silently weaken tests.** If an assertion is removed, explain why it was necessary. Removing assertions to make things compile is not acceptable.
