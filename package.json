@@ -6,15 +6,16 @@
   "scripts": {
     "init": "npm install && dotnet restore && dotnet tool restore",
     "fantomas": "dotnet fantomas .",
+    "prettier": "prettier --write .",
     "fable": "npm run fantomas && dotnet fable --lang typescript --outDir ../generated --cwd ./src/Wilnaatahl.Core",
-    "build": "npm run fable && tsc && vite build",
-    "dev": "npm run fable && vite",
-    "preview": "npm run fable && vite preview",
+    "build": "npm run fable && npm run prettier && tsc && vite build",
+    "dev": "npm run fable && npm run prettier && vite",
+    "preview": "npm run fable && npm run prettier && vite preview",
     "test": "dotnet test && npm run test:koota",
     "test:koota": "dotnet fable tests/Wilnaatahl.ECS.Tests --lang typescript --outDir tests/Wilnaatahl.ECS.Tests/out --noCache && npx vite-node tests/Wilnaatahl.ECS.Tests/out/Runner.ts",
     "coverage": "node -e \"require('fs').rmSync('TestResults',{recursive:true,force:true})\" && dotnet test --collect:\"XPlat Code Coverage\" --results-directory TestResults",
     "report": "reportgenerator -reports:TestResults/**/coverage.cobertura.xml -targetdir:coveragereport -reporttypes:Html && start ./coveragereport/index.html",
-    "format": "prettier --write . && npm run fantomas"
+    "format": "npm run prettier && npm run fantomas"
   },
   "devDependencies": {
     "@types/node": "^24.0.10",

@@ -64,6 +64,7 @@ Wilnaatahl visualizes genealogical relationships of Gitxsan huwilp members. It i
 These reflect the owner's priorities, learned from prior sessions.
 
 ### Testing Philosophy
+
 - **Koota is the gold standard.** The mock must match Koota's behavior exactly, even when that behavior appears buggy or inconsistent. Document known Koota bugs with issue links, but replicate them faithfully.
 - **TDD is strict.** Write failing tests first, observe the failure, then implement. Don't skip the red phase — it validates the test itself.
 - **Tests should be portable by default.** ECS tests should run against both the .NET mock and real Koota unless technically impossible (e.g., Fable doesn't support quotations).
@@ -76,6 +77,7 @@ These reflect the owner's priorities, learned from prior sessions.
 - **Test data independence.** Tests in `Wilnaatahl.Core.Tests` should use `TestData.testPeopleAndParents` (stable test data), not `Initial.peopleAndParents` (app seed data that may change).
 
 ### Code Style
+
 - **Use F# idioms, not workarounds.** Prefer bare `_` discards over `_prefixed` names where the language allows. Use tuple-style `TryRemove` returns instead of `&` out-params. Don't over-qualify record constructors when the type can be inferred.
 - **Don't use `emitJsExpr` when F# works.** Default to pure F#; only use JS interop when the F# standard library can't express it.
 - **No optional parameters.** Optional parameters are an OOP/C#-interop feature, not idiomatic F#. Make all parameters required. If F# type inference fails without an overload, add type annotations at the point of declaration rather than introducing optional parameters or leaving dead overloads.
@@ -85,6 +87,7 @@ These reflect the owner's priorities, learned from prior sessions.
 - **Cross-assembly anonymous records.** Anonymous records created in one assembly are a different type from those in another. Use helper functions in the source assembly (e.g., `Line3.pos`) to create anonymous records that can be used in test assertions.
 
 ### Process
+
 - **Don't silently weaken tests.** If an assertion is removed, explain why it was necessary. Removing assertions to make things compile is not acceptable.
 - **Preserve existing comments.** Don't delete comments from code being refactored unless they're factually wrong.
 - **When behavior changes, update comments to match.** Dead code paths should `failwith`, not silently return defaults.
