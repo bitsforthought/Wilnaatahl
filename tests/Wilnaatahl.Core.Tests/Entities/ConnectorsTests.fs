@@ -18,8 +18,10 @@ open Wilnaatahl.Tests.TestData
 let private spawnTestScene (world: IWorld) =
     let graph = createFamilyGraph testPeopleAndParents
     let wilpId = world |> People.spawnWilpBox testWilp.Value
+
     for person, _ in testPeopleAndParents do
         world |> People.spawnTreeNode person wilpId
+
     graph
 
 type Tests() =
@@ -30,7 +32,7 @@ type Tests() =
         member _.Dispose() = (ecs :> IDisposable).Dispose()
 
     [<Fact>]
-    member _.``destroyAllConnectors removes all connector entities`` () =
+    member _.``destroyAllConnectors removes all connector entities``() =
         let graph = spawnTestScene world
         world |> Connectors.spawnAllConnectors graph
         let connectorsBefore = world.Query(With Connector) |> Seq.length
@@ -40,7 +42,7 @@ type Tests() =
         connectorsAfter =! 0
 
     [<Fact>]
-    member _.``spawnAllConnectors creates connector entities for a family`` () =
+    member _.``spawnAllConnectors creates connector entities for a family``() =
         let graph = spawnTestScene world
         world |> Connectors.spawnAllConnectors graph
         let connectorCount = world.Query(With Connector) |> Seq.length
@@ -49,7 +51,7 @@ type Tests() =
         lineCount >! 0
 
     [<Fact>]
-    member _.``spawnAllConnectors creates elbow entities`` () =
+    member _.``spawnAllConnectors creates elbow entities``() =
         let graph = spawnTestScene world
         world |> Connectors.spawnAllConnectors graph
         // With 3 children, we expect at least 1 branch elbow + 3 child junction elbows = 4.

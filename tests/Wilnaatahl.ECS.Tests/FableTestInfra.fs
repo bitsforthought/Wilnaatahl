@@ -10,8 +10,11 @@ let inline (=!) (actual: 'T) (expected: 'T) =
         failwithf "Assertion failed: expected %A but got %A" expected actual
 
 /// Do-nothing replacements for xUnit attributes so test code compiles without conditional compilation.
-type FactAttribute() = inherit System.Attribute()
-type CollectionAttribute(_name: string) = inherit System.Attribute()
+type FactAttribute() =
+    inherit System.Attribute()
+
+type CollectionAttribute(_name: string) =
+    inherit System.Attribute()
 
 [<Import("createWorld", "koota")>]
 let private createKootaWorld: unit -> obj = jsNative

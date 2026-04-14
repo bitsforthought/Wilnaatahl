@@ -21,7 +21,7 @@ type Tests() =
     let world = ecs.World
 
     [<Fact>]
-    member _.``dragNodes with no events returns world unchanged`` () =
+    member _.``dragNodes with no events returns world unchanged``() =
         let entity = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |})
 
         dragNodes world |> ignore
@@ -30,13 +30,9 @@ type Tests() =
         pos.x =! 5.0
 
     [<Fact>]
-    member _.``full drag flow moves selected entity position`` () =
+    member _.``full drag flow moves selected entity position``() =
         let node =
-            world.Spawn(
-                PersonRef.Val Person.Empty,
-                Position.Val {| x = 5.0; y = 0.0; z = 0.0 |},
-                Selected.Tag()
-            )
+            world.Spawn(PersonRef.Val Person.Empty, Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
 
         // Step 1: Touch the node (PointerDown)
         node |> add PointerDownEvent
@@ -58,13 +54,9 @@ type Tests() =
         pos =! Line3.pos 12.0 0.0 0.0
 
     [<Fact>]
-    member _.``sequential drag events accumulate correctly`` () =
+    member _.``sequential drag events accumulate correctly``() =
         let node =
-            world.Spawn(
-                PersonRef.Val Person.Empty,
-                Position.Val {| x = 5.0; y = 0.0; z = 0.0 |},
-                Selected.Tag()
-            )
+            world.Spawn(PersonRef.Val Person.Empty, Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
 
         // Touch + drag start
         node |> add PointerDownEvent
@@ -91,13 +83,9 @@ type Tests() =
         pos2 =! Line3.pos 12.0 0.0 0.0
 
     [<Fact>]
-    member _.``drag end cleans up click events`` () =
+    member _.``drag end cleans up click events``() =
         let node =
-            world.Spawn(
-                PersonRef.Val Person.Empty,
-                Position.Val {| x = 0.0; y = 0.0; z = 0.0 |},
-                Selected.Tag()
-            )
+            world.Spawn(PersonRef.Val Person.Empty, Position.Val {| x = 0.0; y = 0.0; z = 0.0 |}, Selected.Tag())
 
         // Touch + drag start
         node |> add PointerDownEvent
@@ -114,7 +102,7 @@ type Tests() =
         node |> has ClickEvent =! false
 
     [<Fact>]
-    member _.``spurious drag end without active drag removes DragEndEvent`` () =
+    member _.``spurious drag end without active drag removes DragEndEvent``() =
         world.Add DragEndEvent
         world.Has DragEndEvent =! true
 
@@ -123,18 +111,12 @@ type Tests() =
         world.Has DragEndEvent =! false
 
     [<Fact>]
-    member _.``drag moves multiple selected entities`` () =
+    member _.``drag moves multiple selected entities``() =
         let node1 =
-            world.Spawn(
-                PersonRef.Val Person.Empty,
-                Position.Val {| x = 0.0; y = 0.0; z = 0.0 |},
-                Selected.Tag()
-            )
+            world.Spawn(PersonRef.Val Person.Empty, Position.Val {| x = 0.0; y = 0.0; z = 0.0 |}, Selected.Tag())
+
         let node2 =
-            world.Spawn(
-                Position.Val {| x = 10.0; y = 0.0; z = 0.0 |},
-                Selected.Tag()
-            )
+            world.Spawn(Position.Val {| x = 10.0; y = 0.0; z = 0.0 |}, Selected.Tag())
 
         // Touch first node, start drag, then drag
         node1 |> add PointerDownEvent

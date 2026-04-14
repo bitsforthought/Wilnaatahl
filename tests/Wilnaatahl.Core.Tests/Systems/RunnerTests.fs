@@ -31,8 +31,7 @@ type Tests() =
         member _.Dispose() = (ecs :> IDisposable).Dispose()
 
     [<Fact>]
-    member _.``runSystems with no events completes without error``() =
-        runSystems world frameDelta
+    member _.``runSystems with no events completes without error``() = runSystems world frameDelta
 
     [<Fact>]
     member _.``runSystems cleans up events at end of frame``() =
@@ -47,10 +46,7 @@ type Tests() =
     [<Fact>]
     member _.``runSystems animates entities toward target``() =
         let entity =
-            world.Spawn(
-                Position.Val zeroPosition,
-                TargetPosition.Val {| x = 10.0; y = 0.0; z = 0.0 |}
-            )
+            world.Spawn(Position.Val zeroPosition, TargetPosition.Val {| x = 10.0; y = 0.0; z = 0.0 |})
 
         // Position starts at origin (0,0,0), so any movement toward target is progress.
         let posBefore = (entity |> get Position).Value.x
@@ -66,7 +62,8 @@ type Tests() =
         layoutNodes world graph
 
         // Animate to settled positions
-        for _ in 1..50 do runSystems world 0.1
+        for _ in 1..50 do
+            runSystems world 0.1
 
         // Find a person node
         let nodeEntity = world.Query(With PersonRef) |> Seq.head
@@ -96,6 +93,7 @@ type Tests() =
         let _, undoBtn =
             world.QueryTrait(Button).ToSequence()
             |> Seq.find (fun (buttonData, _) -> buttonData.label = "Undo")
+
         handleClick undoBtn
         runSystems world frameDelta
 

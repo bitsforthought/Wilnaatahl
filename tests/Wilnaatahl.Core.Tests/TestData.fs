@@ -82,7 +82,9 @@ let extendedFamily =
     ]
 
 let private treeNode id =
-    let person = testPeopleAndParents |> List.find (fun (p, _) -> p.Id = PersonId id) |> fst
+    let person =
+        testPeopleAndParents |> List.find (fun (p, _) -> p.Id = PersonId id) |> fst
+
     TestFamilyMember(id, person, WilpName "H")
 
 // Test data is public because they are shared by other tests.

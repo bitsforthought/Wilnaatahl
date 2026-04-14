@@ -17,10 +17,7 @@ let ``animate moves position toward target`` () =
     let world = ecs.World
 
     let entity =
-        world.Spawn(
-            Position.Val {| x = 10.0; y = 0.0; z = 0.0 |},
-            TargetPosition.Val {| x = 0.0; y = 0.0; z = 0.0 |}
-        )
+        world.Spawn(Position.Val {| x = 10.0; y = 0.0; z = 0.0 |}, TargetPosition.Val {| x = 0.0; y = 0.0; z = 0.0 |})
 
     animate 0.1 world |> ignore
 
@@ -57,10 +54,7 @@ let ``animate does nothing with zero delta`` () =
     let world = ecs.World
 
     let entity =
-        world.Spawn(
-            Position.Val {| x = 5.0; y = 5.0; z = 5.0 |},
-            TargetPosition.Val {| x = 0.0; y = 0.0; z = 0.0 |}
-        )
+        world.Spawn(Position.Val {| x = 5.0; y = 5.0; z = 5.0 |}, TargetPosition.Val {| x = 0.0; y = 0.0; z = 0.0 |})
 
     animate 0.0 world |> ignore
 
@@ -85,16 +79,10 @@ let ``animate handles multiple entities`` () =
     let world = ecs.World
 
     let e1 =
-        world.Spawn(
-            Position.Val {| x = 10.0; y = 0.0; z = 0.0 |},
-            TargetPosition.Val {| x = 0.0; y = 0.0; z = 0.0 |}
-        )
+        world.Spawn(Position.Val {| x = 10.0; y = 0.0; z = 0.0 |}, TargetPosition.Val {| x = 0.0; y = 0.0; z = 0.0 |})
 
     let e2 =
-        world.Spawn(
-            Position.Val {| x = 0.0; y = 0.0; z = 0.0 |},
-            TargetPosition.Val {| x = 10.0; y = 10.0; z = 10.0 |}
-        )
+        world.Spawn(Position.Val {| x = 0.0; y = 0.0; z = 0.0 |}, TargetPosition.Val {| x = 10.0; y = 10.0; z = 10.0 |})
 
     animate 0.1 world |> ignore
 

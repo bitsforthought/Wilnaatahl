@@ -1,0 +1,7 @@
+<Project>
+
+  <Target Name="FormatWithFantomas" BeforeTargets="BeforeBuild">
+    <Exec Command="dotnet fantomas ." WorkingDirectory="$(MSBuildThisFileDirectory)" />
+  </Target>
+
+</Project>

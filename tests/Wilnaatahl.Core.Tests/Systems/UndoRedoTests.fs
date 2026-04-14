@@ -22,8 +22,7 @@ let private getButtonLabel entity =
 let private findButton label (world: IWorld) =
     world.Query(With Button) |> Seq.find (fun e -> getButtonLabel e = label)
 
-let private isButtonDisabled entity =
-    (entity |> get Button).Value.disabled
+let private isButtonDisabled entity = (entity |> get Button).Value.disabled
 
 type Tests() =
     let ecs = new EcsWorld()
@@ -51,11 +50,7 @@ type Tests() =
 
     [<Fact>]
     member _.``drag start captures positions and enables undo button``() =
-        let _ =
-            world.Spawn(
-                Position.Val {| x = 5.0; y = 0.0; z = 0.0 |},
-                Selected.Tag()
-            )
+        let _ = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
 
         world.Add DragStartEvent
         handleUndoRedo world |> ignore
@@ -65,11 +60,7 @@ type Tests() =
 
     [<Fact>]
     member _.``undo restores original position via TargetPosition``() =
-        let node =
-            world.Spawn(
-                Position.Val {| x = 5.0; y = 0.0; z = 0.0 |},
-                Selected.Tag()
-            )
+        let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
 
         // Capture position on drag start
         world.Add DragStartEvent
@@ -95,11 +86,7 @@ type Tests() =
 
     [<Fact>]
     member _.``undo then redo re-applies moved position``() =
-        let node =
-            world.Spawn(
-                Position.Val {| x = 5.0; y = 0.0; z = 0.0 |},
-                Selected.Tag()
-            )
+        let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
 
         // Drag: capture, move, end
         world.Add DragStartEvent
@@ -128,11 +115,7 @@ type Tests() =
 
     [<Fact>]
     member _.``buttons reflect stack state``() =
-        let _ =
-            world.Spawn(
-                Position.Val {| x = 5.0; y = 3.0; z = 1.0 |},
-                Selected.Tag()
-            )
+        let _ = world.Spawn(Position.Val {| x = 5.0; y = 3.0; z = 1.0 |}, Selected.Tag())
 
         // Initially both disabled
         let undoBtn = world |> findButton "Undo"
@@ -163,11 +146,7 @@ type Tests() =
 
     [<Fact>]
     member _.``new drag after undo flushes redo stack``() =
-        let node =
-            world.Spawn(
-                Position.Val {| x = 5.0; y = 0.0; z = 0.0 |},
-                Selected.Tag()
-            )
+        let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
 
         // Drag: capture at 5, move to 10, end
         world.Add DragStartEvent

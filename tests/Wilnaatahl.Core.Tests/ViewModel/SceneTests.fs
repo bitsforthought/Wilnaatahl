@@ -140,7 +140,9 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
         |> List.ofSeq
         |> List.choose (fun (pid, pos) ->
             match pid with
-            | PersonId 102 | PersonId 103 | PersonId 104 -> Some(pid, pos.X)
+            | PersonId 102
+            | PersonId 103
+            | PersonId 104 -> Some(pid, pos.X)
             | _ -> None)
         |> List.sortBy snd
 

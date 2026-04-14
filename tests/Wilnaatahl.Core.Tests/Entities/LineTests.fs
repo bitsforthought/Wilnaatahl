@@ -126,9 +126,16 @@ let ``updateEndpoints calls functions on each endpoint position`` () =
     let lineId = world |> Line3.spawn (Line3.pos 1.0 0.0 0.0) (Line3.pos 2.0 0.0 0.0)
     let mutable calls = 0
 
-    lineId |> Line3.updateEndpoints world AlwaysTrack
-        (fun pos -> pos.x <- 100.0; calls <- calls + 1)
-        (fun pos -> pos.x <- 200.0; calls <- calls + 1)
+    lineId
+    |> Line3.updateEndpoints
+        world
+        AlwaysTrack
+        (fun pos ->
+            pos.x <- 100.0
+            calls <- calls + 1)
+        (fun pos ->
+            pos.x <- 200.0
+            calls <- calls + 1)
 
     calls =! 2
     let v1, v2 = lineId |> Line3.getPositions world

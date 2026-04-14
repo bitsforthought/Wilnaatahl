@@ -55,15 +55,22 @@ type WorldTests() =
         world.QueryTrait(Age).ToSequence() |> Set.ofSeq
         =! set [ {| age = 27 |}, entity1; {| age = 44 |}, entity2 ]
 
-    // ------------------------------------------------------------------
-    // .NET-only tests (use Unquote quotations or TestECS internals)
-    // ------------------------------------------------------------------
+// ------------------------------------------------------------------
+// .NET-only tests (use Unquote quotations or TestECS internals)
+// ------------------------------------------------------------------
 
 #if !FABLE_COMPILER
     [<Fact>]
     member _.``Default trait factory throws NotImplementedException``() =
         let factory = TestSupport.defaultTraitFactory
-        let threw (f: unit -> _) = try f () |> ignore; false with :? NotImplementedException -> true
+
+        let threw (f: unit -> _) =
+            try
+                f () |> ignore
+                false
+            with :? NotImplementedException ->
+                true
+
         threw (fun () -> factory.CreateAdded()) =! true
         threw (fun () -> factory.CreateChanged()) =! true
         threw (fun () -> factory.CreateRemoved()) =! true
@@ -80,7 +87,14 @@ type WorldTests() =
         let trait' = tagTrait ()
         let vt = valueTrait {| x = 0 |}
         let rel = tagRelation ()
-        let threw (f: unit -> _) = try f () |> ignore; false with :? NotImplementedException -> true
+
+        let threw (f: unit -> _) =
+            try
+                f () |> ignore
+                false
+            with :? NotImplementedException ->
+                true
+
         threw (fun () -> ops.Add trait' entity) =! true
         threw (fun () -> ops.Destroy entity) =! true
         threw (fun () -> ops.Get vt entity) =! true

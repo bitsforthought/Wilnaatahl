@@ -21,8 +21,10 @@ open Wilnaatahl.Tests.TestData
 let private spawnTestScene (world: IWorld) =
     let graph = createFamilyGraph testPeopleAndParents
     let wilpId = world |> People.spawnWilpBox testWilp.Value
+
     for person, _ in testPeopleAndParents do
         world |> People.spawnTreeNode person wilpId
+
     graph
 
 type Tests() =
@@ -30,21 +32,26 @@ type Tests() =
     let world = ecs.World
 
     [<Fact>]
-    member _.``layoutNodes sets TargetPosition on all tree nodes`` () =
+    member _.``layoutNodes sets TargetPosition on all tree nodes``() =
         let graph = spawnTestScene world
         layoutNodes world graph
         let personEntities = world.Query(With PersonRef) |> Set.ofSeq
-        let animatingEntities = world.Query(With PersonRef, With TargetPosition) |> Set.ofSeq
+
+        let animatingEntities =
+            world.Query(With PersonRef, With TargetPosition) |> Set.ofSeq
+
         personEntities =! animatingEntities
 
     [<Fact>]
-    member _.``layoutNodes assigns distinct positions to each person`` () =
+    member _.``layoutNodes assigns distinct positions to each person``() =
         let graph = spawnTestScene world
         layoutNodes world graph
+
         let positions =
             world.QueryTrait(TargetPosition, With PersonRef).ToSequence()
             |> Seq.map fst
             |> Seq.toList
+
         let distinctPositions = positions |> List.distinct
         List.length positions =! List.length distinctPositions
 

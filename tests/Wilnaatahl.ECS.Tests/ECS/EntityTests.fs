@@ -123,28 +123,32 @@ type EntityTests() =
     [<Fact>]
     member _.``setValue throws when trait not added``() =
         let entity = world.Spawn [| NetWorth.Val {| netWorth = 5 |} |]
+
         let threw =
             try
                 entity |> setValue Age {| age = 25 |}
                 false
             with _ ->
                 true
+
         threw =! true
 
     [<Fact>]
     member _.``setWith throws when trait not added``() =
         let entity = world.Spawn [| NetWorth.Val {| netWorth = 5 |} |]
+
         let threw =
             try
                 entity |> setWith Age (fun v -> {| age = v.age + 5 |})
                 false
             with _ ->
                 true
+
         threw =! true
 
-    // ------------------------------------------------------------------
-    // .NET-only tests (use Unquote quotations)
-    // ------------------------------------------------------------------
+// ------------------------------------------------------------------
+// .NET-only tests (use Unquote quotations)
+// ------------------------------------------------------------------
 
 #if !FABLE_COMPILER
     [<Fact>]

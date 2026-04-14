@@ -108,17 +108,38 @@ type QueryTests() =
 
     [<Fact>]
     member _.``QueryTraits returns correct pairs of values and entities``() =
-        let entity1 = world.Spawn [| Age.Val {| age = 41 |}; Name.Val {| name = "Alice" |} |]
+        let entity1 =
+            world.Spawn [| Age.Val {| age = 41 |}; Name.Val {| name = "Alice" |} |]
+
         let entity2 = world.Spawn [| Age.Val {| age = 32 |}; Name.Val {| name = "Bob" |} |]
         let results = world.QueryTraits(Age, Name).ToSequence() |> Set.ofSeq
-        results =! set [ ({| age = 41 |}, {| name = "Alice" |}), entity1; ({| age = 32 |}, {| name = "Bob" |}), entity2 ]
+
+        results
+        =! set [
+            ({| age = 41 |}, {| name = "Alice" |}), entity1
+            ({| age = 32 |}, {| name = "Bob" |}), entity2
+        ]
 
     [<Fact>]
     member _.``QueryTraits3 returns correct triples of values and entities``() =
-        let entity1 = world.Spawn [| Age.Val {| age = 41 |}; Name.Val {| name = "Alice" |}; Active.Val {| active = true |} |]
-        let entity2 = world.Spawn [| Age.Val {| age = 32 |}; Name.Val {| name = "Bob" |}; Active.Val {| active = false |} |]
+        let entity1 =
+            world.Spawn [|
+                Age.Val {| age = 41 |}
+                Name.Val {| name = "Alice" |}
+                Active.Val {| active = true |}
+            |]
+
+        let entity2 =
+            world.Spawn [|
+                Age.Val {| age = 32 |}
+                Name.Val {| name = "Bob" |}
+                Active.Val {| active = false |}
+            |]
+
         let results = world.QueryTraits3(Age, Name, Active).ToSequence() |> Set.ofSeq
-        results =! set [
+
+        results
+        =! set [
             ({| age = 41 |}, {| name = "Alice" |}, {| active = true |}), entity1
             ({| age = 32 |}, {| name = "Bob" |}, {| active = false |}), entity2
         ]
@@ -126,12 +147,25 @@ type QueryTests() =
     [<Fact>]
     member _.``QueryTraits4 returns correct quadruples of values and entities``() =
         let entity1 =
-            world.Spawn [| Age.Val {| age = 41 |}; Name.Val {| name = "Alice" |}; Active.Val {| active = true |}; Score.Val {| score = 3.5 |} |]
+            world.Spawn [|
+                Age.Val {| age = 41 |}
+                Name.Val {| name = "Alice" |}
+                Active.Val {| active = true |}
+                Score.Val {| score = 3.5 |}
+            |]
+
         let entity2 =
-            world.Spawn [| Age.Val {| age = 32 |}; Name.Val {| name = "Bob" |}; Active.Val {| active = false |}; Score.Val {| score = 2.5 |} |]
-        let results =
-            world.QueryTraits4(Age, Name, Active, Score).ToSequence() |> Set.ofSeq
-        results =! set [
+            world.Spawn [|
+                Age.Val {| age = 32 |}
+                Name.Val {| name = "Bob" |}
+                Active.Val {| active = false |}
+                Score.Val {| score = 2.5 |}
+            |]
+
+        let results = world.QueryTraits4(Age, Name, Active, Score).ToSequence() |> Set.ofSeq
+
+        results
+        =! set [
             ({| age = 41 |}, {| name = "Alice" |}, {| active = true |}, {| score = 3.5 |}), entity1
             ({| age = 32 |}, {| name = "Bob" |}, {| active = false |}, {| score = 2.5 |}), entity2
         ]

@@ -27,7 +27,7 @@ type Tests() =
     let tracker = createChanged ()
 
     [<Fact>]
-    member _.``move updates SnapToX entity position`` () =
+    member _.``move updates SnapToX entity position``() =
         let entityA = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |})
         let entityB = world.Spawn(Position.Val {| x = 0.0; y = 0.0; z = 0.0 |})
         entityB |> addWith (SnapToX => entityA) {| x = 2.0 |}
@@ -39,7 +39,7 @@ type Tests() =
         posB.x =! 7.0
 
     [<Fact>]
-    member _.``move updates snapped points on all axes`` () =
+    member _.``move updates snapped points on all axes``() =
         let entityA = world.Spawn(Position.Val {| x = 10.0; y = 20.0; z = 30.0 |})
         let entityB = world.Spawn(Position.Val {| x = 0.0; y = 0.0; z = 0.0 |})
         entityB |> addWith (SnapToX => entityA) {| x = 1.0 |}
@@ -53,7 +53,7 @@ type Tests() =
         posB =! Line3.pos 11.0 22.0 33.0
 
     [<Fact>]
-    member _.``move updates bisecting entity to midpoint of line`` () =
+    member _.``move updates bisecting entity to midpoint of line``() =
         let lineId = world |> Line3.spawn zeroPosition zeroPosition
         let bisectEntity = world.Spawn(Position.Val zeroPosition, Connector.Tag())
         bisectEntity |> add (Bisects => lineId)
@@ -69,7 +69,7 @@ type Tests() =
         pos =! Line3.pos 6.0 12.0 18.0
 
     [<Fact>]
-    member _.``move propagates through kinematic chain`` () =
+    member _.``move propagates through kinematic chain``() =
         // Chain: C snaps to B, B snaps to A
         let entityA = world.Spawn(Position.Val {| x = 100.0; y = 0.0; z = 0.0 |})
         let entityB = world.Spawn(Position.Val {| x = 0.0; y = 0.0; z = 0.0 |})
@@ -86,7 +86,7 @@ type Tests() =
         posC.x =! 108.0
 
     [<Fact>]
-    member _.``move updates bounding box corners`` () =
+    member _.``move updates bounding box corners``() =
         let boxId, _, _ = world |> BoundingBox.spawn {| x = 0.5; y = 0.5; z = 0.5 |}
 
         let child1 = world.Spawn(Position.Val {| x = 1.0; y = 1.0; z = 1.0 |})
@@ -111,7 +111,7 @@ type Tests() =
     [<Theory>]
     [<InlineData(1.0, 1.0)>]
     [<InlineData(-1.0, -1.0)>]
-    member _.``move updates parallel line on horizontal line`` (offset: float, expectedY: float) =
+    member _.``move updates parallel line on horizontal line``(offset: float, expectedY: float) =
         // Source line: horizontal along X-axis
         let sourceLineId = world |> Line3.spawn zeroPosition zeroPosition
         let srcEp1, srcEp2 = sourceLineId |> Line3.getEndpoints world
@@ -132,7 +132,7 @@ type Tests() =
         pv2 =! Vector3.FromComponents(10.0, expectedY, 0.0)
 
     [<Fact>]
-    member _.``move handles parallel line on vertical line`` () =
+    member _.``move handles parallel line on vertical line``() =
         // Vertical line along Y-axis
         let sourceLineId = world |> Line3.spawn zeroPosition zeroPosition
         let srcEp1, srcEp2 = sourceLineId |> Line3.getEndpoints world
@@ -154,7 +154,7 @@ type Tests() =
         pv2 =! Vector3.FromComponents(0.0, 10.0, 1.0)
 
     [<Fact>]
-    member _.``move handles parallel line on z-axis line`` () =
+    member _.``move handles parallel line on z-axis line``() =
         // Line along Z-axis
         let sourceLineId = world |> Line3.spawn zeroPosition zeroPosition
         let srcEp1, srcEp2 = sourceLineId |> Line3.getEndpoints world
@@ -175,7 +175,7 @@ type Tests() =
         pv2 =! Vector3.FromComponents(0.0, 1.0, 10.0)
 
     [<Fact>]
-    member _.``move handles parallel line on nearly-vertical line with z perturbation`` () =
+    member _.``move handles parallel line on nearly-vertical line with z perturbation``() =
         // Nearly vertical line with tiny Z perturbation: dir ≈ (0, 1, 1e-15).
         // perpUp length ≈ 1e-15 < nearZero, so the fallback path is taken.
         // abs(dir.x)=0 < abs(dir.z)≈1e-15 → true → alt = (1, 0, 0)

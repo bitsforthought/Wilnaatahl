@@ -63,8 +63,8 @@ let ``updateCorners calls callback for each corner with correct IsBounds flag`` 
     let boxId, _, _ = world |> BoundingBox.spawn zeroPosition
     let mutable isBoundsValues = []
 
-    boxId |> BoundingBox.updateCorners world AlwaysTrack (fun _ isBounds ->
-        isBoundsValues <- isBounds :: isBoundsValues)
+    boxId
+    |> BoundingBox.updateCorners world AlwaysTrack (fun _ isBounds -> isBoundsValues <- isBounds :: isBoundsValues)
 
     // Should have exactly one true and one false
     isBoundsValues |> List.sort =! [ false; true ]
@@ -76,15 +76,21 @@ let ``updateCorners can modify corner positions`` () =
 
     let boxId, boxPosId, boundPosId = world |> BoundingBox.spawn zeroPosition
 
-    boxId |> BoundingBox.updateCorners world AlwaysTrack (fun pos isBounds ->
+    boxId
+    |> BoundingBox.updateCorners world AlwaysTrack (fun pos isBounds ->
         if isBounds then
-            pos.x <- 10.0; pos.y <- 10.0; pos.z <- 10.0
+            pos.x <- 10.0
+            pos.y <- 10.0
+            pos.z <- 10.0
         else
-            pos.x <- -1.0; pos.y <- -1.0; pos.z <- -1.0)
+            pos.x <- -1.0
+            pos.y <- -1.0
+            pos.z <- -1.0)
 
     // Check that positions were updated (we don't know which corner is which,
     // so check both possibilities)
     let pos1 = (boxPosId |> get Position).Value
     let pos2 = (boundPosId |> get Position).Value
+
     Set.ofList [ pos1; pos2 ]
     =! Set.ofList [ Line3.pos -1.0 -1.0 -1.0; Line3.pos 10.0 10.0 10.0 ]

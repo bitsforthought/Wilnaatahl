@@ -49,8 +49,7 @@ let ``Division by scalar`` () =
 // --- Vector module ---
 
 [<Fact>]
-let ``length of known vector`` () =
-    Vector.length (vec 3.0 4.0 0.0) =! 5.0
+let ``length of known vector`` () = Vector.length (vec 3.0 4.0 0.0) =! 5.0
 
 [<Fact>]
 let ``normalize of known vector`` () =

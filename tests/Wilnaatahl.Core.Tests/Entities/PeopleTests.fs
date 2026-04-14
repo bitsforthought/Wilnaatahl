@@ -23,7 +23,7 @@ type Tests() =
     let wilpId = world |> People.spawnWilpBox (WilpName "H")
 
     [<Fact>]
-    member _.``spawnWilpBox creates bounding box with Wilp trait`` () =
+    member _.``spawnWilpBox creates bounding box with Wilp trait``() =
         let boxId = world |> People.spawnWilpBox (WilpName "TestWilp")
 
         boxId |> has Wilp =! true
@@ -31,14 +31,14 @@ type Tests() =
         wilpData.wilpName =! "TestWilp"
 
     [<Fact>]
-    member _.``spawnWilpBox creates entity with Hidden and Connector traits`` () =
+    member _.``spawnWilpBox creates entity with Hidden and Connector traits``() =
         let boxId = world |> People.spawnWilpBox (WilpName "W")
 
         boxId |> has Hidden =! true
         boxId |> has Connector =! true
 
     [<Fact>]
-    member _.``spawnTreeNode creates entity with PersonRef and Position`` () =
+    member _.``spawnTreeNode creates entity with PersonRef and Position``() =
         world |> People.spawnTreeNode p0 wilpId
 
         let nodes = world.Query(With PersonRef) |> Seq.toList
@@ -49,7 +49,7 @@ type Tests() =
         person.Id =! p0.Id
 
     [<Fact>]
-    member _.``spawnTreeNode uses sphere size for Sphere shape`` () =
+    member _.``spawnTreeNode uses sphere size for Sphere shape``() =
         world |> People.spawnTreeNode p0 wilpId // p0 has Shape = Sphere
 
         let nodeId = world.Query(With PersonRef) |> Seq.head
@@ -60,7 +60,7 @@ type Tests() =
         size.z =! s
 
     [<Fact>]
-    member _.``spawnTreeNode uses cube size for Cube shape`` () =
+    member _.``spawnTreeNode uses cube size for Cube shape``() =
         world |> People.spawnTreeNode p1 wilpId // p1 has Shape = Cube
 
         let nodeId = world.Query(With PersonRef) |> Seq.head
@@ -71,14 +71,14 @@ type Tests() =
         size.z =! c
 
     [<Fact>]
-    member _.``spawnTreeNode adds RenderedIn relation to wilp`` () =
+    member _.``spawnTreeNode adds RenderedIn relation to wilp``() =
         world |> People.spawnTreeNode p0 wilpId
 
         let nodeId = world.Query(With PersonRef) |> Seq.head
         nodeId |> targetFor RenderedIn =! Some wilpId
 
     [<Fact>]
-    member _.``destroyAllTreeNodes removes all person entities`` () =
+    member _.``destroyAllTreeNodes removes all person entities``() =
         world |> People.spawnTreeNode p0 wilpId
         world |> People.spawnTreeNode p1 wilpId
 

@@ -32,7 +32,8 @@ type private ITestValueTrait<'T> =
     abstract FreezeValue: mutableValue: obj -> 'T
     abstract UnfreezeValue: value: 'T -> obj
 
-type private TestValueTrait<'T, 'TMutable>(relation, freeze: 'TMutable -> 'T, unfreeze: 'T -> 'TMutable, defaultValue: 'T option) =
+type private TestValueTrait<'T, 'TMutable>
+    (relation, freeze: 'TMutable -> 'T, unfreeze: 'T -> 'TMutable, defaultValue: 'T option) =
     inherit TestTrait(relation, false)
     interface IMutableValueTrait<'T, 'TMutable>
 
@@ -40,8 +41,7 @@ type private TestValueTrait<'T, 'TMutable>(relation, freeze: 'TMutable -> 'T, un
         member _.UnfreezeUntypedValue value = unfreeze (value :?> 'T) :> obj
         member _.FreezeValue mutableValue = freeze (mutableValue :?> 'TMutable)
         member _.UnfreezeValue value = unfreeze value
-        member _.DefaultMutableValue =
-            defaultValue |> Option.map (fun v -> unfreeze v :> obj)
+        member _.DefaultMutableValue = defaultValue |> Option.map (fun v -> unfreeze v :> obj)
 
 type private TestWildcardTrait(relation: ITestRelation) =
 
@@ -83,16 +83,18 @@ type private TestValueRelation<'T, 'TMutable>(config, freeze, unfreeze, defaultV
             fun relation -> TestValueTrait<'T, 'TMutable>(Some relation, freeze, unfreeze, Some defaultValue)
         )
 
-type private QueryResult<'T, 'TMutable> private (entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient) =
+type private QueryResult<'T, 'TMutable>
+    private (entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient) =
 
     static member Create
-        (entities: seq<EntityId>,
-         getRead: EntityId -> 'T,
-         getMutable: EntityId -> 'TMutable,
-         notifyChanges: ChangeDetectionOption -> EntityId -> 'T -> 'T -> unit,
-         hasChangedModifier: bool,
-         getReadResilient: 'T -> EntityId -> 'T)
-        =
+        (
+            entities: seq<EntityId>,
+            getRead: EntityId -> 'T,
+            getMutable: EntityId -> 'TMutable,
+            notifyChanges: ChangeDetectionOption -> EntityId -> 'T -> 'T -> unit,
+            hasChangedModifier: bool,
+            getReadResilient: 'T -> EntityId -> 'T
+        ) =
         QueryResult<'T, 'TMutable>(entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient)
 
     interface IQueryResult<'T, 'TMutable> with
@@ -264,7 +266,8 @@ type private TestTraitFactory() =
             let unfreeze (v: 'T) = unfreezeUntyped v :?> 'TMutable
             TestValueTrait<'T, 'TMutable>(None, freeze, unfreeze, Some value)
 
-        member _.TraitWithRef _ = TestValueTrait<'T, 'T>(None, id, id, None)
+        member _.TraitWithRef _ =
+            TestValueTrait<'T, 'T>(None, id, id, None)
 
 [<AutoOpen>]
 module private World =
@@ -423,9 +426,14 @@ module private World =
         IsInitialPopulation: bool
     } with
 
-        static member val Empty = {
-            With = []; Or = Set.empty; Not = Set.empty; Tracking = []; IsInitialPopulation = false
-        }
+        static member val Empty =
+            {
+                With = []
+                Or = Set.empty
+                Not = Set.empty
+                Tracking = []
+                IsInitialPopulation = false
+            }
 
     let query where world =
         let rec getEntitySet (someTrait: ITrait) =
@@ -455,21 +463,30 @@ module private World =
             | Added(traits, tracker) ->
                 let t = tracker :?> TestTracker
                 let wasInitial = not (t.HasBeenDrained world.WorldId)
-                { acc with
-                    Tracking = drainForWorld t traits :: acc.Tracking
-                    IsInitialPopulation = acc.IsInitialPopulation || wasInitial }
+
+                {
+                    acc with
+                        Tracking = drainForWorld t traits :: acc.Tracking
+                        IsInitialPopulation = acc.IsInitialPopulation || wasInitial
+                }
             | Removed(traits, tracker) ->
                 let t = tracker :?> TestTracker
                 let wasInitial = not (t.HasBeenDrained world.WorldId)
-                { acc with
-                    Tracking = drainForWorld t traits :: acc.Tracking
-                    IsInitialPopulation = acc.IsInitialPopulation || wasInitial }
+
+                {
+                    acc with
+                        Tracking = drainForWorld t traits :: acc.Tracking
+                        IsInitialPopulation = acc.IsInitialPopulation || wasInitial
+                }
             | Changed(traits, tracker) ->
                 let t = tracker :?> TestTracker
                 let wasInitial = not (t.HasBeenDrained world.WorldId)
-                { acc with
-                    Tracking = drainForWorld t traits :: acc.Tracking
-                    IsInitialPopulation = acc.IsInitialPopulation || wasInitial }
+
+                {
+                    acc with
+                        Tracking = drainForWorld t traits :: acc.Tracking
+                        IsInitialPopulation = acc.IsInitialPopulation || wasInitial
+                }
 
         let matches = where |> Array.fold collect MatchedEntities.Empty
 
@@ -681,8 +698,7 @@ type TestWorld() =
             let getReadResilient before entity =
                 world |> getTraitValue someTrait entity |> Option.defaultValue before
 
-            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
-                getReadResilient)
+            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged, getReadResilient)
 
         member _.QueryTraits(firstTrait, secondTrait, where) =
             let entities = world |> query [| With firstTrait; With secondTrait; yield! where |]
@@ -731,8 +747,7 @@ type TestWorld() =
 
                 afterFirst, afterSecond
 
-            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
-                getReadResilient)
+            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged, getReadResilient)
 
         member _.QueryTraits3(firstTrait, secondTrait, thirdTrait, where) =
             let entities =
@@ -787,8 +802,7 @@ type TestWorld() =
                 let a3 = world |> getTraitValue thirdTrait entity |> Option.defaultValue b3
                 a1, a2, a3
 
-            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
-                getReadResilient)
+            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged, getReadResilient)
 
         member _.QueryTraits4(firstTrait, secondTrait, thirdTrait, fourthTrait, where) =
 
@@ -857,8 +871,7 @@ type TestWorld() =
                 let a4 = world |> getTraitValue fourthTrait entity |> Option.defaultValue b4
                 a1, a2, a3, a4
 
-            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged,
-                getReadResilient)
+            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged, getReadResilient)
 
         member _.QueryFirst where = world |> queryFirst where
 

@@ -459,9 +459,11 @@ type TrackingTests() =
         let T1 = mutableTrait {| X = 0 |} { X = 0 }
         let T2 = mutableTrait {| X = 0 |} { X = 0 }
         let _ = world.Spawn [| T1.Val {| X = 0 |}; T2.Val {| X = 0 |} |]
+
         world.QueryTraits(T1, T2).UpdateEachWith AlwaysTrack (fun ((m1, m2), _) ->
             m1.X <- 42
             m2.X <- 99)
+
         let changedT1 = world.Query(Changed <=> [| T1 |]) |> Seq.length
         let changedT2 = world.Query(Changed <=> [| T2 |]) |> Seq.length
         changedT1 =! 1
@@ -478,6 +480,7 @@ type TrackingTests() =
         world.QueryTraits(T1, T2, Changed <=> [| T1 |]).UpdateEachWith AutoTrack (fun ((m1, m2), _) ->
             m1.X <- 42
             m2.X <- 99)
+
         let changedT1 = world.Query(Changed <=> [| T1 |]) |> Seq.length
         let changedT2 = world.Query(Changed <=> [| T2 |]) |> Seq.length
         changedT1 =! 1
@@ -505,7 +508,15 @@ type TrackingTests() =
         let T2 = mutableTrait {| X = 0 |} { X = 0 }
         let T3 = mutableTrait {| X = 0 |} { X = 0 }
         let T4 = mutableTrait {| X = 0 |} { X = 0 }
-        let _ = world.Spawn [| T1.Val {| X = 0 |}; T2.Val {| X = 0 |}; T3.Val {| X = 0 |}; T4.Val {| X = 0 |} |]
+
+        let _ =
+            world.Spawn [|
+                T1.Val {| X = 0 |}
+                T2.Val {| X = 0 |}
+                T3.Val {| X = 0 |}
+                T4.Val {| X = 0 |}
+            |]
+
         world.QueryTraits4(T1, T2, T3, T4).UpdateEachWith AlwaysTrack (fun ((m1, _m2, _m3, _m4), _) -> m1.X <- 42)
         let changedT1 = world.Query(Changed <=> [| T1 |]) |> Seq.length
         let changedT2 = world.Query(Changed <=> [| T2 |]) |> Seq.length
@@ -524,10 +535,12 @@ type TrackingTests() =
         let T3 = mutableTrait {| X = 0 |} { X = 0 }
         let e = world.Spawn [| T1.Val {| X = 0 |}; T2.Val {| X = 0 |}; T3.Val {| X = 0 |} |]
         e |> setValue T1 {| X = 5 |}
+
         world.QueryTraits3(T1, T2, T3, Changed <=> [| T1 |]).UpdateEachWith AutoTrack (fun ((m1, m2, m3), _) ->
             m1.X <- 42
             m2.X <- 99
             m3.X <- 77)
+
         let changedT1 = world.Query(Changed <=> [| T1 |]) |> Seq.length
         let changedT2 = world.Query(Changed <=> [| T2 |]) |> Seq.length
         let changedT3 = world.Query(Changed <=> [| T3 |]) |> Seq.length
@@ -542,9 +555,11 @@ type TrackingTests() =
         let T2 = mutableTrait {| X = 0 |} { X = 0 }
         let T3 = mutableTrait {| X = 0 |} { X = 0 }
         let _ = world.Spawn [| T1.Val {| X = 0 |}; T2.Val {| X = 0 |}; T3.Val {| X = 0 |} |]
+
         world.QueryTraits3(T1, T2, T3).UpdateEachWith AlwaysTrack (fun ((_m1, m2, m3), _) ->
             m2.X <- 99
             m3.X <- 77)
+
         let changedT1 = world.Query(Changed <=> [| T1 |]) |> Seq.length
         let changedT2 = world.Query(Changed <=> [| T2 |]) |> Seq.length
         let changedT3 = world.Query(Changed <=> [| T3 |]) |> Seq.length
@@ -559,13 +574,23 @@ type TrackingTests() =
         let T2 = mutableTrait {| X = 0 |} { X = 0 }
         let T3 = mutableTrait {| X = 0 |} { X = 0 }
         let T4 = mutableTrait {| X = 0 |} { X = 0 }
-        let e = world.Spawn [| T1.Val {| X = 0 |}; T2.Val {| X = 0 |}; T3.Val {| X = 0 |}; T4.Val {| X = 0 |} |]
+
+        let e =
+            world.Spawn [|
+                T1.Val {| X = 0 |}
+                T2.Val {| X = 0 |}
+                T3.Val {| X = 0 |}
+                T4.Val {| X = 0 |}
+            |]
+
         e |> setValue T1 {| X = 5 |}
+
         world.QueryTraits4(T1, T2, T3, T4, Changed <=> [| T1 |]).UpdateEachWith AutoTrack (fun ((m1, m2, m3, m4), _) ->
             m1.X <- 42
             m2.X <- 99
             m3.X <- 77
             m4.X <- 55)
+
         let changedT1 = world.Query(Changed <=> [| T1 |]) |> Seq.length
         let changedT2 = world.Query(Changed <=> [| T2 |]) |> Seq.length
         let changedT3 = world.Query(Changed <=> [| T3 |]) |> Seq.length
@@ -582,11 +607,20 @@ type TrackingTests() =
         let T2 = mutableTrait {| X = 0 |} { X = 0 }
         let T3 = mutableTrait {| X = 0 |} { X = 0 }
         let T4 = mutableTrait {| X = 0 |} { X = 0 }
-        let _ = world.Spawn [| T1.Val {| X = 0 |}; T2.Val {| X = 0 |}; T3.Val {| X = 0 |}; T4.Val {| X = 0 |} |]
+
+        let _ =
+            world.Spawn [|
+                T1.Val {| X = 0 |}
+                T2.Val {| X = 0 |}
+                T3.Val {| X = 0 |}
+                T4.Val {| X = 0 |}
+            |]
+
         world.QueryTraits4(T1, T2, T3, T4).UpdateEachWith AlwaysTrack (fun ((_m1, m2, m3, m4), _) ->
             m2.X <- 99
             m3.X <- 77
             m4.X <- 55)
+
         let changedT1 = world.Query(Changed <=> [| T1 |]) |> Seq.length
         let changedT2 = world.Query(Changed <=> [| T2 |]) |> Seq.length
         let changedT3 = world.Query(Changed <=> [| T3 |]) |> Seq.length
@@ -607,6 +641,7 @@ type TrackingTests() =
         world.QueryTraits(T1, T2).UpdateEachWith AlwaysTrack (fun ((m, _), entity) ->
             m.X <- 42
             entity |> remove T2)
+
         let val1 = (e |> get T1).Value
         val1.X =! 42
         (e |> has T2) =! false
@@ -621,6 +656,7 @@ type TrackingTests() =
         world.QueryTraits(T1, T2).UpdateEachWith AlwaysTrack (fun ((m1, _), entity) ->
             m1.X <- 99
             entity |> remove T2)
+
         let val1 = (e |> get T1).Value
         val1.X =! 99
         (e |> has T2) =! false
@@ -771,11 +807,16 @@ type TrackingTests() =
     [<Fact>]
     member _.``M3: Tracking + With + Or initial population skips both filters``() =
         let Added = createAdded ()
-        let a = world.Spawn [| Age.Val {| age = 0 |}; Name.Val {| name = "" |}; IsTagged.Tag() |]
+
+        let a =
+            world.Spawn [| Age.Val {| age = 0 |}; Name.Val {| name = "" |}; IsTagged.Tag() |]
+
         let b = world.Spawn [| Age.Val {| age = 0 |}; Name.Val {| name = "" |} |]
         let c = world.Spawn [| Age.Val {| age = 0 |}; IsTagged.Tag() |]
         let d = world.Spawn [| Age.Val {| age = 0 |} |]
-        let results = world.Query(Added <=> [| Age |], With Name, Or [| IsTagged |]) |> Set.ofSeq
+
+        let results =
+            world.Query(Added <=> [| Age |], With Name, Or [| IsTagged |]) |> Set.ofSeq
         // Initial population: skips With and Or. All four have Added(Age).
         results =! set [ a; b; c; d ]
 
@@ -858,11 +899,15 @@ type TrackingTests() =
         // Drain initial state
         world.Query(Added <=> [| Age |], With Name, Or [| IsTagged |]) |> ignore
         // Event-driven path
-        let a = world.Spawn [| Age.Val {| age = 0 |}; Name.Val {| name = "" |}; IsTagged.Tag() |]
+        let a =
+            world.Spawn [| Age.Val {| age = 0 |}; Name.Val {| name = "" |}; IsTagged.Tag() |]
+
         let _ = world.Spawn [| Age.Val {| age = 0 |}; Name.Val {| name = "" |} |] // no Or match
         let _ = world.Spawn [| Age.Val {| age = 0 |}; IsTagged.Tag() |] // no With match
         let _ = world.Spawn [| Age.Val {| age = 0 |} |] // neither
-        let results = world.Query(Added <=> [| Age |], With Name, Or [| IsTagged |]) |> Set.ofSeq
+
+        let results =
+            world.Query(Added <=> [| Age |], With Name, Or [| IsTagged |]) |> Set.ofSeq
         // Must have Added(Age) AND Name AND IsTagged. Only A has all three.
         results =! set [ a ]
 

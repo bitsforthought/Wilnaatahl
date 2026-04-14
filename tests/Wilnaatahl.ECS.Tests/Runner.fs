@@ -21,13 +21,7 @@ let private decodeName (key: string) (prefix: string) =
         fun m -> string (char (System.Convert.ToInt32(m.Groups[1].Value, 16)))
     )
 
-let private runTestClass
-    (testModule: obj)
-    (prefix: string)
-    (ctorName: string)
-    (passed: int ref)
-    (failed: int ref)
-    =
+let private runTestClass (testModule: obj) (prefix: string) (ctorName: string) (passed: int ref) (failed: int ref) =
     let keys: string[] = JS.Constructors.Object.keys testModule |> unbox
 
     for key in keys do
