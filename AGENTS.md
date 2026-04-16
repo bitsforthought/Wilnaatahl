@@ -78,16 +78,19 @@ These reflect the owner's priorities, learned from prior sessions.
 
 ### Code Style
 
+- **Separate pure and impure code.** Keep I/O (file reads, console output, `exit`) at the top level or in a thin shell. Functions called by the top level should be pure — no side effects, no `exit`, no file I/O. Communicate errors via discriminated union return types (e.g., `Result<'T, Error>`) rather than exceptions or early exits.
 - **Use F# idioms, not workarounds.** Prefer bare `_` discards over `_prefixed` names where the language allows. Use tuple-style `TryRemove` returns instead of `&` out-params. Don't over-qualify record constructors when the type can be inferred.
 - **Don't use `emitJsExpr` when F# works.** Default to pure F#; only use JS interop when the F# standard library can't express it.
 - **No optional parameters.** Optional parameters are an OOP/C#-interop feature, not idiomatic F#. Make all parameters required. If F# type inference fails without an overload, add type annotations at the point of declaration rather than introducing optional parameters or leaving dead overloads.
 - **Don't introduce unnecessary abstractions.** Avoid over-generalizing (e.g., predicate callbacks when a concrete parameter suffices).
 - **Don't leave dead code.** Remove unused overloads, unreachable branches, and orphaned helpers. If removing code causes a compile error, fix the root cause (e.g., add type annotations) rather than keeping the dead code as a workaround.
 - **Avoid unnecessary type annotations.** F# infers types well in most cases. Only add annotations when needed for disambiguation or to fix inference failures.
+- **PascalCase file names.** F# source files and scripts should use PascalCase (e.g., `CheckCoverage.fsx`, `Model.fs`), not kebab-case or camelCase.
 - **Cross-assembly anonymous records.** Anonymous records created in one assembly are a different type from those in another. Use helper functions in the source assembly (e.g., `Line3.pos`) to create anonymous records that can be used in test assertions.
 
 ### Process
 
+- **Check coverage after every change.** Run `npm run coverage:check` after making code changes and before committing. This runs all tests with coverage collection, generates a summary, and fails if line coverage drops below the baseline in `coverage-baseline.json`. The baseline auto-updates when coverage improves.
 - **Don't silently weaken tests.** If an assertion is removed, explain why it was necessary. Removing assertions to make things compile is not acceptable.
 - **Preserve existing comments.** Don't delete comments from code being refactored unless they're factually wrong.
 - **When behavior changes, update comments to match.** Dead code paths should `failwith`, not silently return defaults.
