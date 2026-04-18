@@ -14,4 +14,4 @@ let RenderedIn = tagRelationWith { IsExclusive = true }
 
 /// Identifies an entity that represents a rendered Wilp, which is a special BoundingBox that contains, directly or
 /// indirectly, all tree nodes representing wilp members.
-let Wilp = valueTrait {| wilpName = "" |}
+let RenderedWilp = valueTrait {| wilpName = "" |}

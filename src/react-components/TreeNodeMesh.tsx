@@ -52,7 +52,7 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
           <sphereGeometry args={[Math.min(size.x, size.y, size.z), 16, 16]} />
         )}
         <meshStandardMaterial
-          color={"#FF0000"} // Default to red; Paint system will update it as needed.
+          color={"#888888"} // Neutral placeholder; Paint system will overwrite per-Wilp on first frame.
           metalness={0.3} // Slight metallic effect
           roughness={0.3} // Moderate roughness for better light scattering
         />

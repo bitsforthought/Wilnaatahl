@@ -20,7 +20,7 @@ let destroyAllTreeNodes (world: IWorld) =
 let spawnWilpBox (wilp: WilpName) (world: IWorld) =
     // Since a Wilp is also a BoundingBox, it will be cleaned up along with all other Connectors.
     let boundingBoxId, _, _ = world |> BoundingBox.spawn zeroPosition // TODO: Tweak Size.x to make huwilp forest look good
-    boundingBoxId |> addWith Wilp {| wilpName = wilp.AsString |} // TODO: Also add MeshRef/GroupRef/SceneRef to link this to a Three.js <group/>
+    boundingBoxId |> addWith RenderedWilp {| wilpName = wilp.AsString |} // TODO: Also add MeshRef/GroupRef/SceneRef to link this to a Three.js <group/>
     // TODO: Add Follows => Layout entity to track increasing z co-ordinate during layout.
     boundingBoxId
 

@@ -29,7 +29,7 @@ let private queryFamilies familyGraph (world: IWorld) =
 
         match maybeWilpId with
         | Some wilpId ->
-            match wilpId |> get Wilp with
+            match wilpId |> get RenderedWilp with
             | Some wilp -> FamilyMember(entity, position, person, WilpName wilp.wilpName)
             | None -> failwith $"Found Wilp {wilpId} without a name."
         | None -> failwith $"Found tree node {entity} with no Wilp."

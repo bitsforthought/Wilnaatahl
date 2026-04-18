@@ -20,7 +20,7 @@ let layoutNodes (world: IWorld) familyGraph =
 
         rootBox |> LayoutBox.visit visitLeaf visitComposite initialPosition
 
-    world.QueryTrait(Wilp).ForEach
+    world.QueryTrait(RenderedWilp).ForEach
     <| fun (wilpData, wilpId) ->
         let wilp = WilpName wilpData.wilpName
         let layoutMap = Scene.layoutGraph wilp familyGraph |> setPositions |> Map.ofSeq

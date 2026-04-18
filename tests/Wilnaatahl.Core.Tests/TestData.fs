@@ -19,7 +19,7 @@ let private person id name shape wilp = {
         Shape = shape
 }
 
-let testWilp = Some(WilpName "H")
+let testWilp = Some { Name = WilpName "H"; Pdeek = Giskaast }
 
 // Test data is public because they are shared by other tests.
 // Include some birthdates to exercise sorting.
@@ -33,7 +33,7 @@ let p2 = {
 }
 
 let p3 = {
-    person 3 "Child2" Cube (Some(WilpName "L")) with
+    person 3 "Child2" Cube (Some { Name = WilpName "L"; Pdeek = Ganeda }) with
         DateOfBirth = Some(DateOnly(1900, 1, 1))
         BirthOrder = 1
 }

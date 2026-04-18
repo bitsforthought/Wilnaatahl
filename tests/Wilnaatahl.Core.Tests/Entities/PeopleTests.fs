@@ -26,8 +26,8 @@ type Tests() =
     member _.``spawnWilpBox creates bounding box with Wilp trait``() =
         let boxId = world |> People.spawnWilpBox (WilpName "TestWilp")
 
-        boxId |> has Wilp =! true
-        let wilpData = (boxId |> get Wilp).Value
+        boxId |> has RenderedWilp =! true
+        let wilpData = (boxId |> get RenderedWilp).Value
         wilpData.wilpName =! "TestWilp"
 
     [<Fact>]

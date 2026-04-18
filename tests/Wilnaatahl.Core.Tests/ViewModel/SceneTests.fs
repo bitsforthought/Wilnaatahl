@@ -82,7 +82,7 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
             Id = PersonId 100
             Label = Some "Mother"
             Shape = Sphere
-            Wilp = Some(WilpName "T")
+            Wilp = Some { Name = WilpName "T"; Pdeek = Giskaast }
     }
 
     let father = {
@@ -97,7 +97,7 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
             Id = PersonId 102
             Label = Some "ChildA"
             Shape = Sphere
-            Wilp = Some(WilpName "T")
+            Wilp = Some { Name = WilpName "T"; Pdeek = Giskaast }
             DateOfBirth = Some(System.DateOnly(2000, 6, 1))
             BirthOrder = 0
     }
@@ -107,7 +107,7 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
             Id = PersonId 103
             Label = Some "ChildB"
             Shape = Sphere
-            Wilp = Some(WilpName "T")
+            Wilp = Some { Name = WilpName "T"; Pdeek = Giskaast }
             DateOfBirth = Some(System.DateOnly(2005, 1, 1))
     }
 
@@ -116,7 +116,7 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
             Id = PersonId 104
             Label = Some "ChildC"
             Shape = Sphere
-            Wilp = Some(WilpName "T")
+            Wilp = Some { Name = WilpName "T"; Pdeek = Giskaast }
             DateOfBirth = Some(System.DateOnly(2000, 6, 1))
             BirthOrder = 1
     }

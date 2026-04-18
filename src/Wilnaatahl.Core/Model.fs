@@ -16,7 +16,7 @@ type PersonId =
         let (PersonId personId) = this
         personId
 
-/// Represents a Wilp; Strongly typed to distinguish a Wilp name from other strings.
+/// Represents a Wilp's name; strongly typed to distinguish a Wilp name from other strings.
 #if FABLE_COMPILER
 [<Erase>]
 #endif
@@ -26,6 +26,20 @@ type WilpName =
     member this.AsString =
         let (WilpName wilp) = this
         wilp
+
+/// Represents a P'deek (Clan). Each Wilp belongs to exactly one Pdeek. There are four Pdeek
+/// in the Gitxsan nation: LaxGibuu (Wolf), LaxSkiik (Eagle), Ganeda (Frog), and Giskaast (Fireweed).
+#if FABLE_COMPILER
+[<StringEnum>]
+#endif
+type Pdeek =
+    | LaxGibuu
+    | LaxSkiik
+    | Ganeda
+    | Giskaast
+
+/// A Wilp, identified by its Name and tagged with the Pdeek (Clan) it belongs to.
+type Wilp = { Name: WilpName; Pdeek: Pdeek }
 
 /// Stand-in for Gender until we decide how best to handle it.
 #if FABLE_COMPILER
@@ -39,7 +53,7 @@ type NodeShape =
 type Person = {
     Id: PersonId
     Label: string option // TODO: Commit to schema for names (colonial vs. traditional)
-    Wilp: WilpName option
+    Wilp: Wilp option
     Shape: NodeShape
     BirthOrder: int
     DateOfBirth: DateOnly option
@@ -114,7 +128,10 @@ module FamilyGraph =
             |> Seq.map (fun (parent, children) -> parent, children |> List.ofSeq)
             |> Map.ofSeq
 
-        let huwilp = peopleAndParents |> Seq.choose (fun (p, _) -> p.Wilp) |> Set.ofSeq
+        let huwilp =
+            peopleAndParents
+            |> Seq.choose (fun (p, _) -> p.Wilp |> Option.map (fun w -> w.Name))
+            |> Set.ofSeq
 
         // Helper to build WilpTree recursively using coparent relationships.
         let rec buildWilpTree person =
@@ -159,7 +176,7 @@ module FamilyGraph =
                     peopleAndParents
                     |> Seq.choose (fun (p, maybeParents) ->
                         match p.Wilp, maybeParents with
-                        | Some w', None when w' = w -> Some p
+                        | Some w', None when w'.Name = w -> Some p
                         | _ -> None)
 
                 let trees = roots |> Seq.map buildWilpTree
@@ -249,10 +266,14 @@ module Initial =
     // Some husbands have Wilp = None to represent unknown / unaffiliated affiliation. The matrilineal
     // invariant — every internal mother is Sphere/Wilp A, every internal father is a Cube whose Wilp
     // is non-A or None — holds throughout this dataset.
-    let private wilpA = Some(WilpName "A")
-    let private wilpB = Some(WilpName "B")
-    let private wilpC = Some(WilpName "C")
-    let private wilpD = Some(WilpName "D")
+    //
+    // Each Wilp belongs to exactly one Pdeek (Clan). We assign all four Pdeek so the visualization
+    // exercises the full color palette. Wilp A is Giskaast (red) so the bulk of the visible nodes
+    // remain red, matching the prior visual impression of the test data.
+    let private wilpA = Some { Name = WilpName "A"; Pdeek = Giskaast }
+    let private wilpB = Some { Name = WilpName "B"; Pdeek = Ganeda }
+    let private wilpC = Some { Name = WilpName "C"; Pdeek = LaxSkiik }
+    let private wilpD = Some { Name = WilpName "D"; Pdeek = LaxGibuu }
 
     let private person id label shape wilp = {
         Person.Empty with

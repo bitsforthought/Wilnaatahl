@@ -4,6 +4,13 @@
 
 Wilnaatahl visualizes genealogical relationships of Gitxsan huwilp members. It is a cross-platform, web-based tool with a React/TypeScript frontend and a core domain model in F# (compiled to JS via Fable). The architecture enforces a strict separation between UI, ECS, and domain logic, with F# as the source of truth for all business rules and data structures.
 
+## Gitxsan Terminology
+
+The domain uses Gitxsan terms as identifiers. Pluralization in Gitxsan does not follow the English `+s` convention, so use the correct plural form in identifiers rather than appending `s`:
+
+- **Wilp** (singular) / **Huwilp** (plural) — a matrilineal House. E.g. a `Map<WilpName, Wilp>` keyed by Wilp name should be named `HuwilpByName`, not `WilpsByName`.
+- **Pdeek** (Clan) — each Wilp belongs to exactly one Pdeek (`LaxGibuu`/Wolf, `LaxSkiik`/Eagle, `Ganeda`/Frog, `Giskaast`/Fireweed).
+
 ## Architecture & Data Flow
 
 - **Frontend:** React (TypeScript) in `src/react-components/` and `src/main.tsx`.

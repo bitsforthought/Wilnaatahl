@@ -63,6 +63,26 @@ let ``WilpName returns itself as a string`` () =
     wilp.AsString =! "Test"
 
 [<Fact>]
+let ``Initial peopleAndParents assigns each Wilp to a distinct Pdeek`` () =
+    // Wilp A is the primary matriline; per project conventions it is Giskaast (red) so
+    // most visible nodes in the rendered tree retain the historical red appearance.
+    let huwilpByName =
+        Initial.peopleAndParents
+        |> Seq.choose (fun (p, _) -> p.Wilp)
+        |> Seq.map (fun w -> w.Name, w)
+        |> Map.ofSeq
+
+    huwilpByName |> Map.find (WilpName "A")
+    =! { Name = WilpName "A"; Pdeek = Giskaast }
+
+    // All four Pdeek must be represented across the four huwilp so the visualization
+    // exercises the full color palette.
+    let representedPdeek =
+        huwilpByName |> Map.values |> Seq.map (fun w -> w.Pdeek) |> Set.ofSeq
+
+    representedPdeek =! Set.ofList [ Giskaast; Ganeda; LaxSkiik; LaxGibuu ]
+
+[<Fact>]
 let ``visitWilpForest computes correct tree statistics`` () =
     let graph = createFamilyGraph extendedFamily
     let wilp = WilpName "H"
