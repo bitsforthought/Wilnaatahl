@@ -10,10 +10,12 @@ open Wilnaatahl.Model.FamilyGraph
 let ``LoadGraph returns graph with expected people count`` () =
     let factory = GraphViewFactory() :> IGraphViewFactory
     let graph = factory.LoadGraph()
-    graph |> allPeople |> Seq.length =! 5
+    graph |> allPeople |> Seq.length =! 32
 
 [<Fact>]
 let ``LoadGraph returns graph with expected huwilp`` () =
     let factory = GraphViewFactory() :> IGraphViewFactory
     let graph = factory.LoadGraph()
-    graph |> huwilp =! Set.ofList [ WilpName "H" ]
+
+    graph |> huwilp
+    =! Set.ofList [ WilpName "A"; WilpName "B"; WilpName "C"; WilpName "D" ]

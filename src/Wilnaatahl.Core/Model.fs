@@ -245,47 +245,158 @@ module FamilyGraph =
 
 module Initial =
 
+    // Wilp A is the primary (matriline) Wilp; B, C, and D are used only for in-marrying husbands.
+    // Some husbands have Wilp = None to represent unknown / unaffiliated affiliation. The matrilineal
+    // invariant — every internal mother is Sphere/Wilp A, every internal father is a Cube whose Wilp
+    // is non-A or None — holds throughout this dataset.
+    let private wilpA = Some(WilpName "A")
+    let private wilpB = Some(WilpName "B")
+    let private wilpC = Some(WilpName "C")
+    let private wilpD = Some(WilpName "D")
+
+    let private person id label shape wilp = {
+        Person.Empty with
+            Id = PersonId id
+            Label = Some label
+            Wilp = wilp
+            Shape = shape
+    }
+
+    let private withDob (year, month, day) p = { p with DateOfBirth = Some(DateOnly(year, month, day)) }
+
+    let private withBirthOrder n p = { p with BirthOrder = n }
+
+    let private parents (mother: Person) (father: Person) =
+        Some { Mother = mother.Id; Father = father.Id }
+
+    // ----- Forest root #1: Mary's matriline -----
+
+    let private mary = person 0 "Mary Whitfield" Sphere wilpA
+    let private george = person 1 "George Ashford" Cube wilpB
+
+    // Gen 1 — six children of (Mary, George). DOB tie between Elizabeth and John exercises the
+    // equal-DOB branch of the comparator; Susan has no DOB so her ordering falls back to BirthOrder.
+    let private anne = person 2 "Anne Ashford" Sphere wilpA |> withDob (1925, 3, 10)
+    let private james = person 3 "James Ashford" Cube wilpA |> withDob (1927, 7, 22)
+
+    let private elizabeth =
+        person 4 "Elizabeth Ashford" Sphere wilpA |> withDob (1929, 11, 2)
+
+    let private john = person 5 "John Ashford" Cube wilpA |> withDob (1929, 11, 2)
+
+    let private margaret =
+        person 6 "Margaret Ashford" Sphere wilpA |> withDob (1932, 4, 17)
+
+    let private susan = person 7 "Susan Ashford" Sphere wilpA |> withBirthOrder 5
+
+    // Gen 1 husbands.
+    let private henry = person 8 "Henry Lee" Cube None // unaffiliated; Anne's husband
+    let private richard = person 9 "Richard Cromwell" Cube wilpD // Elizabeth spouse #1
+    let private charles = person 10 "Charles Davenport" Cube wilpB // Elizabeth spouse #2
+    let private frederick = person 11 "Frederick Easton" Cube wilpC // Margaret spouse #1
+    let private albert = person 12 "Albert Fitzgerald" Cube None // unaffiliated; Margaret spouse #2
+    let private samuel = person 13 "Samuel Greenwood" Cube wilpD // Margaret spouse #3
+
+    // Gen 2 children.
+    let private catherine =
+        person 14 "Catherine Lee" Sphere wilpA |> withDob (1950, 5, 1)
+
+    let private robert = person 15 "Robert Cromwell" Cube wilpA |> withDob (1952, 4, 4)
+    let private jane = person 16 "Jane Cromwell" Sphere wilpA |> withDob (1954, 8, 19)
+
+    let private thomas =
+        person 17 "Thomas Davenport" Cube wilpA |> withDob (1960, 2, 14)
+
+    let private sarah = person 18 "Sarah Easton" Sphere wilpA |> withDob (1956, 3, 3)
+
+    let private william =
+        person 19 "William Fitzgerald" Cube wilpA |> withDob (1958, 6, 1)
+
+    let private emily =
+        person 20 "Emily Fitzgerald" Sphere wilpA |> withDob (1960, 9, 9)
+
+    let private edward =
+        person 21 "Edward Greenwood" Cube wilpA |> withDob (1962, 12, 12)
+
+    // Gen 2 husbands.
+    let private daniel = person 22 "Daniel Featherstonhaugh" Cube wilpC // Catherine's husband
+    let private peter = person 23 "Peter Ng" Cube None // unaffiliated; Jane's husband
+
+    // Gen 3 children.
+    let private michael =
+        person 24 "Michael Featherstonhaugh" Cube wilpA |> withDob (1975, 6, 15)
+
+    let private lucy =
+        person 25 "Lucy Featherstonhaugh" Sphere wilpA |> withDob (1977, 9, 30)
+
+    let private christopher =
+        person 26 "Christopher Featherstonhaugh" Cube wilpA |> withDob (1980, 1, 8)
+
+    let private rachel = person 27 "Rachel Ng" Sphere wilpA |> withDob (1982, 12, 25)
+
+    // ----- Forest root #2: Helen's matriline (independent root, exercises multi-root forest) -----
+
+    let private helen = person 28 "Helen Whitfield-Brook" Sphere wilpA
+    let private walter = person 29 "Walter Yu" Cube wilpD
+    let private grace = person 30 "Grace Yu" Sphere wilpA |> withBirthOrder 0
+    let private benjamin = person 31 "Benjamin Yu" Cube wilpA |> withBirthOrder 1
+
     let peopleAndParents = [
-        {
-            Person.Empty with
-                Id = PersonId 0
-                Shape = Sphere
-                Wilp = Some(WilpName "H")
-        },
-        None
-        {
-            Person.Empty with
-                Id = PersonId 1
-                Label = Some "GGGG Grandfather"
-                Wilp = None
-                Shape = Cube
-        },
-        None
-        {
-            Person.Empty with
-                Id = PersonId 2
-                Label = Some "GGG Grandmother" // Putting an underlined X̲ here for no particular reason...
-                Wilp = Some(WilpName "H")
-                Shape = Sphere
-                BirthOrder = 0
-        },
-        Some { Mother = PersonId 0; Father = PersonId 1 }
-        {
-            Person.Empty with
-                Id = PersonId 3
-                Label = Some "GGG Granduncle H"
-                Wilp = Some(WilpName "H")
-                BirthOrder = 1
-                Shape = Cube
-        },
-        Some { Mother = PersonId 0; Father = PersonId 1 }
-        {
-            Person.Empty with
-                Id = PersonId 4
-                Label = Some "GGG Granduncle N"
-                Wilp = Some(WilpName "H")
-                BirthOrder = 2
-                Shape = Cube
-        },
-        Some { Mother = PersonId 0; Father = PersonId 1 }
+        // Forest #1 roots
+        mary, None
+        george, None
+
+        // Gen 1: children of Mary + George
+        anne, parents mary george
+        james, parents mary george
+        elizabeth, parents mary george
+        john, parents mary george
+        margaret, parents mary george
+        susan, parents mary george
+
+        // Gen 1 husbands (all roots)
+        henry, None
+        richard, None
+        charles, None
+        frederick, None
+        albert, None
+        samuel, None
+
+        // Gen 2: Anne + Henry (1 child)
+        catherine, parents anne henry
+
+        // Gen 2: Elizabeth + Richard (2 children)
+        robert, parents elizabeth richard
+        jane, parents elizabeth richard
+
+        // Gen 2: Elizabeth + Charles (1 child, second coparent of Elizabeth)
+        thomas, parents elizabeth charles
+
+        // Gen 2: Margaret + Frederick (1 child, first of three coparents of Margaret)
+        sarah, parents margaret frederick
+
+        // Gen 2: Margaret + Albert (2 children, middle coparent of Margaret)
+        william, parents margaret albert
+        emily, parents margaret albert
+
+        // Gen 2: Margaret + Samuel (1 child, third coparent of Margaret)
+        edward, parents margaret samuel
+
+        // Gen 2 husbands (roots)
+        daniel, None
+        peter, None
+
+        // Gen 3: Catherine + Daniel (3 children)
+        michael, parents catherine daniel
+        lucy, parents catherine daniel
+        christopher, parents catherine daniel
+
+        // Gen 3: Jane + Peter (1 child)
+        rachel, parents jane peter
+
+        // Forest #2: Helen's matriline
+        helen, None
+        walter, None
+        grace, parents helen walter
+        benjamin, parents helen walter
     ]
