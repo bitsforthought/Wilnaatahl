@@ -73,7 +73,7 @@ These reflect the owner's priorities, learned from prior sessions.
 ### Testing Philosophy
 
 - **Koota is the gold standard.** The mock must match Koota's behavior exactly, even when that behavior appears buggy or inconsistent. Document known Koota bugs with issue links, but replicate them faithfully.
-- **TDD is strict.** Write failing tests first, observe the failure, then implement. Don't skip the red phase — it validates the test itself.
+- **TDD is strict.** Write failing tests first, observe the failure, then implement. Don't skip the red phase — it validates the test itself. When planning, structure todos so that tests for each unit of work come *before* the corresponding implementation — don't batch all tests into a single step at the end.
 - **Tests should be portable by default.** ECS tests should run against both the .NET mock and real Koota unless technically impossible (e.g., Fable doesn't support quotations).
 - **Test the lowest common denominator.** When the mock is more permissive than Koota, constrain tests to what Koota supports (e.g., object schemas instead of primitive values for traits).
 - **Use xUnit class fixtures** for tests with repetitive setup. Shared setup goes in the constructor; cleanup via `IDisposable`. See `TrackingTests` and `PeopleTests` for the pattern. Module-level functions are fine for tests with minimal shared setup.
