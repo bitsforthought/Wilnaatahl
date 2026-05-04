@@ -39,12 +39,6 @@ let private queryFamilies familyGraph (world: IWorld) =
     |> Scene.extractFamilies familyGraph
 
 
-let destroyAllConnectors (world: IWorld) =
-    for entity in world.Query(With Connector) do
-        entity |> destroy
-
-    world
-
 let spawnAllConnectors familyGraph (world: IWorld) =
     let families = world |> queryFamilies familyGraph
 
@@ -78,8 +72,7 @@ let spawnAllConnectors familyGraph (world: IWorld) =
         //    the other line even when the parent nodes have been dragged due to how the Parallels
         //    relation is implemented. Our definition of "bottom" is that it's the Line that Parallels the
         //    Hidden Line with a negative offset.
-        let bisectingEntityId =
-            world.Spawn(Position.Val zeroPosition, Hidden.Tag(), Connector.Tag())
+        let bisectingEntityId = world.Spawn(Position.Val zeroPosition, Hidden.Tag())
 
         bisectingEntityId |> addRelation Bisects bottomLineId
 
@@ -96,8 +89,7 @@ let spawnAllConnectors familyGraph (world: IWorld) =
             // child processing in one loop.
 
             // 5. A visible Elbow that FollowsX the Bisects Node and FollowsY the Bounding Box.
-            let branchNodeId =
-                world.Spawn(Position.Val zeroPosition, Elbow.Tag(), Connector.Tag())
+            let branchNodeId = world.Spawn(Position.Val zeroPosition, Elbow.Tag())
 
             branchNodeId |> addRelationWith SnapToX bisectingEntityId {| x = 0.0 |}
             branchNodeId |> addRelationWith SnapToY boxBoundId {| y = 0.0 |}
@@ -114,8 +106,7 @@ let spawnAllConnectors familyGraph (world: IWorld) =
 
                 // 7. A visible Elbow for each child node that FollowsX the corresponding child node
                 //    and FollowsY the Bounding Box.
-                let junctionId =
-                    world.Spawn(Position.Val zeroPosition, Elbow.Tag(), Connector.Tag())
+                let junctionId = world.Spawn(Position.Val zeroPosition, Elbow.Tag())
 
                 junctionId |> addRelationWith SnapToX child.Entity {| x = 0.0 |}
                 junctionId |> addRelationWith SnapToY boxBoundId {| y = 0.0 |}

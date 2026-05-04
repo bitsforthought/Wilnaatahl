@@ -7,6 +7,7 @@ import {
   toKootaValueTrait,
 } from "./koota/kootaWrapper";
 import * as Events from "../generated/Traits/Events";
+import * as FileCommands from "../generated/Systems/FileCommands";
 import * as ConnectorTraits from "../generated/Traits/ConnectorTraits";
 import * as PeopleTraits from "../generated/Traits/PeopleTraits";
 import * as SpaceTraits from "../generated/Traits/SpaceTraits";
@@ -17,6 +18,11 @@ export const MeshRef = trait(() => new Mesh());
 
 // Re-export traits from the F# side.
 export const ClickEvent = toKootaTagTrait(Events.ClickEvent);
+
+// Outward file-command request signals, set on the world by the FileCommands
+// system and consumed (then cleared) by the Visualizer's IO bridge.
+export const OpenFileRequested = toKootaTagTrait(FileCommands.OpenFileRequested);
+export const SaveRequested = toKootaTagTrait(FileCommands.SaveRequested);
 
 export const Elbow = toKootaTagTrait(ConnectorTraits.Elbow);
 export const Hidden = toKootaTagTrait(ConnectorTraits.Hidden);

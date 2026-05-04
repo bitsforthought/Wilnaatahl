@@ -1,0 +1,275 @@
+{
+  "people": [
+    {
+      "id": 0,
+      "name": "Mary Whitfield",
+      "wilp": 0,
+      "birthOrder": 0,
+      "gender": "F"
+    },
+    {
+      "id": 1,
+      "name": "George Ashford",
+      "wilp": 1,
+      "birthOrder": 0,
+      "gender": "M"
+    },
+    {
+      "id": 2,
+      "name": "Anne Ashford",
+      "parents": 0,
+      "wilp": 0,
+      "birthOrder": 0,
+      "normalizedDateOfBirth": "1925-03-10",
+      "gender": "F"
+    },
+    {
+      "id": 3,
+      "name": "James Ashford",
+      "parents": 0,
+      "wilp": 0,
+      "birthOrder": 0,
+      "normalizedDateOfBirth": "1927-07-22",
+      "gender": "M"
+    },
+    {
+      "id": 4,
+      "name": "Elizabeth Ashford",
+      "parents": 0,
+      "wilp": 0,
+      "birthOrder": 0,
+      "normalizedDateOfBirth": "1929-11-02",
+      "gender": "F"
+    },
+    {
+      "id": 5,
+      "name": "John Ashford",
+      "parents": 0,
+      "wilp": 0,
+      "birthOrder": 0,
+      "normalizedDateOfBirth": "1929-11-02",
+      "gender": "M"
+    },
+    {
+      "id": 6,
+      "name": "Margaret Ashford",
+      "parents": 0,
+      "wilp": 0,
+      "birthOrder": 0,
+      "normalizedDateOfBirth": "1932-04-17",
+      "gender": "F"
+    },
+    {
+      "id": 7,
+      "name": "Susan Ashford",
+      "parents": 0,
+      "wilp": 0,
+      "birthOrder": 5,
+      "gender": "F"
+    },
+    { "id": 8, "name": "Henry Lee", "wilp": 2, "birthOrder": 0, "gender": "M" },
+    {
+      "id": 9,
+      "name": "Richard Cromwell",
+      "wilp": 3,
+      "birthOrder": 0,
+      "gender": "M"
+    },
+    {
+      "id": 10,
+      "name": "Charles Davenport",
+      "wilp": 1,
+      "birthOrder": 0,
+      "gender": "M"
+    },
+    {
+      "id": 11,
+      "name": "Frederick Easton",
+      "wilp": 4,
+      "birthOrder": 0,
+      "gender": "M"
+    },
+    { "id": 12, "name": "Albert Fitzgerald", "birthOrder": 0, "gender": "M" },
+    {
+      "id": 13,
+      "name": "Samuel Greenwood",
+      "wilp": 3,
+      "birthOrder": 0,
+      "gender": "M"
+    },
+    {
+      "id": 14,
+      "name": "Catherine Lee",
+      "parents": 1,
+      "wilp": 0,
+      "birthOrder": 0,
+      "normalizedDateOfBirth": "1950-05-01",
+      "gender": "F"
+    },
+    {
+      "id": 15,
+      "name": "Robert Cromwell",
+      "parents": 2,
+      "wilp": 0,
+      "birthOrder": 0,
+      "normalizedDateOfBirth": "1952-04-04",
+      "gender": "M"
+    },
+    {
+      "id": 16,
+      "name": "Jane Cromwell",
+      "parents": 2,
+      "wilp": 0,
+      "birthOrder": 0,
+      "normalizedDateOfBirth": "1954-08-19",
+      "gender": "F"
+    },
+    {
+      "id": 17,
+      "name": "Thomas Davenport",
+      "parents": 3,
+      "wilp": 0,
+      "birthOrder": 0,
+      "normalizedDateOfBirth": "1960-02-14",
+      "gender": "M"
+    },
+    {
+      "id": 18,
+      "name": "Sarah Easton",
+      "parents": 4,
+      "wilp": 0,
+      "birthOrder": 0,
+      "normalizedDateOfBirth": "1956-03-03",
+      "gender": "F"
+    },
+    {
+      "id": 19,
+      "name": "William Fitzgerald",
+      "parents": 5,
+      "wilp": 0,
+      "birthOrder": 0,
+      "normalizedDateOfBirth": "1958-06-01",
+      "gender": "M"
+    },
+    {
+      "id": 20,
+      "name": "Emily Fitzgerald",
+      "parents": 5,
+      "wilp": 0,
+      "birthOrder": 0,
+      "normalizedDateOfBirth": "1960-09-09",
+      "gender": "F"
+    },
+    {
+      "id": 21,
+      "name": "Edward Greenwood",
+      "parents": 6,
+      "wilp": 0,
+      "birthOrder": 0,
+      "normalizedDateOfBirth": "1962-12-12",
+      "gender": "M"
+    },
+    {
+      "id": 22,
+      "name": "Daniel Featherstonhaugh",
+      "wilp": 4,
+      "birthOrder": 0,
+      "gender": "M"
+    },
+    { "id": 23, "name": "Peter Ng", "birthOrder": 0, "gender": "M" },
+    {
+      "id": 24,
+      "name": "Michael Featherstonhaugh",
+      "parents": 7,
+      "wilp": 0,
+      "birthOrder": 0,
+      "normalizedDateOfBirth": "1975-06-15",
+      "gender": "M"
+    },
+    {
+      "id": 25,
+      "name": "Lucy Featherstonhaugh",
+      "parents": 7,
+      "wilp": 0,
+      "birthOrder": 0,
+      "normalizedDateOfBirth": "1977-09-30",
+      "gender": "F"
+    },
+    {
+      "id": 26,
+      "name": "Christopher Featherstonhaugh",
+      "parents": 7,
+      "wilp": 0,
+      "birthOrder": 0,
+      "normalizedDateOfBirth": "1980-01-08",
+      "gender": "M"
+    },
+    {
+      "id": 27,
+      "name": "Rachel Ng",
+      "parents": 8,
+      "wilp": 0,
+      "birthOrder": 0,
+      "normalizedDateOfBirth": "1982-12-25",
+      "gender": "F"
+    },
+    {
+      "id": 28,
+      "name": "Helen Whitfield-Brook",
+      "wilp": 0,
+      "birthOrder": 0,
+      "gender": "F"
+    },
+    {
+      "id": 29,
+      "name": "Walter Yu",
+      "wilp": 3,
+      "birthOrder": 0,
+      "gender": "M"
+    },
+    {
+      "id": 30,
+      "name": "Grace Yu",
+      "parents": 9,
+      "wilp": 0,
+      "birthOrder": 0,
+      "gender": "F"
+    },
+    {
+      "id": 31,
+      "name": "Benjamin Yu",
+      "parents": 9,
+      "wilp": 0,
+      "birthOrder": 1,
+      "gender": "M"
+    },
+    { "id": 32, "name": "Frank Hollister", "birthOrder": 0, "gender": "M" },
+    { "id": 33, "name": "Roy Pemberton", "birthOrder": 0, "gender": "M" }
+  ],
+  "couples": [
+    { "coupleId": 0, "member1": 0, "member2": 1 },
+    { "coupleId": 1, "member1": 2, "member2": 8 },
+    { "coupleId": 2, "member1": 4, "member2": 9 },
+    { "coupleId": 3, "member1": 4, "member2": 10 },
+    { "coupleId": 4, "member1": 6, "member2": 11 },
+    { "coupleId": 5, "member1": 6, "member2": 12 },
+    { "coupleId": 6, "member1": 6, "member2": 13 },
+    { "coupleId": 7, "member1": 14, "member2": 22 },
+    { "coupleId": 8, "member1": 16, "member2": 23 },
+    { "coupleId": 9, "member1": 28, "member2": 29 },
+    {
+      "coupleId": 10,
+      "member1": 7,
+      "member2": 32,
+      "dateOfUnion": "1955-06-15"
+    },
+    { "coupleId": 11, "member1": 6, "member2": 33, "dateOfUnion": "1965-03-01" }
+  ],
+  "huwilp": [
+    { "id": 0, "name": "A", "pdeek": "Giskaast" },
+    { "id": 1, "name": "B", "pdeek": "Ganeda" },
+    { "id": 2, "pdeek": "Ganeda" },
+    { "id": 3, "name": "D", "pdeek": "LaxGibuu" },
+    { "id": 4, "name": "C", "pdeek": "LaxSkiik" }
+  ]
+}

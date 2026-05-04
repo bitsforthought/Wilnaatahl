@@ -12,16 +12,15 @@ open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Tests.EcsTestSupport
 
 [<Fact>]
-let ``spawn creates bounding box with Size Hidden and Connector`` () =
+let ``spawn creates bounding box with Size and Hidden`` () =
     use ecs = new EcsWorld()
     let world = ecs.World
     let boxId, _, _ = world |> BoundingBox.spawn {| x = 1.0; y = 2.0; z = 3.0 |}
 
     boxId |> has Hidden =! true
-    boxId |> has Connector =! true
 
 [<Fact>]
-let ``spawn creates two corners with Position Hidden and Connector`` () =
+let ``spawn creates two corners with Position and Hidden`` () =
     use ecs = new EcsWorld()
     let world = ecs.World
 
@@ -29,10 +28,8 @@ let ``spawn creates two corners with Position Hidden and Connector`` () =
 
     boxPosId |> has Position =! true
     boxPosId |> has Hidden =! true
-    boxPosId |> has Connector =! true
     boundPosId |> has Position =! true
     boundPosId |> has Hidden =! true
-    boundPosId |> has Connector =! true
 
 [<Fact>]
 let ``spawn returns three distinct entity ids`` () =

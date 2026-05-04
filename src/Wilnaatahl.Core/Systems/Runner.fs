@@ -5,6 +5,7 @@ open Wilnaatahl.ECS.Tracking
 open Wilnaatahl.Traits.Events
 open Wilnaatahl.Systems.Animation
 open Wilnaatahl.Systems.Dragging
+open Wilnaatahl.Systems.FileCommands
 open Wilnaatahl.Systems.Movement
 open Wilnaatahl.Systems.Selection
 open Wilnaatahl.Systems.UndoRedo
@@ -37,6 +38,7 @@ let runSystems (world: IWorld) delta =
     |> dragNodes
     |> handleUndoRedo
     |> selectNodes
+    |> handleFileCommands
     |> move movementTracker
     |> render
     |> cleanupEvents

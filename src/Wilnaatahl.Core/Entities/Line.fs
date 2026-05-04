@@ -15,13 +15,11 @@ open Wilnaatahl.Traits.SpaceTraits
 let pos x y z = {| x = x; y = y; z = z |}
 
 let spawn firstPos secondPos (world: IWorld) =
-    let firstEndpointId =
-        world.Spawn(Position.Val firstPos, Hidden.Tag(), Connector.Tag())
+    let firstEndpointId = world.Spawn(Position.Val firstPos, Hidden.Tag())
 
-    let secondEndpointId =
-        world.Spawn(Position.Val secondPos, Hidden.Tag(), Connector.Tag())
+    let secondEndpointId = world.Spawn(Position.Val secondPos, Hidden.Tag())
 
-    let lineId = world.Spawn(Line.Tag(), Connector.Tag())
+    let lineId = world.Spawn(Line.Tag())
     firstEndpointId |> addRelation EndpointOf lineId
     secondEndpointId |> addRelation EndpointOf lineId
     lineId

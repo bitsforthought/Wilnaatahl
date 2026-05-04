@@ -455,3 +455,118 @@ let ``layoutGraph interleaves childless and procreative Couples by effective dat
     let xOf personId = (Map.find personId positions).X
     test <@ xOf earlyPartner.Id < xOf midPartner.Id @>
     test <@ xOf midPartner.Id < xOf latePartner.Id @>
+
+// ----- enumerateHuwilpToRender -----------------------------------------------------------
+
+[<Fact>]
+let ``enumerateHuwilpToRender for the chosen Wilp excludes people from other huwilp`` () =
+    // Two unrelated huwilp, each with a single root member. The renderer
+    // currently picks the alphabetically-first Wilp ("A") and must not list
+    // people who don't appear in that Wilp's forest — otherwise the layout
+    // pass blows up looking them up in the Wilp-A layout map.
+    let wilpA = Wilp { Name = WilpName "A"; Pdeek = Giskaast }
+    let wilpB = Wilp { Name = WilpName "B"; Pdeek = Ganeda }
+
+    let alice = { Person.Empty with Id = PersonId 0; Kinship = wilpA; Shape = Sphere }
+
+    let bob = { Person.Empty with Id = PersonId 1; Kinship = wilpB; Shape = Sphere }
+
+    let graph = createFamilyGraph [ alice, None; bob, None ] []
+
+    let result = Scene.enumerateHuwilpToRender graph
+
+    let aPeople = result |> Map.find (WilpName "A") |> Seq.map _.Id |> Set.ofSeq
+    aPeople =! Set.singleton (PersonId 0)
+
+[<Fact>]
+let ``enumerateHuwilpToRender includes outside-Wilp partners that appear in the Wilp's tree`` () =
+    // The Wilp parent's partner is from outside the Wilp but appears in the
+    // rendered tree as the partner side of a Family node — they must be
+    // included so the rendering pass can place them.
+    let wilpA = Wilp { Name = WilpName "A"; Pdeek = Giskaast }
+    let wilpB = Wilp { Name = WilpName "B"; Pdeek = Ganeda }
+
+    let alice = { Person.Empty with Id = PersonId 0; Kinship = wilpA; Shape = Sphere }
+
+    let outsidePartner = { Person.Empty with Id = PersonId 1; Kinship = wilpB; Shape = Cube }
+
+    let aliceAndPartner = Couple.create (CoupleId 100) alice.Id outsidePartner.Id None
+
+    let graph =
+        createFamilyGraph [ alice, None; outsidePartner, None ] [ aliceAndPartner ]
+
+    let result = Scene.enumerateHuwilpToRender graph
+
+    let aPeople = result |> Map.find (WilpName "A") |> Seq.map _.Id |> Set.ofSeq
+    aPeople =! Set.ofList [ PersonId 0; PersonId 1 ]
+
+[<Fact>]
+let ``enumerateHuwilpToRender picks the wilp with the most members`` () =
+    // Two huwilp: "A" has one member, "B" has two. The most-populous Wilp
+    // ("B") must be chosen even though "A" sorts first alphabetically.
+    let wilpA = Wilp { Name = WilpName "A"; Pdeek = Giskaast }
+    let wilpB = Wilp { Name = WilpName "B"; Pdeek = Ganeda }
+
+    let alice = { Person.Empty with Id = PersonId 0; Kinship = wilpA; Shape = Sphere }
+
+    let bob = { Person.Empty with Id = PersonId 1; Kinship = wilpB; Shape = Sphere }
+
+    let carol = { Person.Empty with Id = PersonId 2; Kinship = wilpB; Shape = Sphere }
+
+    let graph = createFamilyGraph [ alice, None; bob, None; carol, None ] []
+
+    let result = Scene.enumerateHuwilpToRender graph
+    result |> Map.containsKey (WilpName "B") =! true
+    result |> Map.containsKey (WilpName "A") =! false
+
+[<Fact>]
+let ``enumerateHuwilpToRender breaks ties on member count by alphabetical name`` () =
+    // Two huwilp with the same member count. The alphabetically-first name
+    // ("Bravo" < "Charlie") must win.
+    let wilpBravo = Wilp { Name = WilpName "Bravo"; Pdeek = Giskaast }
+    let wilpCharlie = Wilp { Name = WilpName "Charlie"; Pdeek = Ganeda }
+
+    let alice = {
+        Person.Empty with
+            Id = PersonId 0
+            Kinship = wilpBravo
+            Shape = Sphere
+    }
+
+    let bob = {
+        Person.Empty with
+            Id = PersonId 1
+            Kinship = wilpCharlie
+            Shape = Sphere
+    }
+
+    let graph = createFamilyGraph [ alice, None; bob, None ] []
+
+    let result = Scene.enumerateHuwilpToRender graph
+    result |> Map.containsKey (WilpName "Bravo") =! true
+    result |> Map.containsKey (WilpName "Charlie") =! false
+
+[<Fact>]
+let ``enumerateHuwilpToRender counts members by Person.Kinship, not partners-from-outside`` () =
+    // wilpA has 1 member (alice). wilpB has 1 member (bob) plus a partner-from-
+    // outside (carol, whose Kinship is wilpA). If "members" were counted as
+    // "person ids that appear in the Wilp's tree", wilpB would falsely win
+    // 2 vs 1. The correct count is by Person.Kinship, so this is a tie and
+    // alphabetical wilpA wins.
+    let wilpA = Wilp { Name = WilpName "A"; Pdeek = Giskaast }
+    let wilpB = Wilp { Name = WilpName "B"; Pdeek = Ganeda }
+
+    let alice = { Person.Empty with Id = PersonId 0; Kinship = wilpA; Shape = Sphere }
+
+    let bob = { Person.Empty with Id = PersonId 1; Kinship = wilpB; Shape = Sphere }
+
+    let carol = { Person.Empty with Id = PersonId 2; Kinship = wilpA; Shape = Sphere }
+
+    let bobAndCarol = Couple.create (CoupleId 100) bob.Id carol.Id None
+
+    let graph =
+        createFamilyGraph [ alice, None; bob, None; carol, None ] [ bobAndCarol ]
+
+    let result = Scene.enumerateHuwilpToRender graph
+    result |> Map.containsKey (WilpName "A") =! true
+    result |> Map.containsKey (WilpName "B") =! false

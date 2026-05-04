@@ -21,7 +21,6 @@
     <Compile Include="ViewModel/Vector.fs" />
     <Compile Include="ViewModel/Palette.fs" />
     <Compile Include="ViewModel/Scene.fs" />
-    <Compile Include="ViewModel/ViewModel.fs" />
     <Compile Include="Traits/Events.fs" />
     <Compile Include="Traits/SpaceTraits.fs" />
     <Compile Include="Traits/ConnectorTraits.fs" />
@@ -36,6 +35,7 @@
     <Compile Include="Systems/Dragging.fs" />
     <Compile Include="Systems/UndoRedo.fs" />
     <Compile Include="Systems/Selection.fs" />
+    <Compile Include="Systems/FileCommands.fs" />
     <Compile Include="Systems/Movement.fs" />
     <Compile Include="Systems/Runner.fs" />
     <Compile Include="EntityLifeCycle.fs" />
@@ -43,6 +43,8 @@
     <Compile Include="Persistence/JsonReader.fs" />
     <Compile Include="Persistence/JsonWriter.fs" />
     <Compile Include="Persistence/Transform.fs" />
+    <Compile Include="Persistence/ImportService.fs" />
+    <Compile Include="ViewModel/ImportMessages.fs" />
   </ItemGroup>
 
   <ItemGroup>

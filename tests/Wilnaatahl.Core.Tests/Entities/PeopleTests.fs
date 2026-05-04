@@ -31,11 +31,10 @@ type Tests() =
         wilpData.wilpName =! "TestWilp"
 
     [<Fact>]
-    member _.``spawnWilpBox creates entity with Hidden and Connector traits``() =
+    member _.``spawnWilpBox creates entity with the Hidden trait``() =
         let boxId = world |> People.spawnWilpBox (WilpName "W")
 
         boxId |> has Hidden =! true
-        boxId |> has Connector =! true
 
     [<Fact>]
     member _.``spawnTreeNode creates entity with PersonRef and Position``() =
@@ -76,19 +75,6 @@ type Tests() =
 
         let nodeId = world.Query(With PersonRef) |> Seq.head
         nodeId |> targetFor RenderedIn =! Some wilpId
-
-    [<Fact>]
-    member _.``destroyAllTreeNodes removes all person entities``() =
-        world |> People.spawnTreeNode p0 wilpId
-        world |> People.spawnTreeNode p1 wilpId
-
-        let before = world.Query(With PersonRef) |> Seq.length
-        before =! 2
-
-        world |> People.destroyAllTreeNodes
-
-        let after = world.Query(With PersonRef) |> Seq.length
-        after =! 0
 
     interface IDisposable with
         member _.Dispose() = (ecs :> IDisposable).Dispose()

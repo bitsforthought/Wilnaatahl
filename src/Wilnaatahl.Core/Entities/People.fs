@@ -11,14 +11,9 @@ open Wilnaatahl.Entities
 open Wilnaatahl.Traits.PeopleTraits
 open Wilnaatahl.Traits.SpaceTraits
 
-/// Destroys all tree node entities (those with PersonRef) in the world.
-let destroyAllTreeNodes (world: IWorld) =
-    for entity in world.Query(With PersonRef) do
-        entity |> destroy
-
 /// Spawns a Wilp box entity in the world and returns its EntityId.
 let spawnWilpBox (wilp: WilpName) (world: IWorld) =
-    // Since a Wilp is also a BoundingBox, it will be cleaned up along with all other Connectors.
+    // A Wilp box is itself a BoundingBox, so it is spawned via BoundingBox.spawn.
     let boundingBoxId, _, _ = world |> BoundingBox.spawn zeroPosition // TODO: Tweak Size.x to make huwilp forest look good
     boundingBoxId |> addWith RenderedWilp {| wilpName = wilp.AsString |} // TODO: Also add MeshRef/GroupRef/SceneRef to link this to a Three.js <group/>
     // TODO: Add Follows => Layout entity to track increasing z co-ordinate during layout.

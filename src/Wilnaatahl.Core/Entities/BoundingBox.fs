@@ -17,12 +17,11 @@ let private CornerOf =
     valueRelationWith {| IsBounds = false |} { IsExclusive = true }
 
 let spawn size (world: IWorld) =
-    let boxPosId = world.Spawn(Position.Val zeroPosition, Hidden.Tag(), Connector.Tag())
+    let boxPosId = world.Spawn(Position.Val zeroPosition, Hidden.Tag())
 
-    let boundPosId =
-        world.Spawn(Position.Val zeroPosition, Hidden.Tag(), Connector.Tag())
+    let boundPosId = world.Spawn(Position.Val zeroPosition, Hidden.Tag())
 
-    let boxId = world.Spawn(Size.Val size, Hidden.Tag(), Connector.Tag())
+    let boxId = world.Spawn(Size.Val size, Hidden.Tag())
     boxPosId |> addRelationWith CornerOf boxId {| IsBounds = false |}
     boundPosId |> addRelationWith CornerOf boxId {| IsBounds = true |}
     boxId, boxPosId, boundPosId

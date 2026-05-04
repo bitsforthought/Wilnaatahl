@@ -4,24 +4,21 @@ open Wilnaatahl.ECS
 open Wilnaatahl.ViewModel
 open Wilnaatahl.Entities.Connectors
 open Wilnaatahl.Entities.People
+open Wilnaatahl.Systems.FileCommands
 open Wilnaatahl.Systems.Selection
 open Wilnaatahl.Systems.UndoRedo
 
-/// Called at app startup to create entities that represent the scene controls.
+/// Called when entering the visualizer to create entities that represent the scene controls.
 let spawnControls (world: IWorld) =
-    // Put the Undo/Redo controls to the left of the Select mode controls by
-    // spawning them first.
+    // Lay the toolbar out left to right by spawning in order: undo/redo, then the
+    // select-mode control, then the open/save file controls.
     let initialSortOrder = 0
 
     (initialSortOrder, world)
     |> spawnUndoRedoControls
     |> spawnSelectControls
+    |> spawnFileControls
     |> ignore
-
-/// Called during teardown of the App control to destroy all entities in the scene.
-let destroyScene (world: IWorld) =
-    // Destroy the connectors before the tree nodes (it shouldn't matter, but just for symmetry).
-    world |> destroyAllConnectors |> destroyAllTreeNodes
 
 /// Called during setup of the App control to create all entities in the scene.
 let spawnScene (world: IWorld) familyGraph =

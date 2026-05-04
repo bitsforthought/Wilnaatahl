@@ -58,7 +58,7 @@ type Tests() =
     [<Fact>]
     member _.``move updates bisecting entity to midpoint of line``() =
         let lineId = world |> Line3.spawn zeroPosition zeroPosition
-        let bisectEntity = world.Spawn(Position.Val zeroPosition, Connector.Tag())
+        let bisectEntity = world.Spawn(Position.Val zeroPosition)
         bisectEntity |> addRelation Bisects lineId
 
         // Set endpoint positions after spawn to trigger Changed

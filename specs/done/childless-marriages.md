@@ -616,7 +616,7 @@ pick_. Per-option footprints differ in size; per-system footprints don't.
 
 ### Future / out-of-scope adjacencies (worth flagging)
 
-- **Import feature** (`specs/import-feature.md`): the eventual file format
+- **Import feature** (`specs/import-export-feature.md`): the eventual file format
   must encode marriages — including childless ones. Whichever option we
   pick here pins the shape of that part of the format.
 - **Multi-Wilp rendering** (TODO in `Scene.enumerateHuwilpToRender` and

@@ -17,7 +17,7 @@
     <Compile Include="ViewModel/SceneTests.fs" />
     <Compile Include="ViewModel/VectorTests.fs" />
     <Compile Include="ViewModel/PaletteTests.fs" />
-    <Compile Include="ViewModel/GraphViewFactoryTests.fs" />
+    <Compile Include="ViewModel/ImportMessagesTests.fs" />
     <Compile Include="Traits/EventsTests.fs" />
     <Compile Include="Entities/LineTests.fs" />
     <Compile Include="Entities/BoundingBoxTests.fs" />
@@ -25,6 +25,7 @@
     <Compile Include="Entities/ConnectorsTests.fs" />
     <Compile Include="Systems/AnimationTests.fs" />
     <Compile Include="Systems/SelectionTests.fs" />
+    <Compile Include="Systems/FileCommandsTests.fs" />
     <Compile Include="Systems/DraggingTests.fs" />
     <Compile Include="Systems/UndoRedoTests.fs" />
     <Compile Include="Systems/MovementTests.fs" />
@@ -33,6 +34,7 @@
     <Compile Include="Systems/LifeCycleTests.fs" />
     <Compile Include="Persistence/JsonReadWriteTests.fs" />
     <Compile Include="Persistence/TransformTests.fs" />
+    <Compile Include="Persistence/ImportServiceTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

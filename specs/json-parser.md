@@ -2,7 +2,7 @@
 
 ## Problem
 
-The import feature (spec: `specs/import-feature.md`) needs a parser that transforms
+The import feature (spec: `specs/import-export-feature.md`) needs a parser that transforms
 a JSON file of genealogical data into the `(Person * CoupleId option) seq` and
 `Couple seq` formats consumed by `createFamilyGraph`. The JSON format uses numeric
 IDs for people, couples, and huwilp; per-person Wilp membership is recorded

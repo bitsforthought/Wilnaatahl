@@ -286,6 +286,13 @@ module FamilyGraph =
 
     let huwilp graph = graph.Huwilp
 
+    /// Returns the forest of WilpTree roots for the given Wilp, or an empty sequence
+    /// if the Wilp is not represented in this graph. Each root tree carries every
+    /// person who participates in that Wilp's family lines, including from-outside
+    /// partners that appear in Family nodes.
+    let huwilpForest wilpName graph =
+        graph.HuwilpForests |> Map.tryFind wilpName |> Option.defaultValue Seq.empty
+
     let findPerson (PersonId personId) graph = graph.People |> Map.find personId
 
     /// Returns the recorded children of a given Couple, in insertion order.

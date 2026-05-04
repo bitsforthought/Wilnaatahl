@@ -1,4 +1,4 @@
-import { createActions, createWorld, Entity, World } from "koota";
+import { createActions, Entity, World } from "koota";
 import { Matrix4, Quaternion, Vector3 } from "three";
 import { ThreeEvent } from "@react-three/fiber";
 import { FamilyGraph_FamilyGraph as FamilyGraph } from "../generated/Model";
@@ -6,13 +6,9 @@ import { EntityId } from "../generated/ECS/Types";
 import * as Events from "../generated/Traits/Events";
 import { layoutNodes } from "../generated/Systems/Layout";
 import { runSystems as runFableSystems } from "../generated/Systems/Runner";
-import { destroyScene, spawnScene, spawnControls } from "../generated/EntityLifeCycle";
+import { spawnControls, spawnScene } from "../generated/EntityLifeCycle";
 import { fromKootaWorld } from "./koota/kootaWrapper";
 import { ClickEvent } from "./traits";
-
-export const world = createWorld();
-
-spawnControls(fromKootaWorld(world));
 
 export function runSystems(input: { world: World; delta: number }) {
   runFableSystems(fromKootaWorld(input.world), input.delta);
@@ -21,8 +17,8 @@ export function runSystems(input: { world: World; delta: number }) {
 export const worldActions = createActions((world: World) => {
   const wrappedWorld = fromKootaWorld(world);
   return {
-    destroyScene: () => destroyScene(wrappedWorld),
     layoutNodes: (familyGraph: FamilyGraph) => layoutNodes(wrappedWorld, familyGraph),
+    spawnControls: () => spawnControls(wrappedWorld),
     spawnScene: (familyGraph: FamilyGraph) => spawnScene(wrappedWorld, familyGraph),
   };
 });
@@ -60,7 +56,9 @@ export {
   Line,
   Size,
   MeshRef,
+  OpenFileRequested,
   PersonRef,
   Position,
+  SaveRequested,
   Selected,
 } from "./traits";

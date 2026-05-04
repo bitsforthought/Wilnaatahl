@@ -32,21 +32,9 @@ type Tests() =
         member _.Dispose() = (ecs :> IDisposable).Dispose()
 
     [<Fact>]
-    member _.``destroyAllConnectors removes all connector entities``() =
-        let graph = spawnTestScene world
-        world |> Connectors.spawnAllConnectors graph
-        let connectorsBefore = world.Query(With Connector) |> Seq.length
-        connectorsBefore >! 0
-        world |> Connectors.destroyAllConnectors |> ignore
-        let connectorsAfter = world.Query(With Connector) |> Seq.length
-        connectorsAfter =! 0
-
-    [<Fact>]
     member _.``spawnAllConnectors creates connector entities for a family``() =
         let graph = spawnTestScene world
         world |> Connectors.spawnAllConnectors graph
-        let connectorCount = world.Query(With Connector) |> Seq.length
-        connectorCount >! 0
         let lineCount = world.Query(With Line) |> Seq.length
         lineCount >! 0
 

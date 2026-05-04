@@ -14,14 +14,13 @@ open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Tests.EcsTestSupport
 
 [<Fact>]
-let ``spawn creates line entity with Line and Connector traits`` () =
+let ``spawn creates line entity with the Line trait`` () =
     use ecs = new EcsWorld()
     let world = ecs.World
 
     let lineId = world |> Line3.spawn zeroPosition zeroPosition
 
     lineId |> has Line =! true
-    lineId |> has Connector =! true
 
 [<Fact>]
 let ``spawn creates lines that are not Hidden by default`` () =
@@ -33,7 +32,7 @@ let ``spawn creates lines that are not Hidden by default`` () =
     lineId |> has Hidden =! false
 
 [<Fact>]
-let ``spawn creates two endpoints with Position Hidden Connector and EndpointOf`` () =
+let ``spawn creates two endpoints with Position and Hidden`` () =
     use ecs = new EcsWorld()
     let world = ecs.World
 
@@ -42,10 +41,8 @@ let ``spawn creates two endpoints with Position Hidden Connector and EndpointOf`
 
     ep1 |> has Position =! true
     ep1 |> has Hidden =! true
-    ep1 |> has Connector =! true
     ep2 |> has Position =! true
     ep2 |> has Hidden =! true
-    ep2 |> has Connector =! true
 
 [<Fact>]
 let ``spawn sets endpoint positions correctly`` () =

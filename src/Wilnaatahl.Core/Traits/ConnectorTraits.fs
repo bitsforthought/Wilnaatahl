@@ -46,6 +46,3 @@ let Elbow = tagTrait ()
 
 /// Marks an entity such that it shouldn't be rendered (i.e. -- React components won't add a MeshRef trait).
 let Hidden = tagTrait ()
-
-/// Used to mark connector entities for ease of cleanup later.
-let Connector = tagTrait ()

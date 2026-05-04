@@ -166,13 +166,65 @@ module Scene =
         parentLeafBox
         |> attachAbove descendantsBox { UseUpperConnectX = true; UpperOffset = parentLeftEdge }
 
-    /// Produces a map from WilpName to the people that will render along with that Wilp. Since people can
-    /// play roles in different huwilp, the same Person may appear under different WilpName keys in the result.
+    /// Produces a map from WilpName to the people that will render along with that Wilp.
+    /// Since people can play roles in different huwilp, the same Person may appear under
+    /// different WilpName keys in the result. Each Wilp's people set covers every PersonId
+    /// that surfaces in that Wilp's forest — the Wilp members themselves plus the
+    /// from-outside partners that show up in any Family node.
     let enumerateHuwilpToRender familyGraph =
         // TODO: Extend to support multilple huwilp.
-        let wilp = familyGraph |> huwilp |> Seq.head // ASSUMPTION: At least one Wilp is represented in the input data.
-        let people = familyGraph |> allPeople
-        [ (wilp, people) ] |> Map.ofList
+        // Until then, pick the Wilp with the most members (counted by Person.Kinship's
+        // specific-Wilp case, not by tree presence — partners-from-outside don't
+        // count toward their host Wilp's population, and UnknownWilp people don't
+        // count toward any Wilp). Ties are broken by alphabetical WilpName so the
+        // choice is deterministic.
+        let memberCounts =
+            familyGraph
+            |> allPeople
+            |> Seq.choose (fun p ->
+                match p.Kinship with
+                | Wilp w -> Some w.Name
+                | UnknownWilp _
+                | NoneProvided -> None)
+            |> Seq.countBy id
+            |> Map.ofSeq
+
+        let wilpName =
+            familyGraph
+            |> huwilp
+            |> Seq.sortWith (fun a b ->
+                let countA = Map.tryFind a memberCounts |> Option.defaultValue 0
+                let countB = Map.tryFind b memberCounts |> Option.defaultValue 0
+
+                // Highest population first; ties broken alphabetically.
+                if countA <> countB then
+                    compare countB countA
+                else
+                    compare a b)
+            |> Seq.head // ASSUMPTION: At least one Wilp is represented in the input data.
+
+        let rec collect tree =
+            seq {
+                match tree with
+                | Leaf personId -> yield personId
+                | Family family ->
+                    yield family.WilpParent
+
+                    for KeyValue(partnerId, (_, descendants)) in family.PartnersAndDescendants do
+                        yield partnerId
+
+                        for descendant in descendants do
+                            yield! collect descendant
+            }
+
+        let people =
+            familyGraph
+            |> huwilpForest wilpName
+            |> Seq.collect collect
+            |> Seq.distinct
+            |> Seq.map (fun pid -> familyGraph |> findPerson pid)
+
+        [ (wilpName, people) ] |> Map.ofList
 
     /// Produces a LayoutBox and initial position for the given Wilp. The LayoutBox, along with its nested boxes,
     /// specifies relative offsets that determine the position of every node in the Wilp family tree. The caller
