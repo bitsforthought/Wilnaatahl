@@ -181,6 +181,7 @@ Per AGENTS.md: "Write failing tests first, observe the failure, then implement.
 Don't skip the red phase — it validates the test itself."
 
 Each implementation unit follows the cycle:
+
 1. **Red** — write tests for the next behavior; run them, confirm they fail.
 2. **Green** — write the minimum implementation to make them pass.
 3. **Refactor** — clean up while tests stay green.
@@ -212,6 +213,7 @@ Create `JsonParserTests.fs` with tests that call the not-yet-implemented
 `Error`).
 
 Test cases:
+
 - Valid minimal JSON (one person, no parents) → Ok with correct RawPerson
 - Person with all optional fields populated → Ok with all fields set
 - Person with all optional fields null/missing → Ok with None values
@@ -236,6 +238,7 @@ Create `ImportTests.fs` with tests that call the not-yet-implemented
 `transform` function. All tests fail.
 
 Test cases — parent resolution:
+
 - Two people with a parent-child link → correct CoParentRelationship
 - Unresolvable mother → person becomes root, `UnresolvedMother` warning
 - Unresolvable father → person becomes root, `UnresolvedFather` warning
@@ -243,6 +246,7 @@ Test cases — parent resolution:
 - Duplicate names → first kept, `DuplicateName` warning
 
 Test cases — Wilp assignment:
+
 - Female root who is a mother → gets import Wilp (Giskaast)
 - Male root → Wilp = None
 - Female root who is NOT a mother → Wilp = None
@@ -251,6 +255,7 @@ Test cases — Wilp assignment:
 - Co-parent father → Wilp = None
 
 Test cases — field mapping:
+
 - Gender M → Cube, F → Sphere
 - Normalized ISO date → correct DateOnly
 - Missing normalized date, unparseable raw → None + `UnparseableDate` warning
@@ -258,6 +263,7 @@ Test cases — field mapping:
 - Sequential PersonId assignment (0, 1, 2, …)
 
 Test cases — error conditions:
+
 - Empty input after filtering → `NoPeopleAfterFiltering` error
 
 ### 6. `impl-transform` — Implement transform to pass tests (GREEN)
@@ -267,6 +273,7 @@ Write `Import.fs` with:
 `transform: RawPerson list → string (* wilpName *) → Result<ImportResult, ImportError>`
 
 Steps:
+
 1. **Deduplicate names**: if duplicate names exist, keep the first, warn on rest.
 2. **Build name→index**: `Map<string, int>` for O(1) parent lookups.
 3. **Resolve parent references**: for each person with mother/father strings,
