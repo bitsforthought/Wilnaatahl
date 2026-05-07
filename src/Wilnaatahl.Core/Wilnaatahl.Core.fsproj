@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Wilnaatahl.Core.Tests" />
     <InternalsVisibleTo Include="Wilnaatahl.ECS.Tests" />
   </ItemGroup>
 
@@ -18,6 +19,7 @@
     <Compile Condition="'$(FABLE_COMPILER)'!='true'" Include="ECS/Mocks/TestECS.fs" />
     <Compile Include="ViewModel/LayoutUtils.fs" />
     <Compile Include="ViewModel/Vector.fs" />
+    <Compile Include="ViewModel/Palette.fs" />
     <Compile Include="ViewModel/Scene.fs" />
     <Compile Include="ViewModel/ViewModel.fs" />
     <Compile Include="Traits/Events.fs" />

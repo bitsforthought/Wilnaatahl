@@ -16,6 +16,7 @@
     <Compile Include="ViewModel/LayoutBoxTests.fs" />
     <Compile Include="ViewModel/SceneTests.fs" />
     <Compile Include="ViewModel/VectorTests.fs" />
+    <Compile Include="ViewModel/PaletteTests.fs" />
     <Compile Include="ViewModel/GraphViewFactoryTests.fs" />
     <Compile Include="Traits/EventsTests.fs" />
     <Compile Include="Entities/LineTests.fs" />
