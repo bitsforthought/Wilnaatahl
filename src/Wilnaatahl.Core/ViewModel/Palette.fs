@@ -164,9 +164,15 @@ module Palette =
 
     // ---- Per-node paint decision -------------------------------------------
 
-    /// Selected tree node colour: a deep red copper applied as both the base colour
-    /// and the emissive colour so the node appears to glow when picked.
-    let private selectedColour: SrgbColour = { Red = 0x8Buy; Green = 0x40uy; Blue = 0x00uy }
+    /// Selected tree node colour: a copper-inspired colour applied as both the base
+    /// and emissive colour so the node appears to glow when picked. Copper holds
+    /// cultural significance to the Gitxsan. The hue is chosen to remain visually
+    /// distinct from every Pdeek base colour, including under common forms of
+    /// colour-vision deficiency.
+    /// Variant C: verdigris (oxidized copper patina, soft blue-green).
+    let private selectedColour: SrgbColour =
+        oklchToSrgb { Lightness = 0.65; Chroma = 0.10; Hue = 175.0 }
+
     let private selectedEmissiveIntensity = 0.8
 
     /// No emissive contribution for unselected nodes.

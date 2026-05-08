@@ -11,7 +11,7 @@ let private wilp pdeek name = { Name = WilpName name; Pdeek = pdeek }
 
 let private personWith wilp = { Person.Empty with Id = PersonId 0; Wilp = wilp }
 
-let private copperBytes = srgb 0x8Buy 0x40uy 0x00uy
+let private copperBytes = srgb 0x3Euy 0xA3uy 0x8Cuy
 let private blackBytes = srgb 0x00uy 0x00uy 0x00uy
 
 // ---- djb2Hash -------------------------------------------------------------
