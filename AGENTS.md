@@ -103,6 +103,12 @@ These reflect the owner's priorities, learned from prior sessions.
 - **PascalCase file names.** F# source files and scripts should use PascalCase (e.g., `CheckCoverage.fsx`, `Model.fs`), not kebab-case or camelCase.
 - **Cross-assembly anonymous records.** Anonymous records created in one assembly are a different type from those in another. Use helper functions in the source assembly (e.g., `Line3.pos`) to create anonymous records that can be used in test assertions.
 
+### React + Three.js
+
+- **Don't drive per-frame visual state through React `useState`.** A `useState` value combined with `useFrame(setValue)` re-renders the component every frame and resets to the initial value on remount, causing a one-frame flash of the default. Mutate the DOM/Three.js object directly via `useRef`, or use a built-in mechanism that does so internally (e.g. drei `<Html distanceFactor>` for camera-distance label scaling).
+- **drei `<DragControls>` is one-instance-per-draggable-subtree.** Per-node `<DragControls>` instances mis-attribute the drag transform (labels move, meshes don't). For per-node drag behaviour, use raw `@use-gesture/react`'s `useDrag` (which `<DragControls>` is itself a thin wrapper around).
+- **Koota tag-trait membership via `useTrait`.** `useTrait(entity, TagTrait)` returns `{}` (truthy) when the tag is present and `undefined` when it isn't, and re-renders on add/remove. Use `useTrait(entity, TagTrait) !== undefined` for a reactive "is this tag set?" check.
+
 ### Process
 
 - **Check coverage after every change.** Run `npm run coverage:check` after making code changes and before committing. This runs all tests with coverage collection, generates a summary, and fails if line coverage drops below the baseline in `coverage-baseline.json`. The baseline auto-updates when coverage improves.
@@ -112,3 +118,5 @@ These reflect the owner's priorities, learned from prior sessions.
 - **Investigate before assuming.** When empirical results conflict with documentation, check the source code and issue tracker before concluding something is a bug or intended behavior.
 - **Minimize conditional compilation.** Encapsulate platform differences in shared infrastructure types rather than sprinkling `#if` throughout test bodies.
 - **Line endings must be LF**, not CRLF.
+- **Wrap commit messages at ~70–72 columns.** Past Wilnaatahl commits hand-wrap subject and body. `git commit -m` keeps each `-m` argument as one unwrapped line; use `git commit -F file` (or `\n` inside `-m`) to wrap properly.
+- **Distinguish architectural improvements from performance fixes.** Don't speculate about "GPU resource churn" or "GC pressure" in specs without measuring; in this codebase the React layer is deliberately thin and per-frame work happens in F# systems and Three.js, so React structural choices rarely dominate per-frame cost. Land structural refactors on architectural justification (preventing future bugs, simplifying lifecycle reasoning), not on speculative perf wins.
