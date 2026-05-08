@@ -1,39 +1,23 @@
 import React from "react";
-import { Vector3 } from "three";
-import { useFrame, useThree } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import { Entity } from "koota";
 import { useActions, useTrait } from "koota/react";
 import { defaultArg } from "../generated/fable_modules/fable-library-ts.4.27.0/Option.js";
 import { eventActions, Size, PersonRef, useMeshRef } from "../ecs";
 
+// Scales the HTML label so it tracks the apparent size of the node as the camera
+// moves. drei's <Html> handles the per-frame scaling internally by mutating the
+// wrapping div's CSS transform — no React state involved, so the label survives
+// the remount that selection triggers (HuwilpGroup splits selected vs unselected
+// entities into separate <TreeNodeMesh> lists). Tune by eye to taste.
+const labelDistanceFactor = 8;
+
 export function TreeNodeMesh({ entity }: { entity: Entity }) {
-  // WilpGroup guarantees that the traits are present.
+  // HuwilpGroup guarantees that the traits are present.
   const person = useTrait(entity, PersonRef)!;
   const size = useTrait(entity, Size)!;
   const label = defaultArg(person.Label, undefined);
   const ref = useMeshRef(entity);
-  const { camera } = useThree();
-
-  // Compute distance from camera to mesh
-  const [fontSize, setFontSize] = React.useState(16);
-
-  // Use useFrame for smoother updates
-  useFrame(() => {
-    if (!ref.current) {
-      return;
-    }
-
-    // Get mesh world position.
-    const meshPos = ref.current.getWorldPosition(new Vector3());
-    const camPos = camera.position;
-    const distance = meshPos.distanceTo(camPos);
-
-    // Adjust this formula as needed for the scene scale.
-    // Clamp to reasonable min/max.
-    const size = Math.max(10, Math.min(32, 120 / distance));
-    setFontSize(size);
-  });
 
   const { handlePointerDown, handleMeshClick } = useActions(eventActions);
 
@@ -57,11 +41,10 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
           roughness={0.3} // Moderate roughness for better light scattering
         />
         {label && (
-          <Html position={[0, -0.5, 0]} center>
+          <Html position={[0, -0.5, 0]} center distanceFactor={labelDistanceFactor}>
             <div
               style={{
                 color: "white",
-                fontSize: `${fontSize}px`,
                 textAlign: "center",
                 pointerEvents: "none",
                 width: "160%",
