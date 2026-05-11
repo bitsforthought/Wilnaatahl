@@ -11,8 +11,239 @@ infertility, early death, or simply because the children aren't recorded).
 
 This document proposes several options for extending the data model and walks
 the codebase to identify every system that would have to change to support the
-new case. It deliberately stops short of recommending an option or scheduling
-implementation work — that is the next step.
+new case. The four options and the gap analysis are preserved as a record of
+the exploration; the **Decision** section below records the option that was
+chosen and the answers to each design question, with reasoning.
+
+## Decision
+
+**Chosen option: Option B (modified) — first-class `Couple` type, parents
+reference a couple by id.**
+
+The "modifications" relative to the original Option B sketch are:
+
+- The new type is named **`Couple`**, not `Marriage`, to be maximally
+  inclusive (the tool is not in a position to assert which kinds of unions
+  count as marriages).
+- The two members of a `Couple` live in a single tuple-typed field named
+  **`Members : PersonId * PersonId`**, rather than two named fields, to
+  reflect the fact that the rest of the code already treats the pair
+  symmetrically (see _How `Mother`/`Father` are used today_ below). A smart
+  constructor canonicalizes the pair so `Couple.create a b` and
+  `Couple.create b a` produce the same record.
+- A single optional metadata field, `DateOfUnion`, is added on day one because
+  it's needed for the layout sort order (see Q5 below). All other metadata
+  (status, dissolution date, notes) is deferred.
+
+### Planned shapes
+
+```fsharp
+#if FABLE_COMPILER
+[<Erase>]
+#endif
+type CoupleId =
+    | CoupleId of int
+    member this.AsInt = let (CoupleId id) = this in id
+
+type Couple = private {
+    Id: CoupleId
+    Members: PersonId * PersonId   // canonicalized: lower PersonId first
+    DateOfUnion: DateOnly option
+}
+
+module Couple =
+    /// Smart constructor: canonicalizes Members so (a,b) and (b,a) produce
+    /// the same Couple value. Throws if a = b.
+    val create : CoupleId -> PersonId -> PersonId -> DateOnly option -> Couple
+
+// New createFamilyGraph signature
+val createFamilyGraph :
+    people:  seq<Person * CoupleId option> ->
+    couples: seq<Couple> ->
+    FamilyGraph
+
+// Renamed accessor (was `coparents graph : Set<CoParentRelationship>`).
+// Returns a seq, not a Set: uniqueness-by-CoupleId is already enforced at
+// graph construction (see validation rule below), so callers don't need
+// Set semantics for dedup. As Couple grows additional metadata fields, the
+// structural comparison required by Set<Couple> would also become
+// progressively more expensive for no benefit.
+val couples : FamilyGraph -> Couple seq
+```
+
+Inside `WilpTree.Family`, the field
+`CoParentsAndDescendants : Map<PersonId, WilpTree seq>` is **renamed** to
+`PartnersAndDescendants` to reflect that the keys are now "the Wilp member's
+partner in this Couple" — they may or may not also be co-parents. Childless
+partners are represented by an entry whose value is the empty sequence.
+
+### How `Mother`/`Father` are used today (background for the rename)
+
+A code walk of every read site (`Model.fs:123-124,141,151`,
+`Scene.fs:178-185`) confirms that `Mother` and `Father` are treated
+symmetrically by every algorithm. Nothing branches on which of the two fields
+a `PersonId` lives in; layout decisions about which spouse is the "Wilp
+parent" come from `Person.Wilp` lookups, not from the field name. The
+matrilineal invariant ("`Mother` is the Wilp member, `Father` is the
+outsider") is asserted only in a comment on `module Initial` and in the
+shape of the seed data — the type system does not enforce it. Renaming the
+pair to a neutral `Members` tuple is therefore mechanical and removes a
+documentation lie that would only get worse once the same record can
+represent a non-procreative pair.
+
+### Resolved design questions
+
+These map one-for-one onto the _Cross-cutting design questions_ and _Open
+questions_ sections below. The full motivating discussion lives there; the
+answers are summarized here.
+
+1. **Naming.** `Couple` (Q1, Q-OQ-1). Chosen for inclusiveness — covers
+   marriages, common-law partnerships, and other unions without privileging
+   any one cultural framing.
+2. **Member naming and gender semantics.** `Members : PersonId * PersonId`
+   in canonical order, no gender field on the relationship (Q2, Q-OQ-2).
+   Sex / gender stays on `Person.Shape` (which is itself a stand-in pending
+   a proper gender model).
+3. **Cardinality.** Always exactly two members. `Members : PersonId * PersonId`
+   makes this a type-level guarantee. The smart constructor rejects `a = b`.
+
+   **Single-parent and polyamorous arrangements still fit this model
+   without expanding the representation:**
+   - _Single parents._ When the identity of a child's other parent is
+     genuinely unknown, the import / authoring layer synthesizes a `Person`
+     with `Label = Some "Unknown"` (and minimal other identifying
+     information) and uses that PersonId as the second `Member`. The
+     genealogical tree always shows a `Couple`; the "missing" parent is
+     simply a Person whose only knowable property is that they exist.
+   - _Polyamorous arrangements._ What we care about is each partner's
+     relationship to **the Wilp member**, since that's the relationship the
+     visualization renders. A poly group containing one Wilp member and
+     several partners is therefore expressed as several concurrent `Couple`
+     records, each pairing the Wilp member with one partner. The fact that
+     the Couples are concurrent (rather than sequential, as with successive
+     marriages) is not modeled in this iteration.
+
+     This relies on the simplifying assumption that a poly group contains
+     **at most one Wilp member**. We are deliberately ignoring _ḵ'aats_
+     relationships (in which both partners belong to the same clan,
+     including same-Wilp pairings) for this iteration; once those are
+     in scope, the assumption may need to be revisited.
+
+   Because both cases map cleanly onto the two-member `Couple`, neither
+   needs special test fixtures or seed data — the tests that exercise
+   ordinary two-member Couples already cover the rendering and graph
+   behavior they exhibit.
+
+4. **Multiple Couples per Person.** No constraint — a Person can be in any
+   number of Couples, procreative or childless or any mix. This matches the
+   existing seed (Margaret has three procreative co-parents) and avoids
+   a behavior change unrelated to the feature being added.
+5. **Layout slot ordering for Couples under one Wilp parent.** Sort by an
+   _effective date of union_:
+   - Procreative Couple → DoB of the eldest child (current behavior, no
+     change).
+   - Childless Couple with `DateOfUnion = Some d` → `d`.
+   - Childless Couple with `DateOfUnion = None` → fall back to comparing by
+     `CoupleId`.
+
+   Procreative and childless Couples are interleaved using this single
+   comparator rather than being grouped into separate "with children" and
+   "without children" buckets.
+
+6. **Visual treatment of childless Couples.** Same as procreative: the
+   "spouse bar" (two parallel parent-to-coparent lines) is rendered, and
+   nothing hangs below. No new glyph is introduced. This minimizes new
+   ECS / React surface area and lets the absence of descendants speak for
+   itself.
+7. **Marriage metadata scope.** Only `DateOfUnion : DateOnly option` in this
+   iteration (needed for Q5). `DateOfDissolution`, `Status`, and free-form
+   notes are out of scope; the `Couple` record can grow them later without a
+   second migration.
+8. **Conflict authority (was Q-OQ-6: "if both an explicit marriage and a
+   `CoParentRelationship` between the same pair exist, what wins?").**
+   Moot under Option B. There is only one type — `Couple` — and a child's
+   parents are referenced by `CoupleId`. The "two sources of truth" problem
+   this question was guarding against does not exist in the chosen design.
+9. **Validation behavior.** `createFamilyGraph` throws (with a descriptive
+   exception) on an unknown `CoupleId` referenced by a Person, on an
+   unknown `PersonId` referenced by a Couple's `Members`, and on duplicate
+   `CoupleId`s. This matches the existing convention in the file
+   (`buildWilpTree` already uses `failwith` for similar lookup failures) and
+   avoids spreading a `Result` type through every consumer for what is
+   essentially a programming error.
+10. **`WilpTree` shape for married Wilp leaves.** No new case on
+    `WilpTree`. A married-but-childless Wilp member is represented as
+    `Family { WilpParent = id; PartnersAndDescendants = Map [partnerId, []] }`
+    with the empty sequence acting as "this partner brought no descendants
+    to the tree." This keeps tree traversal uniform and only requires the
+    descendant-handling code paths to tolerate empty sequences.
+11. **Seed data scope.** `module Initial` will be updated to include at
+    least one childless Couple between existing Gen-1 or Gen-2 people, plus
+    one "married Wilp leaf with no descendants" case so the demo exercises
+    both the empty-descendants `Family` rendering and the new sort
+    comparator. Test fixtures (`TestData.fs`) gain analogous coverage.
+12. **`createFamilyGraph` input shape.** Two separate sequences:
+    `createFamilyGraph (people: seq<Person * CoupleId option>) (couples: seq<Couple>)`.
+    Minimal disruption, mirrors the current tuple-based call shape, and
+    keeps Couples and people independently constructible.
+13. **Accessor naming on `FamilyGraph`.** The `coparents graph` accessor is
+    renamed to `couples graph`. Its return type changes from
+    `Set<CoParentRelationship>` to `Couple seq` (note: not `Set<Couple>`).
+    Uniqueness-by-`CoupleId` is enforced at graph construction time (see
+    validation rule #9), so callers don't need a `Set` for dedup; and as
+    `Couple` grows additional metadata, structural comparison required by
+    `Set<Couple>` would become progressively more expensive for no benefit.
+    Callers (`Scene.extractFamilies`, `ModelTests`) update accordingly.
+
+### What changes from the original gap analysis
+
+Most of the gap analysis below still applies as written, with these
+substitutions:
+
+- Wherever it says "`CoParentRelationship`", read "`Couple`".
+- Wherever it says "`CoParentsAndDescendants`", read "`PartnersAndDescendants`".
+- `extractFamilies`'s `Set.intersect childrenOfMother childrenOfFather`
+  step is replaced with a direct lookup of "children whose parent
+  `CoupleId` is this Couple's id." Faster and less error-prone.
+- `Scene.comparePeople` is unchanged; a new comparator
+  (`compareCouplesByEffectiveDate`) is added per Q5 and used by
+  `visitWilpForest`'s group sort.
+
+The rest of the gap analysis (connector spawn changes, ECS-system
+no-touches, generated TS / React no-touches, import-feature adjacency,
+multi-Wilp adjacency) is unaffected.
+
+### Out of scope (deferred)
+
+These were considered and explicitly deferred:
+
+- Couple metadata beyond `DateOfUnion` (status, dissolution, notes).
+- _ḵ'aats_ (same-clan / same-Wilp) marriages, including the cardinality
+  consequences for the polyamorous mapping discussed under Q3.
+- Distinguishing concurrent Couples (as in polyamory) from sequential
+  Couples (as in successive marriages). Both currently render the same way.
+- A first-class "missing parent" representation. Single parents are
+  modeled by synthesizing a `Person` with `Label = Some "Unknown"` and
+  using that `PersonId` as the second `Member` of an ordinary `Couple`.
+- Distinguishing birth parents from genetic parents — for example, a child
+  whose birth mother is a surrogate and whose genetic mother is someone
+  else. The current model collapses both into a single "parent"
+  relationship; teasing them apart will require a separate design pass.
+- Any change to the `Person.Shape` stand-in for gender.
+- Validation expressed as a `Result` type rather than exceptions.
+
+### Next step
+
+Re-enter plan mode to break this decision into TDD-ordered implementation
+todos covering, in dependency order: `Couple` type and smart constructor →
+new `createFamilyGraph` signature with validation → renamed
+`PartnersAndDescendants` field and updated `buildWilpTree` → renamed
+`couples` accessor → updated `Scene.extractFamilies` to look up by
+`CoupleId` → new effective-date comparator and updated `visitWilpForest`
+group sort → relaxed `Scene.attachParentsToDescendants` for empty
+descendants → conditional connector spawn in `Connectors.spawnAllConnectors`
+→ updated `Initial` seed and `TestData` fixtures → portable ECS test for
+the spouse-bar-only spawn path.
 
 ## Current state (relevant code)
 
@@ -389,21 +620,34 @@ pick_. Per-option footprints differ in size; per-system footprints don't.
   options B, C, and D are the only ones that gracefully accommodate it
   later without a second migration.
 
-## Open questions (must be answered before picking an option)
+## Open questions (historical — see _Decision_ above for resolutions)
+
+These are the questions the original draft listed as needing answers before
+picking an option. They are kept here verbatim so the decision history is
+auditable; each is now resolved in the _Decision_ section above.
 
 1. Naming: `Marriage` vs `Union` vs `Partnership`?
+   _Resolved: `Couple`._
 2. Should the spouse pair stay `Mother`/`Father`, or move to a neutral pair?
+   \_Resolved: neutral `Members : PersonId * PersonId`, canonicalized.
 3. What's the layout slot for a childless co-parent (question 5 above)?
+   _Resolved: interleaved with procreative co-parents by effective date of
+   union._
 4. Is a distinct visual glyph wanted, or just absence of descendants
    (question 4 above)?
+   _Resolved: absence of descendants only — same spouse bar as procreative._
 5. Are multiple childless marriages per person allowed?
+   _Resolved: yes, no constraint._
 6. If a marriage and a co-parent record exist for the same pair, what
    wins?
+   _Resolved: moot — Option B has only one type for the pair._
 7. How important is forward compatibility with marriage metadata
    (status/dates) — important enough to pay the Option B/D refactor cost?
+   _Resolved: yes, important enough; Option B chosen partly for this
+   reason. Day-one metadata is just `DateOfUnion`._
 
 ## Next step
 
-Pick an option (and answer the open questions), then this document gets
-re-opened in plan mode to break the chosen direction into TDD-ordered
-implementation todos.
+Per the _Decision_ section: re-enter plan mode to break the chosen design
+into TDD-ordered implementation todos. The implementation order is sketched
+at the end of the _Decision_ section.
