@@ -54,7 +54,7 @@ let spawnAllConnectors familyGraph (world: IWorld) =
         // There are many components that go into a family's connectors. Let's create them
         // one-by-one:
         //
-        // 1. A Hidden Line that Follows the two co-parent nodes.
+        // 1. A Hidden Line that Follows the two partner nodes.
         let parent1, parent2 = family.Parents
 
         // The first entity represents the line itself.
@@ -83,50 +83,54 @@ let spawnAllConnectors familyGraph (world: IWorld) =
 
         bisectingEntityId |> add (Bisects => bottomLineId)
 
-        // 4. A Hidden Bounding Box that includes all child nodes.
-        // The margins are chosen based on what looks good (see SceneConstants).
-        let boundingBoxId, _, boxBoundId =
-            world |> BoundingBox.spawn {| x = 0.0; y = childToJunctionOffset; z = 0 |}
+        // Steps 4-9 below build the elbow + branch + child scaffolding hanging beneath
+        // the spouse bar. They are all skipped for childless Couples — those render as
+        // just the spouse bar with nothing dangling below.
+        if not (List.isEmpty family.Children) then
+            // 4. A Hidden Bounding Box that includes all child nodes.
+            // The margins are chosen based on what looks good (see SceneConstants).
+            let boundingBoxId, _, boxBoundId =
+                world |> BoundingBox.spawn {| x = 0.0; y = childToJunctionOffset; z = 0 |}
 
-        // We'll add the children to the bounding box later, so we can do all
-        // child processing in one loop.
+            // We'll add the children to the bounding box later, so we can do all
+            // child processing in one loop.
 
-        // 5. A visible Elbow that FollowsX the Bisects Node and FollowsY the Bounding Box.
-        let branchNodeId =
-            world.Spawn(Position.Val zeroPosition, Elbow.Tag(), Connector.Tag())
-
-        branchNodeId |> addWith (SnapToX => bisectingEntityId) {| x = 0.0 |}
-        branchNodeId |> addWith (SnapToY => boxBoundId) {| y = 0.0 |}
-
-        // 6. A visible Line that follows the Bisects Node and the Branch Node
-        world
-        |> Line3.spawnDynamic
-        |> Line3.snapTo world bisectingEntityId branchNodeId
-        |> ignore
-
-        for child in family.Children do
-            // Finish step 4 above by adding each child to the bounding box.
-            boundingBoxId |> add (BoundingBoxOn => child.Entity)
-
-            // 7. A visible Elbow for each child node that FollowsX the corresponding child node
-            //    and FollowsY the Bounding Box.
-            let junctionId =
+            // 5. A visible Elbow that FollowsX the Bisects Node and FollowsY the Bounding Box.
+            let branchNodeId =
                 world.Spawn(Position.Val zeroPosition, Elbow.Tag(), Connector.Tag())
 
-            junctionId |> addWith (SnapToX => child.Entity) {| x = 0.0 |}
-            junctionId |> addWith (SnapToY => boxBoundId) {| y = 0.0 |}
+            branchNodeId |> addWith (SnapToX => bisectingEntityId) {| x = 0.0 |}
+            branchNodeId |> addWith (SnapToY => boxBoundId) {| y = 0.0 |}
 
-            // 8. A visible Line for each child that follows the Branch Node and that child's Junction Node
+            // 6. A visible Line that follows the Bisects Node and the Branch Node
             world
             |> Line3.spawnDynamic
-            |> Line3.snapTo world junctionId branchNodeId
+            |> Line3.snapTo world bisectingEntityId branchNodeId
             |> ignore
 
-            // 9. A visible Line for each child that follows that child's Junction Node and the Child Node itself.
-            world
-            |> Line3.spawnDynamic
-            |> Line3.snapTo world junctionId child.Entity
-            |> ignore
+            for child in family.Children do
+                // Finish step 4 above by adding each child to the bounding box.
+                boundingBoxId |> add (BoundingBoxOn => child.Entity)
+
+                // 7. A visible Elbow for each child node that FollowsX the corresponding child node
+                //    and FollowsY the Bounding Box.
+                let junctionId =
+                    world.Spawn(Position.Val zeroPosition, Elbow.Tag(), Connector.Tag())
+
+                junctionId |> addWith (SnapToX => child.Entity) {| x = 0.0 |}
+                junctionId |> addWith (SnapToY => boxBoundId) {| y = 0.0 |}
+
+                // 8. A visible Line for each child that follows the Branch Node and that child's Junction Node
+                world
+                |> Line3.spawnDynamic
+                |> Line3.snapTo world junctionId branchNodeId
+                |> ignore
+
+                // 9. A visible Line for each child that follows that child's Junction Node and the Child Node itself.
+                world
+                |> Line3.spawnDynamic
+                |> Line3.snapTo world junctionId child.Entity
+                |> ignore
 
 // TODO: Create a "family bounding box" and add all bounding boxes of the children to it.
 // This includes the child bounding boxes (for leaves) and the family bounding boxes (when the

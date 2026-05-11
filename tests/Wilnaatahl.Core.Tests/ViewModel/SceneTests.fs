@@ -1,5 +1,6 @@
 module Wilnaatahl.Tests.SceneTests
 
+open System
 open Xunit
 open Swensen.Unquote
 open Wilnaatahl.ViewModel
@@ -18,7 +19,7 @@ let private mapFamily (family: RenderedFamily<TestFamilyMember>) =
 
 [<Fact>]
 let ``ExtractFamilies produces correct results`` () =
-    let graph = createFamilyGraph testPeopleAndParents
+    let graph = createFamilyGraph testPeopleAndParents testCouples
 
     let families =
         Scene.extractFamilies graph initialNodes |> Seq.toList |> List.map mapFamily
@@ -30,8 +31,71 @@ let ``ExtractFamilies produces correct results`` () =
     Set.ofList fam.Children =! Set.ofList [ 2; 3; 4 ]
 
 [<Fact>]
+let ``extractFamilies yields RenderedFamily with empty Children for a childless Couple`` () =
+    // Set up a graph that has both a childless Couple (from the shared TestData
+    // fixture) and a small procreative Couple in the same Wilp. Both should appear
+    // as RenderedFamily values; only the childless one should have an empty
+    // Children list.
+    let wilpName = WilpName "Q"
+
+    let procreativeHead = {
+        Person.Empty with
+            Id = PersonId 110
+            Wilp = childlessWilp
+            Shape = Sphere
+    }
+
+    let procreativeSpouse = { Person.Empty with Id = PersonId 111; Shape = Cube }
+
+    let onlyChild = {
+        Person.Empty with
+            Id = PersonId 112
+            Wilp = childlessWilp
+            Shape = Sphere
+    }
+
+    let procreativeCouple =
+        Couple.create (CoupleId 110) procreativeHead.Id procreativeSpouse.Id None
+
+    let people = [
+        childlessHead, None
+        childlessPartner, None
+        procreativeHead, None
+        procreativeSpouse, None
+        onlyChild, Some procreativeCouple.Id
+    ]
+
+    let couples = [ childlessCouple; procreativeCouple ]
+    let graph = createFamilyGraph people couples
+
+    let nodes = [
+        TestFamilyMember(childlessHead.Id.AsInt, childlessHead, wilpName)
+        TestFamilyMember(childlessPartner.Id.AsInt, childlessPartner, wilpName)
+        TestFamilyMember(procreativeHead.Id.AsInt, procreativeHead, wilpName)
+        TestFamilyMember(procreativeSpouse.Id.AsInt, procreativeSpouse, wilpName)
+        TestFamilyMember(onlyChild.Id.AsInt, onlyChild, wilpName)
+    ]
+
+    let families = Scene.extractFamilies graph nodes |> Seq.toList |> List.map mapFamily
+
+    families.Length =! 2
+
+    let childlessFamily = families |> List.find (fun f -> List.isEmpty f.Children)
+
+    Set.ofList [ fst childlessFamily.Parents; snd childlessFamily.Parents ]
+    =! Set.ofList [ childlessHead.Id.AsInt; childlessPartner.Id.AsInt ]
+
+    let procreativeFamily =
+        families |> List.find (fun f -> not (List.isEmpty f.Children))
+
+    Set.ofList [ fst procreativeFamily.Parents; snd procreativeFamily.Parents ]
+    =! Set.ofList [ procreativeHead.Id.AsInt; procreativeSpouse.Id.AsInt ]
+
+    procreativeFamily.Children =! [ onlyChild.Id.AsInt ]
+
+[<Fact>]
 let ``layoutGraph assigns correct positions`` () =
-    let graph = createFamilyGraph extendedFamily
+    let graph = createFamilyGraph extendedFamily extendedCouples
     let rootOffset, rootBox = Scene.layoutGraph (WilpName "H") graph
 
     let actual =
@@ -70,6 +134,33 @@ let ``layoutGraph assigns correct positions`` () =
                 actualPersonId = expectedPersonId
                 && areVectorsNearEqual actualOffset expectedOffset
             @>)
+
+[<Fact>]
+let ``layoutGraph positions partner of a childless Couple adjacent to the Wilp parent`` () =
+    // Use the shared childless-Couple fixture: the Wilp parent (childlessHead) and the
+    // outsider partner (childlessPartner) form the only Couple in the Wilp. After
+    // layout, both should have positions and the partner should sit exactly one
+    // default spacing unit horizontally from the Wilp parent (i.e. adjacent, with
+    // no other partners or descendants between them).
+    let graph =
+        createFamilyGraph [ childlessHead, None; childlessPartner, None ] [ childlessCouple ]
+
+    let rootOffset, rootBox = Scene.layoutGraph (WilpName "Q") graph
+    let positions = setPositions (rootOffset, rootBox) |> List.ofSeq |> Map.ofList
+
+    let headPos = positions |> Map.find childlessHead.Id
+    let partnerPos = positions |> Map.find childlessPartner.Id
+
+    // No phantom positions for absent children.
+    Map.count positions =! 2
+
+    // Adjacency: partner is exactly one default horizontal spacing away on the X
+    // axis, at the same Y as the Wilp parent (since there are no descendants to
+    // push the partner row downward).
+    let coordsNearEqual a e = abs (a - e) <= LayoutBox.nearZero
+    let xGap = abs (partnerPos.X - headPos.X)
+    test <@ coordsNearEqual xGap SceneConstants.defaultXSpacing @>
+    test <@ coordsNearEqual partnerPos.Y headPos.Y @>
 
 [<Fact>]
 let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
@@ -121,17 +212,17 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
             BirthOrder = 1
     }
 
-    let parents = { Mother = mother.Id; Father = father.Id }
+    let parentsCouple = Couple.create (CoupleId 200) mother.Id father.Id None
 
     let family = [
         mother, None
         father, None
-        childA, Some parents
-        childB, Some parents
-        childC, Some parents
+        childA, Some parentsCouple.Id
+        childB, Some parentsCouple.Id
+        childC, Some parentsCouple.Id
     ]
 
-    let graph = createFamilyGraph family
+    let graph = createFamilyGraph family [ parentsCouple ]
     let _, rootBox = Scene.layoutGraph (WilpName "T") graph
 
     // Collect the X positions of children from the layout.
@@ -149,3 +240,212 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
     // Expected sort order: childA (DoB 2000, order 0), childC (DoB 2000, order 1), childB (DoB 2005)
     let sortedIds = childPositions |> List.map fst
     sortedIds =! [ PersonId 102; PersonId 104; PersonId 103 ]
+
+// ----- compareCouplesByEffectiveDate -------------------------------------------------
+
+/// Constructs a tiny FamilyGraph containing the supplied Couples and the four
+/// shared `anon*` Persons that the comparator tests below use to build Couples
+/// from. Optionally also includes a single child of one of the Couples — pass
+/// `Some (child, parentCouple)` to add a Person who points to `parentCouple` as
+/// their parents. Returns the graph along with the matching `descendants` list
+/// that can be handed to `Scene.compareCouplesByEffectiveDate` (`[]` when no
+/// child was supplied, `[ Leaf child.Id ]` when one was).
+let private makeComparatorGraph (couples: Couple list) (procreativeChild: (Person * Couple) option) =
+    let baseEntries = [ anon1, None; anon2, None; anon3, None; anon4, None ]
+
+    let people, descendants =
+        match procreativeChild with
+        | None -> baseEntries, []
+        | Some(child, parentCouple) -> baseEntries @ [ child, Some parentCouple.Id ], [ Leaf child.Id ]
+
+    createFamilyGraph people couples, descendants
+
+[<Fact>]
+let ``compareCouplesByEffectiveDate: childless-with-date sorts before procreative-with-later-DoB`` () =
+    // c1's DateOfUnion (1990) is earlier than c2's eldest child's DateOfBirth (1995),
+    // so c1 (childless) sorts before c2 (procreative).
+    let child = {
+        Person.Empty with
+            Id = PersonId 250
+            DateOfBirth = Some(DateOnly(1995, 1, 1))
+    }
+
+    let cChildless =
+        Couple.create (CoupleId 1) anon1.Id anon2.Id (Some(DateOnly(1990, 1, 1)))
+
+    let cProcreative = Couple.create (CoupleId 2) anon3.Id anon4.Id None
+
+    let graph, descendants =
+        makeComparatorGraph [ cChildless; cProcreative ] (Some(child, cProcreative))
+
+    Scene.compareCouplesByEffectiveDate graph (cChildless, []) (cProcreative, descendants)
+    <! 0
+
+    Scene.compareCouplesByEffectiveDate graph (cProcreative, descendants) (cChildless, [])
+    >! 0
+
+[<Fact>]
+let ``compareCouplesByEffectiveDate: both childless, equal dates, tie-break by CoupleId`` () =
+    let date = DateOnly(2000, 1, 1)
+    let cLow = Couple.create (CoupleId 10) anon1.Id anon2.Id (Some date)
+    let cHigh = Couple.create (CoupleId 20) anon3.Id anon4.Id (Some date)
+    let graph, _ = makeComparatorGraph [ cLow; cHigh ] None
+
+    Scene.compareCouplesByEffectiveDate graph (cLow, []) (cHigh, []) <! 0
+    Scene.compareCouplesByEffectiveDate graph (cHigh, []) (cLow, []) >! 0
+
+[<Fact>]
+let ``compareCouplesByEffectiveDate: both childless with no date, fall back to CoupleId`` () =
+    let cLow = Couple.create (CoupleId 10) anon1.Id anon2.Id None
+    let cHigh = Couple.create (CoupleId 20) anon3.Id anon4.Id None
+    let graph, _ = makeComparatorGraph [ cLow; cHigh ] None
+
+    Scene.compareCouplesByEffectiveDate graph (cLow, []) (cHigh, []) <! 0
+
+[<Fact>]
+let ``compareCouplesByEffectiveDate: when one childless Couple lacks a date, fall back to CoupleId`` () =
+    // Per the comparator contract, a missing effective date on either side drops both
+    // sides to a CoupleId comparison — the dated side does NOT win automatically.
+    // Give the dated Couple the higher CoupleId so the test would fail under the old
+    // "dated wins" rule (which would put it first regardless of CoupleId).
+    let cUndated = Couple.create (CoupleId 10) anon1.Id anon2.Id None
+
+    let cDated =
+        Couple.create (CoupleId 20) anon3.Id anon4.Id (Some(DateOnly(2000, 1, 1)))
+
+    let graph, _ = makeComparatorGraph [ cUndated; cDated ] None
+
+    Scene.compareCouplesByEffectiveDate graph (cUndated, []) (cDated, []) <! 0
+    Scene.compareCouplesByEffectiveDate graph (cDated, []) (cUndated, []) >! 0
+
+[<Fact>]
+let ``compareCouplesByEffectiveDate: childless-no-date vs procreative-with-DoB-on-eldest falls back to CoupleId`` () =
+    // Childless without DateOfUnion has no effective date; the procreative Couple's
+    // eldest has a DoB. Since one side is undated, both compare by CoupleId — the
+    // dated side does NOT win automatically. Give the procreative (dated) Couple the
+    // higher CoupleId so the test would fail under the old "dated wins" rule.
+    let child = {
+        Person.Empty with
+            Id = PersonId 250
+            DateOfBirth = Some(DateOnly(1990, 1, 1))
+    }
+
+    let cChildless = Couple.create (CoupleId 10) anon1.Id anon2.Id None
+    let cProcreative = Couple.create (CoupleId 20) anon3.Id anon4.Id None
+
+    let graph, descendants =
+        makeComparatorGraph [ cChildless; cProcreative ] (Some(child, cProcreative))
+
+    Scene.compareCouplesByEffectiveDate graph (cChildless, []) (cProcreative, descendants)
+    <! 0
+
+    Scene.compareCouplesByEffectiveDate graph (cProcreative, descendants) (cChildless, [])
+    >! 0
+
+[<Fact>]
+let ``compareCouplesByEffectiveDate: childless-no-date vs procreative-with-no-DoB-on-eldest`` () =
+    // Neither side is dated; fall back to CoupleId comparison.
+    let child = { Person.Empty with Id = PersonId 250 } // no DoB
+    let cChildless = Couple.create (CoupleId 10) anon1.Id anon2.Id None
+    let cProcreative = Couple.create (CoupleId 20) anon3.Id anon4.Id None
+
+    let graph, descendants =
+        makeComparatorGraph [ cChildless; cProcreative ] (Some(child, cProcreative))
+
+    Scene.compareCouplesByEffectiveDate graph (cChildless, []) (cProcreative, descendants)
+    <! 0
+
+    Scene.compareCouplesByEffectiveDate graph (cProcreative, descendants) (cChildless, [])
+    >! 0
+
+[<Fact>]
+let ``compareCouplesByEffectiveDate: procreative-with-no-DoB vs childless-with-date falls back to CoupleId`` () =
+    // c1 procreative whose eldest has no DoB; c2 childless with a date. The procreative
+    // side is undated, so the comparison falls back to CoupleId — the dated side does
+    // NOT automatically win.
+    let child = { Person.Empty with Id = PersonId 250 } // no DoB
+    let cProcreative = Couple.create (CoupleId 10) anon1.Id anon2.Id None
+
+    let cChildless =
+        Couple.create (CoupleId 20) anon3.Id anon4.Id (Some(DateOnly(2000, 1, 1)))
+
+    let graph, descendants =
+        makeComparatorGraph [ cProcreative; cChildless ] (Some(child, cProcreative))
+
+    Scene.compareCouplesByEffectiveDate graph (cProcreative, descendants) (cChildless, [])
+    <! 0
+
+[<Fact>]
+let ``compareCouplesByEffectiveDate: procreative-with-DoB vs childless-no-date falls back to CoupleId`` () =
+    // c1 procreative with an eldest DoB; c2 childless without a date. The childless
+    // side is undated, so the comparison falls back to CoupleId — the dated side does
+    // NOT automatically win. Give the procreative (dated) Couple the higher CoupleId
+    // so the test would fail under the old "dated wins" rule.
+    let child = {
+        Person.Empty with
+            Id = PersonId 250
+            DateOfBirth = Some(DateOnly(2000, 1, 1))
+    }
+
+    let cChildless = Couple.create (CoupleId 10) anon1.Id anon2.Id None
+    let cProcreative = Couple.create (CoupleId 20) anon3.Id anon4.Id None
+
+    let graph, descendants =
+        makeComparatorGraph [ cProcreative; cChildless ] (Some(child, cProcreative))
+
+    Scene.compareCouplesByEffectiveDate graph (cProcreative, descendants) (cChildless, [])
+    >! 0
+
+// ----- layoutGraph integration with the comparator -------------------------------------
+
+[<Fact>]
+let ``layoutGraph interleaves childless and procreative Couples by effective date`` () =
+    // Same scenario as the comparator unit tests, but exercised end-to-end through
+    // layoutGraph. One Wilp parent has three Couples whose effective dates of union
+    // should sort the partner row in this order regardless of the input order:
+    //   - Childless Couple with DateOfUnion 1990 (earliest)
+    //   - Procreative Couple whose eldest child was born 1995
+    //   - Childless Couple with DateOfUnion 2000 (latest)
+    let wilpName = WilpName "S"
+    let wilp = Some { Name = wilpName; Pdeek = Giskaast }
+
+    let wilpHead = { Person.Empty with Id = PersonId 300; Wilp = wilp; Shape = Sphere }
+    let earlyPartner = { Person.Empty with Id = PersonId 301; Shape = Cube }
+    let midPartner = { Person.Empty with Id = PersonId 302; Shape = Cube }
+    let latePartner = { Person.Empty with Id = PersonId 303; Shape = Cube }
+
+    let child = {
+        Person.Empty with
+            Id = PersonId 304
+            Wilp = wilp
+            Shape = Sphere
+            DateOfBirth = Some(DateOnly(1995, 6, 15))
+    }
+
+    // Supplied in scrambled order so the test would fail on a stable-but-wrong sort.
+    let coupleMid = Couple.create (CoupleId 301) wilpHead.Id midPartner.Id None
+
+    let coupleLate =
+        Couple.create (CoupleId 302) wilpHead.Id latePartner.Id (Some(DateOnly(2000, 1, 1)))
+
+    let coupleEarly =
+        Couple.create (CoupleId 303) wilpHead.Id earlyPartner.Id (Some(DateOnly(1990, 1, 1)))
+
+    let people = [
+        wilpHead, None
+        earlyPartner, None
+        midPartner, None
+        latePartner, None
+        child, Some coupleMid.Id
+    ]
+
+    let couples = [ coupleMid; coupleLate; coupleEarly ]
+    let graph = createFamilyGraph people couples
+
+    let rootOffset, rootBox = Scene.layoutGraph wilpName graph
+    let positions = setPositions (rootOffset, rootBox) |> List.ofSeq |> Map.ofList
+
+    // The three partners should be laid out left-to-right in effective-date order.
+    let xOf personId = (Map.find personId positions).X
+    test <@ xOf earlyPartner.Id < xOf midPartner.Id @>
+    test <@ xOf midPartner.Id < xOf latePartner.Id @>

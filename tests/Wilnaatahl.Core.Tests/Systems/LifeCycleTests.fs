@@ -30,7 +30,7 @@ type Tests() =
 
     [<Fact>]
     member _.``spawnScene creates tree nodes and connectors``() =
-        let graph = createFamilyGraph testPeopleAndParents
+        let graph = createFamilyGraph testPeopleAndParents testCouples
         spawnScene world graph
         let personCount = world.Query(With PersonRef) |> Seq.length
         let connectorCount = world.Query(With Connector) |> Seq.length
@@ -39,7 +39,7 @@ type Tests() =
 
     [<Fact>]
     member _.``destroyScene removes all scene entities``() =
-        let graph = createFamilyGraph testPeopleAndParents
+        let graph = createFamilyGraph testPeopleAndParents testCouples
         spawnScene world graph
         let personCountBefore = world.Query(With PersonRef) |> Seq.length
         personCountBefore >! 0
@@ -54,7 +54,7 @@ type Tests() =
     [<Fact>]
     member _.``destroyScene after spawnScene leaves controls intact``() =
         spawnControls world
-        let graph = createFamilyGraph testPeopleAndParents
+        let graph = createFamilyGraph testPeopleAndParents testCouples
         spawnScene world graph
         destroyScene world |> ignore
         let buttonCount = world.Query(With Button) |> Seq.length

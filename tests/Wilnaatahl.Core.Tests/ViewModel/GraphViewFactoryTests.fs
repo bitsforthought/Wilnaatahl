@@ -10,7 +10,7 @@ open Wilnaatahl.Model.FamilyGraph
 let ``LoadGraph returns graph with expected people count`` () =
     let factory = GraphViewFactory() :> IGraphViewFactory
     let graph = factory.LoadGraph()
-    graph |> allPeople |> Seq.length =! 32
+    graph |> allPeople |> Seq.length =! 34
 
 [<Fact>]
 let ``LoadGraph returns graph with expected huwilp`` () =

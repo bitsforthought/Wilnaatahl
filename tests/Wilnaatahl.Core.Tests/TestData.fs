@@ -43,14 +43,17 @@ let p4 = {
         DateOfBirth = Some(DateOnly(1905, 1, 1))
 }
 
-let coParents = { Mother = p0.Id; Father = p1.Id }
+let coupleP0P1 = Couple.create (CoupleId 0) p0.Id p1.Id None
+let coupleP0P1Id = coupleP0P1.Id
+
+let testCouples = [ coupleP0P1 ]
 
 let testPeopleAndParents = [
     p0, None
     p1, None
-    p2, Some coParents
-    p3, Some coParents
-    p4, Some coParents
+    p2, Some coupleP0P1Id
+    p3, Some coupleP0P1Id
+    p4, Some coupleP0P1Id
 ]
 
 // Now we define an extended test data set to cover all corner cases.
@@ -70,16 +73,45 @@ let p9 = {
 
 let p10 = person 10 "GrandChild3" Cube testWilp
 
+let coupleP5P6 = Couple.create (CoupleId 1) p5.Id p6.Id None
+let coupleP5P7 = Couple.create (CoupleId 2) p5.Id p7.Id None
+
+let extendedCouples = testCouples @ [ coupleP5P6; coupleP5P7 ]
+
 let extendedFamily =
     testPeopleAndParents
     @ [
-        p5, Some coParents
+        p5, Some coupleP0P1Id
         p6, None
         p7, None
-        p8, Some { Mother = p6.Id; Father = p5.Id }
-        p9, Some { Mother = p6.Id; Father = p5.Id }
-        p10, Some { Mother = p7.Id; Father = p5.Id }
+        p8, Some coupleP5P6.Id
+        p9, Some coupleP5P6.Id
+        p10, Some coupleP5P7.Id
     ]
+
+// ---- Building blocks for SceneTests and other consumers that need a small,
+// purpose-built fixture rather than the full extendedFamily. These intentionally
+// occupy a separate PersonId / CoupleId range from the p0..p10 fixtures above so
+// the two fixture sets can coexist in the same graph if a test wants to combine
+// them.
+
+/// Two unaffiliated Persons in a Wilp ("Q") whose Couple has no recorded children.
+/// Useful for any test that needs a representative childless-Couple scenario without
+/// re-deriving people, a Wilp, or a Couple from scratch.
+let childlessWilp = Some { Name = WilpName "Q"; Pdeek = LaxSkiik }
+let childlessHead = person 100 "Quinn" Sphere childlessWilp
+let childlessPartner = person 101 "Robin" Cube None
+
+let childlessCouple =
+    Couple.create (CoupleId 100) childlessHead.Id childlessPartner.Id None
+
+/// Four Persons with no Wilp and no other attributes, useful for tests that need
+/// some distinct anonymous Persons to construct Couples between (e.g. the
+/// comparator tests in SceneTests). Small AsInt values keep diagnostics readable.
+let anon1 = { Person.Empty with Id = PersonId 200 }
+let anon2 = { Person.Empty with Id = PersonId 201 }
+let anon3 = { Person.Empty with Id = PersonId 202 }
+let anon4 = { Person.Empty with Id = PersonId 203 }
 
 let private treeNode id =
     let person =

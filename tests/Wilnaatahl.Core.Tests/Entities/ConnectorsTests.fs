@@ -16,7 +16,7 @@ open Wilnaatahl.Tests.EcsTestSupport
 open Wilnaatahl.Tests.TestData
 
 let private spawnTestScene (world: IWorld) =
-    let graph = createFamilyGraph testPeopleAndParents
+    let graph = createFamilyGraph testPeopleAndParents testCouples
     let wilpId = world |> People.spawnWilpBox testWilp.Value.Name
 
     for person, _ in testPeopleAndParents do
@@ -57,3 +57,38 @@ type Tests() =
         // With 3 children, we expect at least 1 branch elbow + 3 child junction elbows = 4.
         let elbowCount = world.Query(With Elbow) |> Seq.length
         elbowCount >=! 4
+
+    [<Fact>]
+    member _.``spawnAllConnectors spawns spouse bar but no elbow or branch for a childless Couple``() =
+        // Self-contained scene: one Wilp parent + one outsider + one childless Couple.
+        // After spawnAllConnectors we expect exactly the spouse bar (1 hidden line +
+        // 2 parallel lines = 3 Line entities) and zero Elbow entities. Procreative
+        // Couples are exercised by the other tests in this fixture.
+        let testWilpName = WilpName "X"
+
+        let mWilp = {
+            Person.Empty with
+                Id = PersonId 700
+                Wilp = Some { Name = testWilpName; Pdeek = Giskaast }
+                Shape = Sphere
+        }
+
+        let pPartner = { Person.Empty with Id = PersonId 701; Shape = Cube }
+
+        let childlessCouple = Couple.create (CoupleId 800) mWilp.Id pPartner.Id None
+        let people = [ mWilp, None; pPartner, None ]
+        let couples = [ childlessCouple ]
+        let graph = createFamilyGraph people couples
+
+        let wilpId = world |> People.spawnWilpBox testWilpName
+
+        for person, _ in people do
+            world |> People.spawnTreeNode person wilpId
+
+        world |> Connectors.spawnAllConnectors graph
+
+        let lineCount = world.Query(With Line) |> Seq.length
+        lineCount =! 3
+
+        let elbowCount = world.Query(With Elbow) |> Seq.length
+        elbowCount =! 0

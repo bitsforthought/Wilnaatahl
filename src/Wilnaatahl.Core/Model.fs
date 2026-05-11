@@ -16,6 +16,17 @@ type PersonId =
         let (PersonId personId) = this
         personId
 
+/// Represents a unique identifier for a Couple.
+#if FABLE_COMPILER
+[<Erase>]
+#endif
+type CoupleId =
+    | CoupleId of int
+
+    member this.AsInt =
+        let (CoupleId coupleId) = this
+        coupleId
+
 /// Represents a Wilp's name; strongly typed to distinguish a Wilp name from other strings.
 #if FABLE_COMPILER
 [<Erase>]
@@ -71,15 +82,44 @@ type Person = {
         DateOfDeath = None
     }
 
-/// Represents a parent-child relationship. For every Person with recorded parents,
-/// there will be two ParentChildRelationships, one for each parent.
-type ParentChildRelationship = { Parent: PersonId; Child: PersonId }
+/// Represents a Couple of two people in a partnered relationship (married, common-law,
+/// or otherwise unioned). Couples may or may not have produced recorded children.
+///
+/// Members is the unordered pair of people in the Couple. The record constructor is
+/// private — use Couple.create, which canonicalizes Members (lower PersonId first) and
+/// rejects equal members. This guarantees that two Couples built from the same pair in
+/// either order are structurally equal and that no Couple can be in an invalid state.
+/// The public read-only properties (Id, Members, DateOfUnion) expose the underlying
+/// fields so callers can inspect a Couple with familiar dot-notation.
+///
+/// DateOfUnion is the optional date when the Couple was formed.
+type Couple = private {
+    Id_: CoupleId
+    Members_: PersonId * PersonId
+    DateOfUnion_: DateOnly option
+} with
 
-/// Represents a pair of co-parents. If a child is missing one of the two recorded parents,
-/// the missing parent is modeled as a Person with no extra non-identifying information.
-type CoParentRelationship = { Mother: PersonId; Father: PersonId }
+    member this.Id = this.Id_
+    member this.Members = this.Members_
+    member this.DateOfUnion = this.DateOfUnion_
 
-/// A family tree centered around one Wilp, including coparents from outside that Wilp.
+module Couple =
+
+    /// Constructs a Couple, canonicalizing Members so the two PersonIds appear in
+    /// ascending order by their AsInt value. Throws if the two members are equal.
+    let create id (member1: PersonId) (member2: PersonId) dateOfUnion : Couple =
+        if member1 = member2 then
+            invalidArg (nameof member2) $"A Couple's two members must differ; got PersonId %d{member1.AsInt} for both."
+
+        let canonicalMembers =
+            if member1.AsInt < member2.AsInt then
+                (member1, member2)
+            else
+                (member2, member1)
+
+        { Id_ = id; Members_ = canonicalMembers; DateOfUnion_ = dateOfUnion }
+
+/// A family tree centered around one Wilp, including partners from outside that Wilp.
 /// If a Wilp has mutiple roots, then it will have more than one such tree.
 type WilpTree =
     | Leaf of PersonId // Person with no descendants
@@ -90,82 +130,108 @@ type WilpTree =
     member this.Root =
         match this with
         | Leaf personId -> personId
-        | Family { WilpParent = personId; CoParentsAndDescendants = _ } -> personId
+        | Family { WilpParent = personId; PartnersAndDescendants = _ } -> personId
 
-/// A Wilp member with one or more coparents and their descendant sub-trees.
+/// A Wilp member with one or more partners (Couples) and their descendant sub-trees.
+/// PartnersAndDescendants is keyed by the partner's PersonId. Each value is a pair of:
+///   - the Couple linking the Wilp member to that partner, and
+///   - the sub-tree for each child of that Couple (empty when the Couple has no children).
 and Family = {
     WilpParent: PersonId
-    CoParentsAndDescendants: Map<PersonId, WilpTree seq>
+    PartnersAndDescendants: Map<PersonId, Couple * WilpTree seq>
 }
 
 module FamilyGraph =
 
     type FamilyGraph = private {
         People: Map<int, Person>
-        ParentChildRelationshipsByParent: Map<int, ParentChildRelationship list>
-        CoParentRelationships: Set<CoParentRelationship>
+        Couples: Map<int, Couple>
+        ChildrenByCoupleId: Map<int, PersonId list>
         Huwilp: Set<WilpName>
         HuwilpForests: Map<WilpName, WilpTree seq>
     }
 
-    let createFamilyGraph (peopleAndParents: seq<Person * CoParentRelationship option>) =
-        let peopleMap =
-            peopleAndParents |> Seq.map (fun (p, _) -> p.Id.AsInt, p) |> Map.ofSeq
+    let createFamilyGraph (people: seq<Person * CoupleId option>) (couples: seq<Couple>) =
+        let peopleList = people |> Seq.toList
+        let couplesList = couples |> Seq.toList
 
-        let coParents =
-            peopleAndParents |> Seq.choose (fun (_, parents) -> parents) |> Set.ofSeq
+        // Validate that every CoupleId in `couples` is unique. Map.ofList silently
+        // overwrites duplicates, so we have to check before constructing the lookup.
+        let duplicateCoupleId =
+            couplesList
+            |> List.countBy (fun c -> c.Id.AsInt)
+            |> List.tryFind (fun (_, count) -> count > 1)
 
-        let parentChildMap =
-            seq {
-                for person, maybeParents in peopleAndParents do
-                    match maybeParents with
-                    | Some parents ->
-                        yield { Parent = parents.Mother; Child = person.Id }
-                        yield { Parent = parents.Father; Child = person.Id }
-                    | None -> () // Person has no recorded parents so they are a "root" in the family multi-graph.
-            }
-            |> Seq.groupBy (fun rel -> rel.Parent.AsInt)
-            |> Seq.map (fun (parent, children) -> parent, children |> List.ofSeq)
-            |> Map.ofSeq
+        match duplicateCoupleId with
+        | Some(id, count) -> failwith $"Duplicate CoupleId %d{id} appears %d{count} times in the supplied couples."
+        | None -> ()
+
+        let peopleMap = peopleList |> List.map (fun (p, _) -> p.Id.AsInt, p) |> Map.ofList
+
+        let couplesMap = couplesList |> List.map (fun c -> c.Id.AsInt, c) |> Map.ofList
+
+        // Validate that every Person's referenced CoupleId exists in the couples set.
+        for person, maybeCoupleId in peopleList do
+            match maybeCoupleId with
+            | Some cId when not (Map.containsKey cId.AsInt couplesMap) ->
+                failwith
+                    $"Person %d{person.Id.AsInt} references unknown CoupleId %d{cId.AsInt}; not present in the supplied couples."
+            | _ -> ()
+
+        // Validate that every Couple's Members reference PersonIds in the supplied people.
+        for couple in couplesList do
+            let m1, m2 = couple.Members
+
+            for memberId in [ m1; m2 ] do
+                if not (Map.containsKey memberId.AsInt peopleMap) then
+                    failwith
+                        $"Couple %d{couple.Id.AsInt} references unknown PersonId %d{memberId.AsInt}; not present in the supplied people."
+
+        let childrenByCoupleId =
+            peopleList
+            |> List.choose (fun (p, maybeCoupleId) -> maybeCoupleId |> Option.map (fun cId -> cId.AsInt, p.Id))
+            |> List.groupBy fst
+            |> List.map (fun (cId, pairs) -> cId, pairs |> List.map snd)
+            |> Map.ofList
 
         let huwilp =
-            peopleAndParents
-            |> Seq.choose (fun (p, _) -> p.Wilp |> Option.map (fun w -> w.Name))
-            |> Set.ofSeq
+            peopleList
+            |> List.choose (fun (p, _) -> p.Wilp |> Option.map (fun w -> w.Name))
+            |> Set.ofList
 
-        // Helper to build WilpTree recursively using coparent relationships.
-        let rec buildWilpTree person =
-            // Find all coparent relationships where this person is a parent
-            let coparentRels =
-                coParents
-                |> Set.filter (fun rel -> rel.Mother = person.Id || rel.Father = person.Id)
-                |> Set.toList
+        // Helper to build WilpTree recursively. A Wilp member becomes a Family node if
+        // they participate in any Couple — whether or not that Couple has produced
+        // recorded children. Childless Couples surface as PartnersAndDescendants entries
+        // with an empty descendants sequence.
+        let rec buildWilpTree (person: Person) =
+            let myCouples =
+                couplesList
+                |> List.filter (fun c ->
+                    let m1, m2 = c.Members
+                    m1 = person.Id || m2 = person.Id)
 
-            if List.isEmpty coparentRels then
+            if List.isEmpty myCouples then
                 Leaf person.Id
             else
-                // For each coparent, find all children for this pair, and build a forest (seq) of their WilpTrees
-                let coParentsAndDescendants =
-                    coparentRels
-                    |> List.map (fun rel ->
-                        let coparentId = if rel.Mother = person.Id then rel.Father else rel.Mother
-                        // Find all children for this coparent pair
-                        let children =
-                            peopleAndParents
-                            |> Seq.choose (fun (p, maybeParents) ->
-                                match maybeParents with
-                                | Some rel' when rel' = rel -> Some p
-                                | _ -> None)
-                            |> Seq.toList
-                        // For each child, build their WilpTree
-                        let descendantTrees = children |> List.map buildWilpTree |> Seq.ofList
-                        // If no children, yield an empty sequence
-                        coparentId, descendantTrees)
+                let partnersAndDescendants =
+                    myCouples
+                    |> List.map (fun couple ->
+                        let m1, m2 = couple.Members
+                        let partnerId = if m1 = person.Id then m2 else m1
+
+                        let descendantTrees =
+                            Map.tryFind couple.Id.AsInt childrenByCoupleId
+                            |> Option.defaultValue []
+                            |> List.map (fun pid -> Map.find pid.AsInt peopleMap)
+                            |> List.map buildWilpTree
+                            |> Seq.ofList
+
+                        partnerId, (couple, descendantTrees))
                     |> Map.ofList
 
                 Family {
                     WilpParent = person.Id
-                    CoParentsAndDescendants = coParentsAndDescendants
+                    PartnersAndDescendants = partnersAndDescendants
                 }
 
         // For each Wilp, find root persons (with that Wilp and no parents).
@@ -173,20 +239,20 @@ module FamilyGraph =
             huwilp
             |> Seq.map (fun w ->
                 let roots =
-                    peopleAndParents
-                    |> Seq.choose (fun (p, maybeParents) ->
-                        match p.Wilp, maybeParents with
+                    peopleList
+                    |> List.choose (fun (p, maybeCoupleId) ->
+                        match p.Wilp, maybeCoupleId with
                         | Some w', None when w'.Name = w -> Some p
                         | _ -> None)
 
-                let trees = roots |> Seq.map buildWilpTree
+                let trees = roots |> List.map buildWilpTree |> Seq.ofList
                 w, trees)
             |> Map.ofSeq
 
         {
             People = peopleMap
-            ParentChildRelationshipsByParent = parentChildMap
-            CoParentRelationships = coParents
+            Couples = couplesMap
+            ChildrenByCoupleId = childrenByCoupleId
             Huwilp = huwilp
             HuwilpForests = huwilpForests
         }
@@ -194,67 +260,60 @@ module FamilyGraph =
     let allPeople graph =
         graph.People |> Map.values :> Person seq
 
-    let coparents graph = graph.CoParentRelationships
+    let couples graph : Couple seq =
+        graph.Couples |> Map.values :> Couple seq
 
     let huwilp graph = graph.Huwilp
 
     let findPerson (PersonId personId) graph = graph.People |> Map.find personId
 
-    let findChildren (PersonId personId) graph =
-        match graph.ParentChildRelationshipsByParent |> Map.tryFind personId with
-        | Some rels -> rels |> List.map (fun r -> r.Child) |> Set.ofList
-        | None -> Set.empty
+    /// Returns the recorded children of a given Couple, in insertion order.
+    /// Returns an empty list for a Couple that has no recorded children
+    /// (i.e. nobody references its CoupleId via their parents pointer).
+    let findChildrenOfCouple (couple: Couple) graph =
+        Map.tryFind couple.Id.AsInt graph.ChildrenByCoupleId |> Option.defaultValue []
 
-    /// Catamorphism for WilpTree forests, one per WilpName. Returns a sequence of 'R, one for each root in the forest.
-    /// Uses the given callbacks to process leaves, parents, co-parents, and families, and to sort each level of the tree.
-    /// The visitLeaf callback takes a PersonId and returns a result value of type 'R. The visitParent and visitCoParent
-    /// callbacks each take a PersonId and returns a result value of type 'P or 'C, respectively. The visitFamily callback
-    /// takes the result for the Wilp parent and a sorted array of results for each co-parent and their descendants and
-    /// combines it all into a single result value.
+    /// Catamorphism for WilpTree forests, one per WilpName. Returns a sequence of 'R, one
+    /// for each root in the forest. The visitLeaf, visitParent, visitPartner and visitFamily
+    /// callbacks combine each visited node (or its constituent parts) into a result.
+    ///
+    /// Sorting is delegated entirely to the caller through two predicates:
+    ///   - compareTrees orders children within a single Couple's descendant group.
+    ///   - compareGroups orders the groups themselves under a Wilp parent. Each group is
+    ///     supplied as the Couple plus its already-sorted (per compareTrees) descendants.
     let visitWilpForest
         wilpName
         (visitLeaf: PersonId -> 'R)
         (visitParent: PersonId -> 'P)
-        (visitCoParent: PersonId -> 'C)
-        (visitFamily: 'P -> ('C * ('R seq))[] -> 'R)
-        (compare: Person -> Person -> int)
+        (visitPartner: PersonId -> 'C)
+        (visitFamily: 'P -> ('C * 'R seq)[] -> 'R)
+        (compareTrees: WilpTree -> WilpTree -> int)
+        (compareGroups: (Couple * WilpTree list) -> (Couple * WilpTree list) -> int)
         graph
         : seq<'R> =
         let rec visit tree =
             match tree with
             | Leaf personId -> visitLeaf personId
             | Family family ->
-                let compareByPersonId personId1 personId2 =
-                    let person1, person2 = graph |> findPerson personId1, graph |> findPerson personId2
-                    compare person1 person2
+                // Sort each group's descendants once into a list. Materialization is
+                // necessary because Seq.sortWith re-sorts on every enumeration of its
+                // result, and the sorted descendants are enumerated twice below: once by
+                // compareGroups and once by `visit`.
+                let sortGroupDescendants _ ((couple: Couple), (trees: WilpTree seq)) =
+                    couple, trees |> Seq.sortWith compareTrees |> List.ofSeq
 
-                let compareTreesByPersonId (tree1: WilpTree) (tree2: WilpTree) = compareByPersonId tree1.Root tree2.Root
+                let visitGroup (partnerId, (_, sortedTrees: WilpTree list)) =
+                    visitPartner partnerId, sortedTrees |> List.map visit |> Seq.ofList
 
-                let sortAndVisitChildGroupForest _ (trees: WilpTree seq) =
-                    trees |> Seq.sortWith compareTreesByPersonId |> Seq.map (fun t -> t, visit t)
-
-                let sortAndProcessSortedChildGroups sortedChildGroups =
-                    // We ignore the co-parent ID and results since we don't need them to sort.
-                    let compareSortedChildGroups (_, childGroup1) (_, childGroup2) =
-                        compareTreesByPersonId (childGroup1 |> Seq.head |> fst) (childGroup2 |> Seq.head |> fst)
-
-                    let stripTreesAndVisitCoParent (coParentId, childGroups) =
-                        visitCoParent coParentId, childGroups |> Seq.map snd
-
-                    sortedChildGroups
-                    |> Seq.sortWith compareSortedChildGroups
-                    |> Seq.map stripTreesAndVisitCoParent
-
-                // We sort each sub-tree and sort the sub-trees by first element before recursing downward.
-                let sortedCoParentResultsPairs =
-                    family.CoParentsAndDescendants
-                    |> Map.map sortAndVisitChildGroupForest
+                let sortedGroups =
+                    family.PartnersAndDescendants
+                    |> Map.map sortGroupDescendants
                     |> Map.toSeq
-                    |> sortAndProcessSortedChildGroups
+                    |> Seq.sortWith (fun (_, group1) (_, group2) -> compareGroups group1 group2)
+                    |> Seq.map visitGroup
                     |> Array.ofSeq
 
-                let parentResult = visitParent family.WilpParent
-                visitFamily parentResult sortedCoParentResultsPairs
+                visitFamily (visitParent family.WilpParent) sortedGroups
 
         match graph.HuwilpForests |> Map.tryFind wilpName with
         | Some forest -> Seq.map visit forest
@@ -270,6 +329,13 @@ module Initial =
     // Each Wilp belongs to exactly one Pdeek (Clan). We assign all four Pdeek so the visualization
     // exercises the full color palette. Wilp A is Giskaast (red) so the bulk of the visible nodes
     // remain red, matching the prior visual impression of the test data.
+    //
+    // Two Couples in the seed exercise the childless-marriages path:
+    //   - Susan + Frank: Susan is a Wilp leaf with no recorded children, so this Couple
+    //     turns her from a Leaf into a Family with empty descendants.
+    //   - Margaret + Roy: an extra childless Couple under Margaret (who already has three
+    //     procreative Couples) exercises the layout sort that interleaves childless and
+    //     procreative Couples by effective date of union.
     let private wilpA = Some { Name = WilpName "A"; Pdeek = Giskaast }
     let private wilpB = Some { Name = WilpName "B"; Pdeek = Ganeda }
     let private wilpC = Some { Name = WilpName "C"; Pdeek = LaxSkiik }
@@ -286,9 +352,6 @@ module Initial =
     let private withDob (year, month, day) p = { p with DateOfBirth = Some(DateOnly(year, month, day)) }
 
     let private withBirthOrder n p = { p with BirthOrder = n }
-
-    let private parents (mother: Person) (father: Person) =
-        Some { Mother = mother.Id; Father = father.Id }
 
     // ----- Forest root #1: Mary's matriline -----
 
@@ -362,6 +425,42 @@ module Initial =
     let private grace = person 30 "Grace Yu" Sphere wilpA |> withBirthOrder 0
     let private benjamin = person 31 "Benjamin Yu" Cube wilpA |> withBirthOrder 1
 
+    // Husbands for the childless Couples below. Both unaffiliated.
+    let private frank = person 32 "Frank Hollister" Cube None // Susan's husband (childless)
+    let private roy = person 33 "Roy Pemberton" Cube None // Margaret's fourth partner (childless)
+
+    // Couples for the seed. CoupleIds are assigned sequentially so the seed remains
+    // hand-readable; their numeric values do not carry meaning beyond uniqueness.
+    let couples = [
+        Couple.create (CoupleId 0) mary.Id george.Id None
+        Couple.create (CoupleId 1) anne.Id henry.Id None
+        Couple.create (CoupleId 2) elizabeth.Id richard.Id None
+        Couple.create (CoupleId 3) elizabeth.Id charles.Id None
+        Couple.create (CoupleId 4) margaret.Id frederick.Id None
+        Couple.create (CoupleId 5) margaret.Id albert.Id None
+        Couple.create (CoupleId 6) margaret.Id samuel.Id None
+        Couple.create (CoupleId 7) catherine.Id daniel.Id None
+        Couple.create (CoupleId 8) jane.Id peter.Id None
+        Couple.create (CoupleId 9) helen.Id walter.Id None
+        // Childless Couples introduced for the childless-marriages feature.
+        Couple.create (CoupleId 10) susan.Id frank.Id (Some(DateOnly(1955, 6, 15)))
+        Couple.create (CoupleId 11) margaret.Id roy.Id (Some(DateOnly(1965, 3, 1)))
+    ]
+
+    // Lookup table from a canonical (lower, higher) pair of PersonId.AsInt to CoupleId,
+    // matching how Couple.create canonicalizes Members. Lets `parents` resolve a pair
+    // to its CoupleId regardless of the order the caller writes the two parents.
+    let private coupleIdByPair =
+        couples
+        |> List.map (fun c ->
+            let m1, m2 = c.Members
+            (m1.AsInt, m2.AsInt), c.Id)
+        |> Map.ofList
+
+    let private parents (mother: Person) (father: Person) =
+        let key = (min mother.Id.AsInt father.Id.AsInt, max mother.Id.AsInt father.Id.AsInt)
+        Some(Map.find key coupleIdByPair)
+
     let peopleAndParents = [
         // Forest #1 roots
         mary, None
@@ -390,17 +489,17 @@ module Initial =
         robert, parents elizabeth richard
         jane, parents elizabeth richard
 
-        // Gen 2: Elizabeth + Charles (1 child, second coparent of Elizabeth)
+        // Gen 2: Elizabeth + Charles (1 child, second partner of Elizabeth)
         thomas, parents elizabeth charles
 
-        // Gen 2: Margaret + Frederick (1 child, first of three coparents of Margaret)
+        // Gen 2: Margaret + Frederick (1 child, first of three partners of Margaret)
         sarah, parents margaret frederick
 
-        // Gen 2: Margaret + Albert (2 children, middle coparent of Margaret)
+        // Gen 2: Margaret + Albert (2 children, middle partner of Margaret)
         william, parents margaret albert
         emily, parents margaret albert
 
-        // Gen 2: Margaret + Samuel (1 child, third coparent of Margaret)
+        // Gen 2: Margaret + Samuel (1 child, third partner of Margaret)
         edward, parents margaret samuel
 
         // Gen 2 husbands (roots)
@@ -420,4 +519,8 @@ module Initial =
         walter, None
         grace, parents helen walter
         benjamin, parents helen walter
+
+        // Childless-Couple husbands.
+        frank, None
+        roy, None
     ]

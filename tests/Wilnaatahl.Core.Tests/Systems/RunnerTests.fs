@@ -56,7 +56,7 @@ type Tests() =
 
     [<Fact>]
     member _.``integration: select, drag, and undo on scene nodes``() =
-        let graph = createFamilyGraph testPeopleAndParents
+        let graph = createFamilyGraph testPeopleAndParents testCouples
 
         spawnScene world graph
         layoutNodes world graph

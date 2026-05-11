@@ -139,12 +139,19 @@ answers are summarized here.
    existing seed (Margaret has three procreative co-parents) and avoids
    a behavior change unrelated to the feature being added.
 5. **Layout slot ordering for Couples under one Wilp parent.** Sort by an
-   _effective date of union_:
-   - Procreative Couple → DoB of the eldest child (current behavior, no
-     change).
-   - Childless Couple with `DateOfUnion = Some d` → `d`.
-   - Childless Couple with `DateOfUnion = None` → fall back to comparing by
-     `CoupleId`.
+   _effective date of union_, which is defined per Couple as:
+   - Procreative Couple → DoB of the eldest child if known; otherwise
+     undefined (`None`).
+   - Childless Couple → its `DateOfUnion`, which may itself be `Some` or
+     `None`.
+
+   When _both_ Couples being compared have an effective date, sort by
+   that date (with `CoupleId` as a tie-break on equal dates). When _either
+   or both_ Couples lack an effective date, fall back immediately to
+   comparing by `CoupleId`. The "missing" case is intentionally handled as
+   "no defined position relative to dated Couples" rather than as
+   "always sorts before/after dated Couples" — incomplete data should not
+   pretend to imply an ordering it doesn't actually carry.
 
    Procreative and childless Couples are interleaved using this single
    comparator rather than being grouped into separate "with children" and

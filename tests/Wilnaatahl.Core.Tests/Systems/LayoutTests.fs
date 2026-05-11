@@ -19,7 +19,7 @@ open Wilnaatahl.Tests.EcsTestSupport
 open Wilnaatahl.Tests.TestData
 
 let private spawnTestScene (world: IWorld) =
-    let graph = createFamilyGraph testPeopleAndParents
+    let graph = createFamilyGraph testPeopleAndParents testCouples
     let wilpId = world |> People.spawnWilpBox testWilp.Value.Name
 
     for person, _ in testPeopleAndParents do

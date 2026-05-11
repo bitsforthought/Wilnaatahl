@@ -9,4 +9,5 @@ type IGraphViewFactory =
 
 type GraphViewFactory() =
     interface IGraphViewFactory with
-        member _.LoadGraph() = createFamilyGraph peopleAndParents
+        member _.LoadGraph() =
+            createFamilyGraph peopleAndParents couples
