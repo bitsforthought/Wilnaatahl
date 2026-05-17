@@ -70,6 +70,13 @@ The domain uses Gitxsan terms as identifiers. Pluralization in Gitxsan does not 
 
 These reflect the owner's priorities, learned from prior sessions.
 
+**Before touching F# source files, re-read the [Doc comment style](#doc-comment-style) subsection.** It captures the rules most often missed by past agent sessions.
+
+### Project conventions
+
+- **PascalCase file names.** F# source files and scripts should use PascalCase (e.g., `CheckCoverage.fsx`, `Model.fs`), not kebab-case or camelCase.
+- **Infrastructure scripts in F# via `fsi`.** Always implement build/CI/codegen-patching scripts as `.fsx` files invoked through `dotnet fsi`, not as `.mjs`/`.sh`/`.ps1`. F# is the project's lingua franca for logic (see `scripts/CheckCoverage.fsx`, `scripts/PatchFableModules.fsx`), and `fsi` ships with the .NET SDK we already require, so there's no extra runtime to manage. The same Code Style rules (DU error types, separated pure/impure code, top-level I/O) apply.
+
 ### Testing Philosophy
 
 - **Koota is the gold standard.** The mock must match Koota's behavior exactly, even when that behavior appears buggy or inconsistent. Document known Koota bugs with issue links, but replicate them faithfully.
@@ -91,7 +98,7 @@ These reflect the owner's priorities, learned from prior sessions.
 
 - **Separate pure and impure code.** Keep I/O (file reads, console output, `exit`) at the top level or in a thin shell. Functions called by the top level should be pure — no side effects, no `exit`, no file I/O. Communicate errors via discriminated union return types (e.g., `Result<'T, Error>`) rather than exceptions or early exits.
 - **Use F# idioms, not workarounds.** Prefer bare `_` discards over `_prefixed` names where the language allows. Use tuple-style `TryRemove` returns instead of `&` out-params. Don't over-qualify record constructors when the type can be inferred.
-- **Layering: helpers go in their consumer module, not the dependency.** If a function exists solely to assist one specific caller (e.g. a comparator the layout uses to sort), it belongs in the caller's module even though it operates on the dependency's types. The dependency module should expose primitives (lookups, queries) that any consumer can build on. Doc comments on a function in the dependency must not mention specific callers, the layers above, or how the result will be consumed downstream.
+- **Layering: helpers go in their consumer module, not the dependency.** If a function exists solely to assist one specific caller (e.g. a comparator the layout uses to sort), it belongs in the caller's module even though it operates on the dependency's types. The dependency module should expose primitives (lookups, queries) that any consumer can build on. (See **Doc comment style** for the related rule about how this affects the dependency's doc comments.)
 - **Smart constructors for types with invariants.** When direct record construction could produce an invalid value (canonical field ordering, mutually-exclusive cases, validation rules), declare the record `private` and force construction through a `Module.create` smart constructor. Expose member properties on the record so dot-notation reads still work at call sites.
 - **Don't materialize sequences unnecessarily.** `Seq.toArray` / `List.ofSeq` are appropriate when callers need random access or when a sorted sequence will be enumerated more than once (the second enumeration of `Seq.sortWith`'s result would re-sort). They are not a default "make this concrete" reflex — round-tripping `seq → array → seq` allocates for no gain. Materialize once at the point where multiple enumerations actually happen.
 - **Naming: spell things out.** `makeComparatorGraph` over `mkComparatorGraph`, `child` over `kid`, `wilpHead` over `mWilp`. Hungarian-style prefixes (`m`, `p`) and abbreviation prefixes (`mk`) save almost no characters while obscuring meaning; prefer names that describe the role directly.
@@ -102,12 +109,45 @@ These reflect the owner's priorities, learned from prior sessions.
 - **Avoid unnecessary type annotations.** F# infers types well in most cases. Only add annotations when needed for disambiguation or to fix inference failures.
 - **Use proper words for record field names.** Single-letter field names like `R/G/B` or `L/C/H` are noisy at call sites and ambiguous in doc strings. Spell them out (`Red/Green/Blue`, `Lightness/Chroma/Hue`).
 - **Encapsulate as tightly as possible.** Default new declarations to `internal` (assembly-scoped — the F# equivalent of C# `internal`) if they need to be usable from tests; promote to public only when something genuinely crosses an assembly boundary (e.g. consumed by Fable-generated TS or by a downstream project). The `Wilnaatahl.Core` project has `InternalsVisibleTo` entries for its test assemblies, so `internal` declarations remain test-visible. F# `private` is _module_-scoped, not assembly-scoped — use `internal` when you mean "visible to tests but not to other projects".
-- **Doc comments describe the contract, not the caller.** F# doc comments should say what the function/type _is_, not how downstream code (e.g. the TS rendering layer) consumes it. A unidirectional contract makes the callee robust to changes on the caller side.
 - **No magic numbers in production code either.** Algorithmic constants need names. For values used in only one function, declare a local `let` binding inside the function rather than a module-level constant.
 - **Use named top-level functions for hot-path callbacks.** ECS/query callbacks in TypeScript (e.g. `updateEach`) called per frame per entity should reference named functions, not inline lambdas, so the closure is allocated once.
 - **All `import`/`open` statements at the top of the file.** No inline imports (`import("...").T` in TS) and no `open` mid-module in F#. Group them at the top so the file's dependencies are visible at a glance.
-- **PascalCase file names.** F# source files and scripts should use PascalCase (e.g., `CheckCoverage.fsx`, `Model.fs`), not kebab-case or camelCase.
 - **Cross-assembly anonymous records.** Anonymous records created in one assembly are a different type from those in another. Use helper functions in the source assembly (e.g., `Line3.pos`) to create anonymous records that can be used in test assertions.
+
+### Doc comment style
+
+Doc comments (`///` on F# types and functions, JSDoc on TS exports) appear in IDE
+hover, language-server output, and generated docs. They should describe **what
+the value is in isolation**, not how any particular caller uses it. The bullets
+below are the ones past agent sessions most often slipped on; each has a
+worked good/bad pair.
+
+- **Describe the contract, not the consumer.** Say what the value/function _is_
+  on its own terms. Don't reference downstream callers, name the function that
+  will operate on the result later, or justify a field's shape by what some
+  other module needs. The callee must stay readable without knowing who calls
+  it.
+  - ✅ `/// Member1 and Member2 are JSON person ids in source order; no ordering invariant is imposed.`
+  - ❌ `/// Member1 and Member2 are JSON person ids; canonicalization to (min, max) happens later via Couple.create.`
+- **Don't justify field absences by pointing at a consumer.** State what the
+  type captures and what source-format fields it doesn't capture. The reason
+  for the omission can be implied by absence; it doesn't need a "because the
+  transform doesn't read X" tail.
+  - ✅ `/// Source fields with no representation here (dateOfBirth, birthWilp, deceased) are silently dropped at decode time.`
+  - ❌ `/// Raw display-only date strings and birthWilp are not captured because the transform never consumes them.`
+- **No version numbers in doc comments.** Package versions belong in the
+  manifest (`.fsproj`, `package.json`) and decay quickly in prose. If you find
+  yourself writing "Thoth.Json.Core 0.8.0 …" in a doc comment, drop the
+  version; the manifest is the source of truth.
+- **Don't restate the F# type signature.** A doc comment that says "Takes a
+  string and returns a Result of RawFile or ImportError" adds nothing the
+  signature doesn't. Use the doc comment to capture invariants, error shapes,
+  edge cases, or semantic nuances the signature can't carry.
+- **Direction matters.** It is fine for a comment in a _consumer_ module to
+  reference the dependency it uses (`Import.fs` mentioning `Couple.create` is
+  natural — `Couple` is what it's calling). It is **not** fine for a comment
+  in a _dependency_ module to reference the consumer (`JsonTypes.fs` mentioning
+  `Couple.create` reverses the dependency arrow in doc form).
 
 ### React + Three.js
 

@@ -39,10 +39,18 @@
     <Compile Include="Systems/Movement.fs" />
     <Compile Include="Systems/Runner.fs" />
     <Compile Include="EntityLifeCycle.fs" />
+    <Compile Include="Import/JsonParser.fs" />
+    <Compile Include="Import/Transform.fs" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Condition="'$(FABLE_COMPILER)'=='true'" Include="Fable.Core" Version="5.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Thoth.Json.Core" Version="0.9.0" />
+    <PackageReference Condition="'$(FABLE_COMPILER)'!='true'" Include="Thoth.Json.Newtonsoft" Version="0.3.3" />
+    <PackageReference Condition="'$(FABLE_COMPILER)'=='true'" Include="Thoth.Json.JavaScript" Version="0.4.1" />
   </ItemGroup>
 
 </Project>

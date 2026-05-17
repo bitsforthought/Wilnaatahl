@@ -3,9 +3,11 @@
 Adds the ability for users to load real genealogical data into Wilnaatahl,
 replacing reliance on the hardcoded `Initial.peopleAndParents` seed.
 
-This document is **format-agnostic**: it covers user flow, app entry behavior,
-state transitions, and the F#/TS seam. The on-disk file format (GEDCOM, JSON,
-custom, etc.) and parser are deliberately out of scope.
+This document covers user flow, app entry behavior, state transitions, and
+the F#/TS seam. The on-disk file format and parser are described separately in
+[`specs/json-parser.md`](./json-parser.md), which is already implemented; this
+plan consumes its `parseJsonFile` entry point and otherwise treats the parser
+as a black box.
 
 ## Problem
 
@@ -28,7 +30,8 @@ custom, etc.) and parser are deliberately out of scope.
 
 ## Non-goals (this iteration)
 
-- Choosing or implementing a file format / parser.
+- Defining the file format or implementing the parser — already done; see
+  `specs/json-parser.md`.
 - Editing data in-app and writing it back to disk.
 - Multi-user, sync, or cloud storage.
 - Authentication / privacy controls beyond "the file never leaves the browser".
@@ -39,10 +42,10 @@ custom, etc.) and parser are deliberately out of scope.
 - `src/react-components/App.tsx` — calls `LoadGraph()` once on mount and
   drives `spawnScene` / `layoutNodes` / `destroyScene`.
 - `src/Wilnaatahl.Core/ViewModel/ViewModel.fs` — `GraphViewFactory.LoadGraph`
-  returns `createFamilyGraph Initial.peopleAndParents`.
+  returns `createFamilyGraph Initial.peopleAndParents Initial.couples`.
 - `src/Wilnaatahl.Core/Model.fs` — `module Initial` holds the hardcoded seed;
   `createFamilyGraph` builds a `FamilyGraph` from a sequence of
-  `Person * CoParentRelationship option`.
+  `Person * CoupleId option` plus a separate sequence of `Couple`.
 - `src/react-components/Toolbar.tsx` — toolbar is ECS-driven (`Button` trait),
   so a new tool button drops in cleanly.
 
@@ -122,12 +125,13 @@ import flow as the landing CTA. No menu, no keyboard shortcut in this
 iteration (could be added later without disturbing the architecture).
 
 ```
- ┌──────────────┐     File      ┌──────────────────┐  string/bytes  ┌────────────────┐
- │ Import UI    │──────────────▶│ Import service   │───────────────▶│ Format parser  │
- │ (React)      │   File API    │ (TS, thin shell) │                │ (TBD; F# pref.)│
- └──────────────┘               └──────────────────┘                └───────┬────────┘
-                                                                            │ peopleAndParents
-                                                                            ▼
+ ┌──────────────┐     File      ┌──────────────────┐   json string   ┌─────────────────────┐
+ │ Import UI    │──────────────▶│ Import service   │────────────────▶│ parseJsonFile (F#)  │
+ │ (React)      │   File API    │ (TS, thin shell) │                 │ JsonParser+Import   │
+ └──────────────┘               └──────────────────┘                 └──────────┬──────────┘
+                                                                                │ (peopleAndCoupleIds,
+                                                                                │  couples, warnings)
+                                                                                ▼
                                                                    ┌─────────────────────┐
                                                                    │ createFamilyGraph   │
                                                                    │ (F#, Model.fs)      │
@@ -144,27 +148,37 @@ iteration (could be added later without disturbing the architecture).
 
 Key points:
 
-- The **format parser is a black box** behind a stable seam:
-  `parse: string | ArrayBuffer -> Result<seq<Person * CoParentRelationship option>, ImportError>`.
-  Defining this seam now lets us land the UI/flow without committing to a format.
-- The React layer owns only file selection and error display; all domain logic
-  remains in F#.
+- The parser already exists (`parseJsonFile` in `Wilnaatahl.Core.Import`,
+  signature
+  `string -> Result<(Person * CoupleId option) list * Couple list * ImportWarning list, ImportError>`).
+  This plan consumes it via Fable-generated interop; `ImportError` and
+  `ImportWarning` are owned by the parser module.
+- The React layer owns only file selection, displaying any returned warnings,
+  and error UI; all domain logic remains in F#.
 - Loading a new graph reuses the existing `destroyScene` → `spawnScene` →
   `layoutNodes` action sequence, so no new ECS wiring is needed for the swap
   itself.
+- Wilp identity comes from the JSON file's top-level `huwilp` array, so the
+  parser needs no filename or other side-channel input to determine which
+  Wilp a person belongs to.
 
 ## F#/TS seam changes
 
 - `IGraphViewFactory` / `GraphViewFactory` evolve from a fixed `LoadGraph()`
   to support both seed and supplied data:
-  - `LoadSampleGraph(): FamilyGraph` — wraps current behavior.
-  - `LoadGraphFromPeopleAndParents(input): FamilyGraph` — pure constructor
-    over a parsed input shape (whatever the parser yields).
-- A new F# `Import` module owns the `ImportError` discriminated union and the
-  parser-result → `FamilyGraph` adapter (no I/O, fully testable in
-  `Wilnaatahl.Core.Tests`).
-- TS `importService.ts` (thin shell) owns `File` reading and calls into the
-  generated F# functions. Errors are surfaced as React state for the UI.
+  - `LoadSampleGraph(): FamilyGraph` — wraps current behavior
+    (`createFamilyGraph Initial.peopleAndParents Initial.couples`).
+  - `LoadGraphFromPeopleAndCoupleIds(peopleAndCoupleIds, couples): FamilyGraph`
+    — pure constructor over the parser's output shape
+    (`(Person * CoupleId option) seq` and `Couple seq`).
+- The `Wilnaatahl.Core.Import` module already exists (see
+  `specs/json-parser.md`) and exposes `parseJsonFile`, `ImportError`, and
+  `ImportWarning`. No changes to the parser are needed for this feature.
+- TS `importService.ts` (thin shell) owns `File` reading
+  (`file.text()`), calls the Fable-generated `parseJsonFile`, and on `Ok`
+  hands the parsed `peopleAndCoupleIds` and `couples` to
+  `LoadGraphFromPeopleAndCoupleIds`. Warnings and errors are surfaced as
+  React state for the UI.
 
 ## State machine (app-level)
 
@@ -230,11 +244,13 @@ Caching the file's contents to restore the graph automatically on reload is
 
 ## Testing strategy
 
-- F# unit tests in `Wilnaatahl.Core.Tests` for the import adapter:
-  empty input, duplicate IDs, dangling parent refs, etc. — all using stable
-  `TestData`, not `Initial`.
-- Component-level test of the import flow can wait until a parser exists; the
-  React seam is thin enough that manual verification is acceptable for v1.
+- Parser-level F# tests already exist in `tests/Wilnaatahl.Core.Tests/Import/`
+  (decoder, transform, integration) per `specs/json-parser.md`. No new parser
+  tests are needed here.
+- Add a small F# test for the new `LoadGraphFromPeopleAndCoupleIds` factory
+  method to confirm it produces a valid `FamilyGraph` from parser output.
+- The React seam is thin enough that manual verification (load sample, load a
+  real file, load a malformed file) is acceptable for v1.
 - Existing ECS / view-model tests are unaffected; the scene-swap path already
   has coverage via `destroyScene` / `spawnScene`.
 
@@ -250,21 +266,26 @@ Caching the file's contents to restore the graph automatically on reload is
 
 ## Implementation outline (todos)
 
-1. Spec & seam: define `ImportError` DU and `parse` signature in F# (no real
-   parser body — return `Error NotImplemented` for now).
-2. F# adapter: `Import.toFamilyGraph` from parsed input, with unit tests.
-3. F# factory: split `GraphViewFactory.LoadGraph` into `LoadSampleGraph` and
-   `LoadGraphFromInput`; regenerate TS via Fable.
-4. TS import service: `importFile(file): Promise<Result>` shell that reads the
-   `File` and invokes the F# parse + adapter.
-5. React landing component (gated by app-level state); wire chosen entry-flow
+Parser, `ImportError`, `ImportWarning`, and `parseJsonFile` are **already
+implemented** per `specs/json-parser.md` — no work needed there.
+
+1. F# factory: split `GraphViewFactory.LoadGraph` into `LoadSampleGraph` and
+   `LoadGraphFromPeopleAndCoupleIds`; add a small test for the latter;
+   regenerate TS via Fable.
+2. TS import service: `importFile(file): Promise<Result>` shell that reads the
+   `File` via `file.text()`, invokes the generated `parseJsonFile`, then calls
+   `LoadGraphFromPeopleAndCoupleIds`.
+3. React landing component (gated by app-level state); wire chosen entry-flow
    option.
-6. React drop-zone wrapper around landing + global drag overlay during viz.
-7. Toolbar "Open file…" button (new ECS `Button` entity) for re-import while
+4. React drop-zone wrapper around landing + global drag overlay during viz.
+5. Toolbar "Open file…" button (new ECS `Button` entity) for re-import while
    visualizing.
-8. App-level state machine (`landing | importing | visualizing` + last error)
+6. App-level state machine (`landing | importing | visualizing` + last error)
    and integration with existing `spawnScene` / `destroyScene` actions.
-9. `localStorage` `lastChoice` persistence and reload behavior.
-10. Error UI: inline on landing, toast in viz.
-11. Accessibility pass (focus, labels, keyboard, aria).
-12. Update README with the new entry flow and a note that file format is TBD.
+7. `localStorage` `lastChoice` persistence and reload behavior.
+8. Error UI: inline on landing, toast in viz. Surface parser `ImportWarning`s
+   non-blockingly (e.g. a dismissible summary toast: "Imported with N
+   warnings — view details").
+9. Accessibility pass (focus, labels, keyboard, aria).
+10. Update README with the new entry flow and a pointer to
+    `specs/json-parser.md` for the file format.

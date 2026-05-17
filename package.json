@@ -7,7 +7,7 @@
     "init": "npm install && dotnet restore && dotnet tool restore",
     "fantomas": "dotnet fantomas .",
     "prettier": "prettier --write .",
-    "fable": "npm run fantomas && dotnet fable --lang typescript --outDir ../generated --cwd ./src/Wilnaatahl.Core",
+    "fable": "npm run fantomas && dotnet fable --lang typescript --outDir ../generated --cwd ./src/Wilnaatahl.Core && dotnet fsi scripts/PatchFableModules.fsx",
     "build": "npm run fable && npm run prettier && tsc && vite build",
     "dev": "npm run fable && npm run prettier && vite",
     "preview": "npm run fable && npm run prettier && vite preview",
