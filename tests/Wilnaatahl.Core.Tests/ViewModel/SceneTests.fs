@@ -41,7 +41,7 @@ let ``extractFamilies yields RenderedFamily with empty Children for a childless 
     let procreativeHead = {
         Person.Empty with
             Id = PersonId 110
-            Wilp = childlessWilp
+            Kinship = childlessWilp
             Shape = Sphere
     }
 
@@ -50,7 +50,7 @@ let ``extractFamilies yields RenderedFamily with empty Children for a childless 
     let onlyChild = {
         Person.Empty with
             Id = PersonId 112
-            Wilp = childlessWilp
+            Kinship = childlessWilp
             Shape = Sphere
     }
 
@@ -173,7 +173,7 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
             Id = PersonId 100
             Label = Some "Mother"
             Shape = Sphere
-            Wilp = Some { Name = WilpName "T"; Pdeek = Giskaast }
+            Kinship = Wilp { Name = WilpName "T"; Pdeek = Giskaast }
     }
 
     let father = {
@@ -188,7 +188,7 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
             Id = PersonId 102
             Label = Some "ChildA"
             Shape = Sphere
-            Wilp = Some { Name = WilpName "T"; Pdeek = Giskaast }
+            Kinship = Wilp { Name = WilpName "T"; Pdeek = Giskaast }
             DateOfBirth = Some(System.DateOnly(2000, 6, 1))
             BirthOrder = 0
     }
@@ -198,7 +198,7 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
             Id = PersonId 103
             Label = Some "ChildB"
             Shape = Sphere
-            Wilp = Some { Name = WilpName "T"; Pdeek = Giskaast }
+            Kinship = Wilp { Name = WilpName "T"; Pdeek = Giskaast }
             DateOfBirth = Some(System.DateOnly(2005, 1, 1))
     }
 
@@ -207,7 +207,7 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
             Id = PersonId 104
             Label = Some "ChildC"
             Shape = Sphere
-            Wilp = Some { Name = WilpName "T"; Pdeek = Giskaast }
+            Kinship = Wilp { Name = WilpName "T"; Pdeek = Giskaast }
             DateOfBirth = Some(System.DateOnly(2000, 6, 1))
             BirthOrder = 1
     }
@@ -407,9 +407,15 @@ let ``layoutGraph interleaves childless and procreative Couples by effective dat
     //   - Procreative Couple whose eldest child was born 1995
     //   - Childless Couple with DateOfUnion 2000 (latest)
     let wilpName = WilpName "S"
-    let wilp = Some { Name = wilpName; Pdeek = Giskaast }
+    let kinship = Wilp { Name = wilpName; Pdeek = Giskaast }
 
-    let wilpHead = { Person.Empty with Id = PersonId 300; Wilp = wilp; Shape = Sphere }
+    let wilpHead = {
+        Person.Empty with
+            Id = PersonId 300
+            Kinship = kinship
+            Shape = Sphere
+    }
+
     let earlyPartner = { Person.Empty with Id = PersonId 301; Shape = Cube }
     let midPartner = { Person.Empty with Id = PersonId 302; Shape = Cube }
     let latePartner = { Person.Empty with Id = PersonId 303; Shape = Cube }
@@ -417,7 +423,7 @@ let ``layoutGraph interleaves childless and procreative Couples by effective dat
     let child = {
         Person.Empty with
             Id = PersonId 304
-            Wilp = wilp
+            Kinship = kinship
             Shape = Sphere
             DateOfBirth = Some(DateOnly(1995, 6, 15))
     }

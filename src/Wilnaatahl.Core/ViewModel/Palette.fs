@@ -46,21 +46,36 @@ module Palette =
     /// Maximum magnitude of the lightness offset applied to a Pdeek's base colour
     /// when deriving a per-Wilp shade. Small enough that all huwilp in a Pdeek still
     /// cluster as that Pdeek's family of colours; large enough for individual huwilp
-    /// to be distinguishable from each other.
-    let private wilpLightnessWobble = 0.08
+    /// to be distinguishable from each other and from the Pdeek base reserved for
+    /// `unknownWilpColourForPdeek`.
+    let private wilpLightnessWobble = 0.12
 
-    /// Number of evenly-spaced lightness positions in [-wobble, +wobble] that hashes
+    /// Minimum magnitude of the per-Wilp lightness offset. The mapping skips a
+    /// band around zero so per-Wilp shades never collapse onto the Pdeek base
+    /// colour (which is reserved for `unknownWilpColourForPdeek`); any Person
+    /// whose specific Wilp is known stays visually distinct from any Pdeek-only
+    /// Person of the same Pdeek.
+    let private wilpMinLightnessOffset = 0.02
+
+    /// Number of evenly-spaced lightness positions in the wobble range that hashes
     /// can land on. The mod operation keeps the spread bounded and reproducible.
     let private hashBuckets = 1000u
 
-    /// Maps a djb2 hash to a lightness offset in the symmetric range
-    /// `[-wilpLightnessWobble, +wilpLightnessWobble]`.
+    /// Maps a djb2 hash to a per-Wilp lightness offset in
+    /// `[-wilpLightnessWobble, -wilpMinLightnessOffset] ∪ [+wilpMinLightnessOffset, +wilpLightnessWobble]`.
+    /// The middle band around zero is excluded so per-Wilp shades stay clear of
+    /// the Pdeek base colour reserved for `unknownWilpColourForPdeek`.
     let internal lightnessOffsetFromHash hash =
         let lastBucket = hashBuckets - 1u
         let bucketFraction = float (hash % hashBuckets) / float lastBucket
-        let rangeMin = -wilpLightnessWobble
-        let rangeMax = wilpLightnessWobble
-        rangeMin + bucketFraction * (rangeMax - rangeMin)
+        // Each half [0, 0.5) and [0.5, 1] maps linearly onto one side of the
+        // skipped band, of width (wobble - minOffset).
+        let halfRange = wilpLightnessWobble - wilpMinLightnessOffset
+
+        if bucketFraction < 0.5 then
+            -wilpLightnessWobble + bucketFraction * 2.0 * halfRange
+        else
+            wilpMinLightnessOffset + (bucketFraction - 0.5) * 2.0 * halfRange
 
     // ---- Oklch -> sRGB conversion -----------------------------------------
 
@@ -153,6 +168,16 @@ module Palette =
     let internal unaffiliatedColour: SrgbColour =
         oklchToSrgb { Lightness = 0.90; Chroma = 0.04; Hue = 85.0 }
 
+    /// Colour for tree nodes whose Person is known to be in a given Pdeek (Clan)
+    /// but whose specific Wilp is unrecorded. The Pdeek's base Oklch is converted
+    /// directly to sRGB with no per-Wilp lightness offset, so the result sits at
+    /// the centre of the shade family that the Pdeek's known huwilp also occupy.
+    /// Colour for tree nodes whose Person is known to be in a given Pdeek (Clan)
+    /// but whose specific Wilp is unrecorded. The Pdeek's base Oklch is converted
+    /// directly to sRGB with no per-Wilp lightness offset, so the result sits at
+    /// the centre of the shade family that the Pdeek's known huwilp also occupy.
+    let internal unknownWilpColourForPdeek (pdeek: Pdeek) : SrgbColour = oklchToSrgb (baseColourForPdeek pdeek)
+
     /// The displayed colour for a Wilp: the Pdeek's base Oklch with a per-name
     /// lightness offset, then converted to an sRGB byte triple. All huwilp in a
     /// Pdeek visibly cluster as one family of shades; within the family, each Wilp
@@ -179,8 +204,12 @@ module Palette =
     let private noEmissiveColour: SrgbColour = { Red = 0uy; Green = 0uy; Blue = 0uy }
     let private noEmissiveIntensity = 0.0
 
-    /// The final paint for a single tree node. Selection wins over Wilp affiliation:
-    /// a selected node always paints copper with an emissive glow regardless of its Wilp.
+    /// The final paint for a single tree node. Selection wins over Kinship:
+    /// a selected node always paints copper with an emissive glow regardless
+    /// of its Kinship. Unselected nodes pick the colour matching their
+    /// Kinship: per-Wilp shade for a fully-known Wilp, the Pdeek base
+    /// colour for a Pdeek-only Person, and warm ivory for a Person with
+    /// no recorded affiliation.
     let nodePaint (person: Person) (isSelected: bool) : NodePaint =
         if isSelected then
             {
@@ -190,9 +219,10 @@ module Palette =
             }
         else
             let colour =
-                match person.Wilp with
-                | Some w -> colourForWilp w
-                | None -> unaffiliatedColour
+                match person.Kinship with
+                | Wilp w -> colourForWilp w
+                | UnknownWilp pdeek -> unknownWilpColourForPdeek pdeek
+                | NoneProvided -> unaffiliatedColour
 
             {
                 Colour = colour

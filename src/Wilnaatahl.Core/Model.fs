@@ -52,6 +52,24 @@ type Pdeek =
 /// A Wilp, identified by its Name and tagged with the Pdeek (Clan) it belongs to.
 type Wilp = { Name: WilpName; Pdeek: Pdeek }
 
+/// What we know about a Person's matrilineal House (Wilp) affiliation.
+///   - `Wilp w`         — the specific Wilp is known.
+///   - `UnknownWilp p`  — the Pdeek (Clan) is known but the specific Wilp is not.
+///   - `NoneProvided`   — no affiliation information has been recorded.
+type Kinship =
+    | Wilp of Wilp
+    | UnknownWilp of Pdeek
+    | NoneProvided
+
+    /// The Pdeek (Clan) of this Kinship, if known. `Wilp w` exposes the Pdeek
+    /// of the inner Wilp; `UnknownWilp p` exposes `p`; `NoneProvided` has no
+    /// Pdeek to expose.
+    member this.Pdeek: Pdeek option =
+        match this with
+        | Wilp w -> Some w.Pdeek
+        | UnknownWilp p -> Some p
+        | NoneProvided -> None
+
 /// Stand-in for Gender until we decide how best to handle it.
 #if FABLE_COMPILER
 [<StringEnum>]
@@ -64,7 +82,7 @@ type NodeShape =
 type Person = {
     Id: PersonId
     Label: string option // TODO: Commit to schema for names (colonial vs. traditional)
-    Wilp: Wilp option
+    Kinship: Kinship
     Shape: NodeShape
     BirthOrder: int
     DateOfBirth: DateOnly option
@@ -75,7 +93,7 @@ type Person = {
     static member Empty = {
         Id = PersonId 0
         Label = None
-        Wilp = None
+        Kinship = NoneProvided
         Shape = Sphere
         BirthOrder = 0
         DateOfBirth = None
@@ -196,7 +214,10 @@ module FamilyGraph =
 
         let huwilp =
             peopleList
-            |> List.choose (fun (p, _) -> p.Wilp |> Option.map (fun w -> w.Name))
+            |> List.choose (fun (p, _) ->
+                match p.Kinship with
+                | Wilp w -> Some w.Name
+                | _ -> None)
             |> Set.ofList
 
         // Helper to build WilpTree recursively. A Wilp member becomes a Family node if
@@ -241,8 +262,8 @@ module FamilyGraph =
                 let roots =
                     peopleList
                     |> List.choose (fun (p, maybeCoupleId) ->
-                        match p.Wilp, maybeCoupleId with
-                        | Some w', None when w'.Name = w -> Some p
+                        match p.Kinship, maybeCoupleId with
+                        | Wilp w', None when w'.Name = w -> Some p
                         | _ -> None)
 
                 let trees = roots |> List.map buildWilpTree |> Seq.ofList
@@ -322,9 +343,13 @@ module FamilyGraph =
 module Initial =
 
     // Wilp A is the primary (matriline) Wilp; B, C, and D are used only for in-marrying husbands.
-    // Some husbands have Wilp = None to represent unknown / unaffiliated affiliation. The matrilineal
-    // invariant — every internal mother is Sphere/Wilp A, every internal father is a Cube whose Wilp
-    // is non-A or None — holds throughout this dataset.
+    // The husbands' Kinship varies to exercise all three Kinship cases:
+    //   - `Wilp w` for husbands whose specific Wilp is recorded (most husbands).
+    //   - `UnknownWilp pdeek` for Henry Lee, whose Pdeek (Ganeda) is recorded but
+    //     whose specific Wilp is not.
+    //   - `NoneProvided` for husbands with no recorded affiliation.
+    // The matrilineal invariant — every internal mother is Sphere/Wilp A, every internal
+    // father is a Cube whose Kinship is not `Wilp A` — holds throughout this dataset.
     //
     // Each Wilp belongs to exactly one Pdeek (Clan). We assign all four Pdeek so the visualization
     // exercises the full color palette. Wilp A is Giskaast (red) so the bulk of the visible nodes
@@ -336,16 +361,16 @@ module Initial =
     //   - Margaret + Roy: an extra childless Couple under Margaret (who already has three
     //     procreative Couples) exercises the layout sort that interleaves childless and
     //     procreative Couples by effective date of union.
-    let private wilpA = Some { Name = WilpName "A"; Pdeek = Giskaast }
-    let private wilpB = Some { Name = WilpName "B"; Pdeek = Ganeda }
-    let private wilpC = Some { Name = WilpName "C"; Pdeek = LaxSkiik }
-    let private wilpD = Some { Name = WilpName "D"; Pdeek = LaxGibuu }
+    let private wilpA = Wilp { Name = WilpName "A"; Pdeek = Giskaast }
+    let private wilpB = Wilp { Name = WilpName "B"; Pdeek = Ganeda }
+    let private wilpC = Wilp { Name = WilpName "C"; Pdeek = LaxSkiik }
+    let private wilpD = Wilp { Name = WilpName "D"; Pdeek = LaxGibuu }
 
-    let private person id label shape wilp = {
+    let private person id label shape kinship = {
         Person.Empty with
             Id = PersonId id
             Label = Some label
-            Wilp = wilp
+            Kinship = kinship
             Shape = shape
     }
 
@@ -374,11 +399,11 @@ module Initial =
     let private susan = person 7 "Susan Ashford" Sphere wilpA |> withBirthOrder 5
 
     // Gen 1 husbands.
-    let private henry = person 8 "Henry Lee" Cube None // unaffiliated; Anne's husband
+    let private henry = person 8 "Henry Lee" Cube (UnknownWilp Ganeda) // Pdeek-known, specific Wilp unknown; Anne's husband
     let private richard = person 9 "Richard Cromwell" Cube wilpD // Elizabeth spouse #1
     let private charles = person 10 "Charles Davenport" Cube wilpB // Elizabeth spouse #2
     let private frederick = person 11 "Frederick Easton" Cube wilpC // Margaret spouse #1
-    let private albert = person 12 "Albert Fitzgerald" Cube None // unaffiliated; Margaret spouse #2
+    let private albert = person 12 "Albert Fitzgerald" Cube NoneProvided // unaffiliated; Margaret spouse #2
     let private samuel = person 13 "Samuel Greenwood" Cube wilpD // Margaret spouse #3
 
     // Gen 2 children.
@@ -404,7 +429,7 @@ module Initial =
 
     // Gen 2 husbands.
     let private daniel = person 22 "Daniel Featherstonhaugh" Cube wilpC // Catherine's husband
-    let private peter = person 23 "Peter Ng" Cube None // unaffiliated; Jane's husband
+    let private peter = person 23 "Peter Ng" Cube NoneProvided // unaffiliated; Jane's husband
 
     // Gen 3 children.
     let private michael =
@@ -426,8 +451,8 @@ module Initial =
     let private benjamin = person 31 "Benjamin Yu" Cube wilpA |> withBirthOrder 1
 
     // Husbands for the childless Couples below. Both unaffiliated.
-    let private frank = person 32 "Frank Hollister" Cube None // Susan's husband (childless)
-    let private roy = person 33 "Roy Pemberton" Cube None // Margaret's fourth partner (childless)
+    let private frank = person 32 "Frank Hollister" Cube NoneProvided // Susan's husband (childless)
+    let private roy = person 33 "Roy Pemberton" Cube NoneProvided // Margaret's fourth partner (childless)
 
     // Couples for the seed. CoupleIds are assigned sequentially so the seed remains
     // hand-readable; their numeric values do not carry meaning beyond uniqueness.

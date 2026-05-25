@@ -17,7 +17,7 @@ open Wilnaatahl.Tests.TestData
 
 let private spawnTestScene (world: IWorld) =
     let graph = createFamilyGraph testPeopleAndParents testCouples
-    let wilpId = world |> People.spawnWilpBox testWilp.Value.Name
+    let wilpId = world |> People.spawnWilpBox testWilpName
 
     for person, _ in testPeopleAndParents do
         world |> People.spawnTreeNode person wilpId
@@ -69,7 +69,7 @@ type Tests() =
         let mWilp = {
             Person.Empty with
                 Id = PersonId 700
-                Wilp = Some { Name = testWilpName; Pdeek = Giskaast }
+                Kinship = Wilp { Name = testWilpName; Pdeek = Giskaast }
                 Shape = Sphere
         }
 

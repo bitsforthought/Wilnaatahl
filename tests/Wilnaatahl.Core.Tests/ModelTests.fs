@@ -72,12 +72,28 @@ let ``WilpName returns itself as a string`` () =
     wilp.AsString =! "Test"
 
 [<Fact>]
+let ``Kinship.Pdeek exposes the Pdeek of a known Wilp`` () =
+    let kinship = Wilp { Name = WilpName "K"; Pdeek = Giskaast }
+    kinship.Pdeek =! Some Giskaast
+
+[<Fact>]
+let ``Kinship.Pdeek exposes the Pdeek of an UnknownWilp`` () =
+    let kinship = UnknownWilp Ganeda
+    kinship.Pdeek =! Some Ganeda
+
+[<Fact>]
+let ``Kinship.Pdeek is None for NoneProvided`` () = NoneProvided.Pdeek =! None
+
+[<Fact>]
 let ``Initial peopleAndParents assigns each Wilp to a distinct Pdeek`` () =
     // Wilp A is the primary matriline; per project conventions it is Giskaast (red) so
     // most visible nodes in the rendered tree retain the historical red appearance.
     let huwilpByName =
         Initial.peopleAndParents
-        |> Seq.choose (fun (p, _) -> p.Wilp)
+        |> Seq.choose (fun (p, _) ->
+            match p.Kinship with
+            | Wilp w -> Some w
+            | _ -> None)
         |> Seq.map (fun w -> w.Name, w)
         |> Map.ofSeq
 
@@ -90,6 +106,33 @@ let ``Initial peopleAndParents assigns each Wilp to a distinct Pdeek`` () =
         huwilpByName |> Map.values |> Seq.map (fun w -> w.Pdeek) |> Set.ofSeq
 
     representedPdeek =! Set.ofList [ Giskaast; Ganeda; LaxSkiik; LaxGibuu ]
+
+[<Fact>]
+let ``createFamilyGraph excludes UnknownWilp people from huwilp`` () =
+    // A person whose specific Wilp is unknown contributes no WilpName to the
+    // huwilp set, even if their Pdeek matches that of another person with a
+    // fully known Wilp. The fully known Wilp is the only entry that should
+    // appear in the set.
+    let graph = createFamilyGraph [ wilpKMember, None; ganedaPdeekOnlyPerson, None ] []
+
+    huwilp graph =! Set.singleton (WilpName "K")
+
+[<Fact>]
+let ``UnknownWilp person with no Couple does not appear in any forest`` () =
+    // Parity with the long-standing NoneProvided behaviour: a Pdeek-only Person
+    // who is not married to a Wilp head is silently absent from every rendered
+    // forest. The shared Pdeek between `wilpKMember` and `ganedaPdeekOnlyPerson`
+    // means a buggy implementation that grouped by Pdeek would mis-include
+    // ganedaPdeekOnlyPerson in wilpKMember's forest.
+    let graph = createFamilyGraph [ wilpKMember, None; ganedaPdeekOnlyPerson, None ] []
+
+    let visited =
+        huwilp graph
+        |> Seq.collect (fun wilpName ->
+            visitWilpForest wilpName id id id (fun parent _ -> parent) (fun _ _ -> 0) (fun _ _ -> 0) graph)
+        |> Set.ofSeq
+
+    visited =! Set.singleton wilpKMember.Id
 
 [<Fact>]
 let ``visitWilpForest computes correct tree statistics`` () =
@@ -279,7 +322,7 @@ let ``buildWilpTree exposes childless Couples as empty PartnersAndDescendants en
     let mWilp = {
         Person.Empty with
             Id = PersonId 100
-            Wilp = Some { Name = WilpName "M"; Pdeek = Giskaast }
+            Kinship = Wilp { Name = WilpName "M"; Pdeek = Giskaast }
             Shape = Sphere
     }
 

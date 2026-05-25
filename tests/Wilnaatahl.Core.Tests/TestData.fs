@@ -11,20 +11,24 @@ type TestFamilyMember(id, person, wilp) =
         member _.Person = person
         member _.RenderedInWilp = wilp
 
-let private person id name shape wilp = {
+let private person id name shape kinship = {
     Person.Empty with
         Id = PersonId id
         Label = Some name
-        Wilp = wilp
+        Kinship = kinship
         Shape = shape
 }
 
-let testWilp = Some { Name = WilpName "H"; Pdeek = Giskaast }
+let testWilp = Wilp { Name = WilpName "H"; Pdeek = Giskaast }
+
+/// The WilpName inside `testWilp`, exposed separately so consumers that need
+/// the bare name don't have to pattern-match the Kinship to reach it.
+let testWilpName = WilpName "H"
 
 // Test data is public because they are shared by other tests.
 // Include some birthdates to exercise sorting.
 let p0 = person 0 "Mother" Sphere testWilp
-let p1 = person 1 "Father" Cube None
+let p1 = person 1 "Father" Cube NoneProvided
 
 let p2 = {
     person 2 "Child1" Sphere testWilp with
@@ -33,7 +37,7 @@ let p2 = {
 }
 
 let p3 = {
-    person 3 "Child2" Cube (Some { Name = WilpName "L"; Pdeek = Ganeda }) with
+    person 3 "Child2" Cube (Wilp { Name = WilpName "L"; Pdeek = Ganeda }) with
         DateOfBirth = Some(DateOnly(1900, 1, 1))
         BirthOrder = 1
 }
@@ -58,8 +62,8 @@ let testPeopleAndParents = [
 
 // Now we define an extended test data set to cover all corner cases.
 let p5 = person 5 "Child4" Cube testWilp
-let p6 = person 6 "DaughterInLaw1" Sphere None
-let p7 = person 7 "DaughterInLaw2" Sphere None
+let p6 = person 6 "DaughterInLaw1" Sphere NoneProvided
+let p7 = person 7 "DaughterInLaw2" Sphere NoneProvided
 
 let p8 = {
     person 8 "GrandChild1" Sphere testWilp with
@@ -98,9 +102,9 @@ let extendedFamily =
 /// Two unaffiliated Persons in a Wilp ("Q") whose Couple has no recorded children.
 /// Useful for any test that needs a representative childless-Couple scenario without
 /// re-deriving people, a Wilp, or a Couple from scratch.
-let childlessWilp = Some { Name = WilpName "Q"; Pdeek = LaxSkiik }
+let childlessWilp = Wilp { Name = WilpName "Q"; Pdeek = LaxSkiik }
 let childlessHead = person 100 "Quinn" Sphere childlessWilp
-let childlessPartner = person 101 "Robin" Cube None
+let childlessPartner = person 101 "Robin" Cube NoneProvided
 
 let childlessCouple =
     Couple.create (CoupleId 100) childlessHead.Id childlessPartner.Id None
@@ -112,6 +116,21 @@ let anon1 = { Person.Empty with Id = PersonId 200 }
 let anon2 = { Person.Empty with Id = PersonId 201 }
 let anon3 = { Person.Empty with Id = PersonId 202 }
 let anon4 = { Person.Empty with Id = PersonId 203 }
+
+// Two unrelated Persons (no Couples, no parents) drawn from the same Pdeek (Ganeda).
+// One has a fully-known Wilp ("K"); the other has only the Pdeek recorded. The
+// shared Pdeek lets tests exercise the boundary between the `Wilp` and
+// `UnknownWilp` Kinship cases without conflating other variables.
+
+/// Person whose Kinship is a fully-known Wilp ("K", Ganeda).
+let wilpKMember = {
+    Person.Empty with
+        Id = PersonId 210
+        Kinship = Wilp { Name = WilpName "K"; Pdeek = Ganeda }
+}
+
+/// Person whose Kinship is Pdeek-only — Ganeda is known, specific Wilp is not.
+let ganedaPdeekOnlyPerson = { Person.Empty with Id = PersonId 211; Kinship = UnknownWilp Ganeda }
 
 let private treeNode id =
     let person =

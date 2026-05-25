@@ -9,7 +9,7 @@ let private srgb red green blue : Palette.SrgbColour = { Red = red; Green = gree
 
 let private wilp pdeek name = { Name = WilpName name; Pdeek = pdeek }
 
-let private personWith wilp = { Person.Empty with Id = PersonId 0; Wilp = wilp }
+let private personWith kinship = { Person.Empty with Id = PersonId 0; Kinship = kinship }
 
 let private copperBytes = srgb 0x3Euy 0xA3uy 0x8Cuy
 let private blackBytes = srgb 0x00uy 0x00uy 0x00uy
@@ -51,30 +51,54 @@ let ``djb2Hash wraps around 32-bit signed bounds for long inputs`` () =
 
 // ---- lightnessOffsetFromHash ----------------------------------------------
 //
-// Maps a djb2 hash to a symmetric lightness offset around zero. The shape of
-// the mapping is `((hash mod 1000) / 999) * 2 * wobble - wobble`, where wobble
-// is the per-Wilp lightness range (currently 0.08 OKLCH units). The endpoints
-// (0u and 999u modulo 1000) must hit -wobble and +wobble exactly.
+// Maps a djb2 hash to a per-Wilp lightness offset within the wobble range,
+// skipping a small band around zero so per-Wilp shades never collapse onto
+// the Pdeek base colour reserved for `unknownWilpColourForPdeek`. The
+// endpoints (hash 0 and hash hashBuckets-1) hit ±wobble exactly.
 
 [<Fact>]
 let ``lightnessOffsetFromHash maps hash 0 to negative wobble`` () =
-    Palette.lightnessOffsetFromHash 0u =! -0.08
+    Palette.lightnessOffsetFromHash 0u =! -0.12
 
 [<Fact>]
 let ``lightnessOffsetFromHash maps hash 999 to positive wobble`` () =
-    Palette.lightnessOffsetFromHash 999u =! 0.08
-
-[<Fact>]
-let ``lightnessOffsetFromHash maps a quarter-point hash to about -wobble/2`` () =
-    // hash 250 → (250/999) * 2 * 0.08 - 0.08 ≈ -0.04. A clearly-nonzero answer that the
-    // formula must produce; protects against trivial implementations like `_ -> 0.0`.
-    let actual = Palette.lightnessOffsetFromHash 250u
-    let expected = (250.0 / 999.0) * 2.0 * 0.08 - 0.08
-    abs (actual - expected) <! 1e-12
+    Palette.lightnessOffsetFromHash 999u =! 0.12
 
 [<Fact>]
 let ``lightnessOffsetFromHash uses hash mod 1000 (1000u behaves like 0u, mapping to negative wobble)`` () =
-    Palette.lightnessOffsetFromHash 1000u =! -0.08
+    Palette.lightnessOffsetFromHash 1000u =! -0.12
+
+[<Fact>]
+let ``lightnessOffsetFromHash always returns an offset of at least the minimum magnitude`` () =
+    // The middle band around zero is reserved for unknownWilpColourForPdeek so
+    // per-Wilp shades never collapse onto the Pdeek base. Asserted across the
+    // full hash bucket range to catch any off-by-one in the band-skip arithmetic.
+    let minMagnitude = 0.02
+
+    let violating =
+        [ 0u .. 999u ]
+        |> List.tryFind (fun h -> abs (Palette.lightnessOffsetFromHash h) < minMagnitude)
+
+    violating =! None
+
+[<Fact>]
+let ``lightnessOffsetFromHash maps the bucket just below the midpoint to just below -wilpMinLightnessOffset`` () =
+    // hash 499 → bucketFraction = 499/999, mapped to the negative-side boundary
+    // of the band-skip — just outside `-wilpMinLightnessOffset = -0.02`. Pins
+    // the boundary value of the lower half so an off-by-one in the band-skip
+    // arithmetic is caught here.
+    let actual = Palette.lightnessOffsetFromHash 499u
+    let expected = -0.02 - (1.0 / 999.0) * (0.12 - 0.02)
+    abs (actual - expected) <! 1e-12
+
+[<Fact>]
+let ``lightnessOffsetFromHash maps the midpoint bucket to just above wilpMinLightnessOffset`` () =
+    // hash 500 → bucketFraction = 500/999, mapped to the positive-side boundary
+    // of the band-skip — just outside `+wilpMinLightnessOffset = +0.02`. Mirror
+    // of the test above, pinning the boundary value of the upper half.
+    let actual = Palette.lightnessOffsetFromHash 500u
+    let expected = 0.02 + (1.0 / 999.0) * (0.12 - 0.02)
+    abs (actual - expected) <! 1e-12
 
 // ---- oklchToSrgb ----------------------------------------------------------
 //
@@ -164,6 +188,21 @@ let ``baseColourForPdeek returns a light Okabe-Ito sky blue for LaxGibuu`` () =
 let ``unaffiliatedColour is the expected warm ivory bytes`` () =
     Palette.unaffiliatedColour =! srgb 0xEAuy 0xDDuy 0xC1uy
 
+// ---- unknownWilpColourForPdeek -------------------------------------------
+//
+// For a Person whose Pdeek (Clan) is known but whose specific Wilp is not,
+// the displayed colour is the Pdeek's base Oklch converted directly to sRGB
+// with no per-Wilp lightness wobble. The result is the "centre" of the shade
+// family that the Pdeek's known huwilp occupy, so an UnknownWilp node sits
+// visually adjacent to its Pdeek's known huwilp.
+
+[<Fact>]
+let ``unknownWilpColourForPdeek produces the expected bytes for all four Pdeek`` () =
+    Palette.unknownWilpColourForPdeek Giskaast =! srgb 0xDFuy 0x59uy 0x1Duy
+    Palette.unknownWilpColourForPdeek Ganeda =! srgb 0x24uy 0xA1uy 0x6Fuy
+    Palette.unknownWilpColourForPdeek LaxSkiik =! srgb 0xF5uy 0xDDuy 0x21uy
+    Palette.unknownWilpColourForPdeek LaxGibuu =! srgb 0x50uy 0xB3uy 0xE8uy
+
 // ---- colourForWilp --------------------------------------------------------
 //
 // Composes the Pdeek base, the per-Wilp lightness offset (from a hash of the
@@ -172,10 +211,10 @@ let ``unaffiliatedColour is the expected warm ivory bytes`` () =
 
 [<Fact>]
 let ``colourForWilp produces the expected bytes for the four Initial huwilp`` () =
-    Palette.colourForWilp (wilp Giskaast "A") =! srgb 0xE6uy 0x60uy 0x27uy
-    Palette.colourForWilp (wilp Ganeda "B") =! srgb 0x2Euy 0xA8uy 0x75uy
-    Palette.colourForWilp (wilp LaxSkiik "C") =! srgb 0xFDuy 0xE4uy 0x30uy
-    Palette.colourForWilp (wilp LaxGibuu "D") =! srgb 0x57uy 0xBAuy 0xF0uy
+    Palette.colourForWilp (wilp Giskaast "A") =! srgb 0xEFuy 0x68uy 0x31uy
+    Palette.colourForWilp (wilp Ganeda "B") =! srgb 0x39uy 0xB0uy 0x7Duy
+    Palette.colourForWilp (wilp LaxSkiik "C") =! srgb 0xFFuy 0xEDuy 0x3Euy
+    Palette.colourForWilp (wilp LaxGibuu "D") =! srgb 0x60uy 0xC3uy 0xF8uy
 
 [<Fact>]
 let ``colourForWilp is deterministic (same Wilp -> same bytes)`` () =
@@ -189,7 +228,7 @@ let ``colourForWilp produces different shades for different names within the sam
     a <>! other
     // Pin the specific bytes for the second name so this isn't just a "hash collisions
     // are unlikely" probabilistic test.
-    other =! srgb 0xD4uy 0x4Fuy 0x0Buy
+    other =! srgb 0xCAuy 0x46uy 0x00uy
 
 // ---- nodePaint ------------------------------------------------------------
 //
@@ -200,7 +239,7 @@ let ``colourForWilp produces different shades for different names within the sam
 
 [<Fact>]
 let ``nodePaint of a selected affiliated person paints copper with strong emissive glow`` () =
-    let person = personWith (Some(wilp Giskaast "A"))
+    let person = personWith (Wilp(wilp Giskaast "A"))
 
     Palette.nodePaint person true
     =! {
@@ -211,9 +250,9 @@ let ``nodePaint of a selected affiliated person paints copper with strong emissi
 
 [<Fact>]
 let ``nodePaint of a selected unaffiliated person also paints copper`` () =
-    // Selection wins over Wilp affiliation: no matter what the Person's Wilp is,
+    // Selection wins over Wilp affiliation: no matter what the Person's Kinship is,
     // a selected node gets the same copper highlight.
-    let person = personWith None
+    let person = personWith NoneProvided
 
     Palette.nodePaint person true
     =! {
@@ -225,7 +264,7 @@ let ``nodePaint of a selected unaffiliated person also paints copper`` () =
 [<Fact>]
 let ``nodePaint of an unselected affiliated person uses colourForWilp with no emissive`` () =
     let w = wilp Giskaast "A"
-    let person = personWith (Some w)
+    let person = personWith (Wilp w)
 
     Palette.nodePaint person false
     =! {
@@ -236,11 +275,34 @@ let ``nodePaint of an unselected affiliated person uses colourForWilp with no em
 
 [<Fact>]
 let ``nodePaint of an unselected unaffiliated person uses ivory with no emissive`` () =
-    let person = personWith None
+    let person = personWith NoneProvided
 
     Palette.nodePaint person false
     =! {
            Colour = Palette.unaffiliatedColour
            Emissive = blackBytes
            EmissiveIntensity = 0.0
+       }
+
+[<Fact>]
+let ``nodePaint of an unselected UnknownWilp person uses the Pdeek base colour with no emissive`` () =
+    let person = personWith (UnknownWilp Ganeda)
+
+    Palette.nodePaint person false
+    =! {
+           Colour = Palette.unknownWilpColourForPdeek Ganeda
+           Emissive = blackBytes
+           EmissiveIntensity = 0.0
+       }
+
+[<Fact>]
+let ``nodePaint of a selected UnknownWilp person also paints copper`` () =
+    // Selection wins over Kinship: even a Pdeek-only person paints copper when selected.
+    let person = personWith (UnknownWilp LaxSkiik)
+
+    Palette.nodePaint person true
+    =! {
+           Colour = copperBytes
+           Emissive = copperBytes
+           EmissiveIntensity = 0.8
        }
