@@ -2,11 +2,6 @@
   "version": 1,
   "isRoot": true,
   "tools": {
-    "fable": {
-      "version": "4.27.0",
-      "commands": ["fable"],
-      "rollForward": false
-    },
     "dotnet-reportgenerator-globaltool": {
       "version": "5.1.18",
       "commands": ["reportgenerator"],
@@ -15,6 +10,11 @@
     "fantomas": {
       "version": "7.0.3",
       "commands": ["fantomas"],
+      "rollForward": false
+    },
+    "fable": {
+      "version": "5.1.0",
+      "commands": ["fable"],
       "rollForward": false
     }
   }

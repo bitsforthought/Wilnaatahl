@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
@@ -42,7 +42,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Condition="'$(FABLE_COMPILER)'=='true'" Include="Fable.Core" Version="4.5.0" />
+    <PackageReference Condition="'$(FABLE_COMPILER)'=='true'" Include="Fable.Core" Version="5.0.0" />
   </ItemGroup>
 
 </Project>

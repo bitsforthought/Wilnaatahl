@@ -2,7 +2,7 @@ import React from "react";
 import { Html } from "@react-three/drei";
 import { Entity } from "koota";
 import { useActions, useTrait } from "koota/react";
-import { defaultArg } from "../generated/fable_modules/fable-library-ts.4.27.0/Option.js";
+import { defaultArg } from "../generated/fable_modules/fable-library-ts.5.1.0/Option.js";
 import { eventActions, Size, PersonRef, useMeshRef } from "../ecs";
 
 // Scales the HTML label so it tracks the apparent size of the node as the camera

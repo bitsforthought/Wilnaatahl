@@ -1,5 +1,5 @@
-import { int32 } from "../../generated/fable_modules/fable-library-ts.4.27.0/Int32.js";
-import { Option } from "../../generated/fable_modules/fable-library-ts.4.27.0/Option";
+import { int32 } from "../../generated/fable_modules/fable-library-ts.5.1.0/Int32.js";
+import { Option } from "../../generated/fable_modules/fable-library-ts.5.1.0/Option";
 import {
   ConfigurableTrait,
   createAdded,
@@ -374,21 +374,21 @@ export function fromKootaWorld(world: World): IWorld {
           case "with":
             return toKootaTrait(op.Item);
           case "not":
-            const notOperands = op.Item.map(toKootaTrait);
+            const notOperands = Array.from(op.Item, toKootaTrait);
             return Not(...notOperands);
           case "or":
-            const orOperands = op.Item.map(toKootaTrait);
+            const orOperands = Array.from(op.Item, toKootaTrait);
             return Or(...orOperands);
           case "added":
-            const addedOperands = op.Item1.map(toKootaTrait);
+            const addedOperands = Array.from(op.Item1, toKootaTrait);
             const Added = toKootaTracker(op.Item2);
             return Added(...addedOperands);
           case "changed":
-            const changedOperands = op.Item1.map(toKootaTrait);
+            const changedOperands = Array.from(op.Item1, toKootaTrait);
             const Changed = toKootaTracker(op.Item2);
             return Changed(...changedOperands);
           case "removed":
-            const removedOperands = op.Item1.map(toKootaTrait);
+            const removedOperands = Array.from(op.Item1, toKootaTrait);
             const Removed = toKootaTracker(op.Item2);
             return Removed(...removedOperands);
         }

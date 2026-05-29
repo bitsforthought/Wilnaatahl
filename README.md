@@ -35,16 +35,16 @@ npm -v     # Should return a recent npm version (e.g. 10.x)
 
 ### ✅ 2. Install the .NET SDK
 
-This project targets .NET 9. To make setup easier we pin the SDK via `global.json` so the correct SDK is used automatically by the `dotnet` CLI.
+This project targets .NET 10. To make setup easier we pin the SDK via `global.json` so the correct SDK is used automatically by the `dotnet` CLI.
 
-If you don't have the pinned SDK installed, install any 9.0.x SDK from:
+If you don't have the pinned SDK installed, install any 10.0.x SDK from:
 
 👉 https://dotnet.microsoft.com/download
 
 Verify installation:
 
 ```powershell
-dotnet --version   # Should return 9.0.x
+dotnet --version   # Should return 10.0.x
 ```
 
 ### ✅ 3. Restore Local Tools and Dependencies
