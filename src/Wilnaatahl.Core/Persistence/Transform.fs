@@ -1,9 +1,12 @@
-namespace Wilnaatahl.Import
+namespace Wilnaatahl.Persistence
 
 open System
+open System.Globalization
 open System.Text
 open Wilnaatahl.Model
-open Wilnaatahl.Import.JsonParser
+open Wilnaatahl.Persistence.JsonContracts
+open Wilnaatahl.Persistence.JsonReader
+open Wilnaatahl.Persistence.JsonWriter
 
 /// Non-fatal warnings emitted during import. The transform records these as it
 /// runs and surfaces them via `ImportResult.Warnings`; none of them prevent
@@ -285,4 +288,101 @@ module Transform =
     /// Public entry point. Parses the JSON and transforms the result into typed
     /// model records, surfacing non-fatal warnings via `ImportResult.Warnings`.
     let fromJson (json: string) : Result<ImportResult, ImportError> =
-        parseJson json |> Result.mapError InvalidJson |> Result.bind transform
+        read json |> Result.mapError InvalidJson |> Result.bind transform
+
+    /// The canonical pdeek spelling for each Pdeek — the ASCII form
+    /// `tryParsePdeek` recognizes — used when writing huwilp entries out.
+    let private pdeekToRaw pdeek =
+        match pdeek with
+        | LaxGibuu -> "LaxGibuu"
+        | LaxSkiik -> "LaxSkiik"
+        | Ganeda -> "Ganeda"
+        | Giskaast -> "Giskaast"
+
+    /// Formats a date as the ISO-8601 yyyy-MM-dd string the reader parses back
+    /// via DateOnly.TryParse. "O" is the round-trip standard specifier (the ISO
+    /// date format); InvariantCulture is required because the Fable compiler
+    /// rejects DateOnly.ToString without an explicit culture, and the culture is
+    /// otherwise irrelevant to the "O" output.
+    let private formatDate (date: DateOnly) =
+        date.ToString("O", CultureInfo.InvariantCulture)
+
+    /// Serializes a FamilyGraph to the JSON persistence format — the inverse of
+    /// `fromJson` for any graph built from a clean import (re-reading the output
+    /// reproduces the same people and couples with no warnings).
+    ///
+    /// The graph carries no Wilp ids (those are an import-format artifact), so
+    /// this synthesizes one `huwilp` entry per distinct affiliation and assigns
+    /// it a stable id, sharing one entry among all people of the same Wilp. A
+    /// person with no recorded Label is written with an empty name, since the
+    /// persistence format requires a name.
+    let toJson (graph: FamilyGraph.FamilyGraph) : string =
+        let people =
+            FamilyGraph.allPeople graph |> Seq.sortBy (fun p -> p.Id.AsInt) |> Seq.toList
+
+        let couples =
+            FamilyGraph.couples graph |> Seq.sortBy (fun c -> c.Id.AsInt) |> Seq.toList
+
+        // Invert the couple→children relation so each child knows its parent couple.
+        let parentCoupleIdByPersonId =
+            couples
+            |> List.collect (fun couple ->
+                FamilyGraph.findChildrenOfCouple couple graph
+                |> List.map (fun childId -> childId.AsInt, couple.Id.AsInt))
+            |> Map.ofList
+
+        // Each distinct Wilp/Pdeek affiliation becomes one huwilp entry, keyed
+        // by its Kinship so people who share an affiliation share an id. The id
+        // is each entry's index, so the list is already in id order.
+        let kinshipsWithIds =
+            people
+            |> List.choose (fun p ->
+                match p.Kinship with
+                | NoneProvided -> None
+                | known -> Some known)
+            |> List.distinct
+            |> List.mapi (fun id kinship -> kinship, id)
+
+        let huwilpIdByKinship = Map.ofList kinshipsWithIds
+
+        let rawHuwilp =
+            kinshipsWithIds
+            |> List.map (fun (kinship, id) ->
+                match kinship with
+                | Wilp w -> {
+                    Id = id
+                    Name = Some w.Name.AsString
+                    Pdeek = Some(pdeekToRaw w.Pdeek)
+                  }
+                | UnknownWilp pdeek -> { Id = id; Name = None; Pdeek = Some(pdeekToRaw pdeek) }
+                | NoneProvided -> failwith "NoneProvided was excluded from the huwilp id map above.")
+
+        let rawPeople =
+            people
+            |> List.map (fun p -> {
+                Id = p.Id.AsInt
+                Name = p.Label |> Option.defaultValue ""
+                Parents = Map.tryFind p.Id.AsInt parentCoupleIdByPersonId
+                Wilp = Map.tryFind p.Kinship huwilpIdByKinship
+                BirthOrder = Some p.BirthOrder
+                NormalizedDateOfBirth = p.DateOfBirth |> Option.map formatDate
+                NormalizedDateOfDeath = p.DateOfDeath |> Option.map formatDate
+                Gender =
+                    match p.Shape with
+                    | Sphere -> "F"
+                    | Cube -> "M"
+            })
+
+        let rawCouples =
+            couples
+            |> List.map (fun couple ->
+                let member1, member2 = couple.Members
+
+                {
+                    CoupleId = couple.Id.AsInt
+                    Member1 = member1.AsInt
+                    Member2 = member2.AsInt
+                    DateOfUnion = couple.DateOfUnion |> Option.map formatDate
+                })
+
+        write { People = rawPeople; Couples = rawCouples; Huwilp = rawHuwilp }

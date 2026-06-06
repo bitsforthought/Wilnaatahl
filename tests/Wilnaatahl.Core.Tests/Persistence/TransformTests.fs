@@ -1,12 +1,16 @@
-module Wilnaatahl.Tests.Import.ImportTests
+module Wilnaatahl.Tests.Persistence.TransformTests
 
 open System
 open Xunit
+open FsCheck
+open FsCheck.FSharp
+open FsCheck.Xunit
 open Swensen.Unquote
 open Wilnaatahl.Model
-open Wilnaatahl.Import
-open Wilnaatahl.Import.JsonParser
-open Wilnaatahl.Import.Transform
+open Wilnaatahl.Persistence
+open Wilnaatahl.Persistence.JsonContracts
+open Wilnaatahl.Persistence.Transform
+open Wilnaatahl.Tests.TestData
 
 // ---------------------------------------------------------------------------
 // Raw-input helpers
@@ -584,3 +588,153 @@ let ``fromJson surfaces WilpMissingNameAndPdeek as a warning, not an error`` () 
         Couples = []
         Warnings = [ WilpMissingNameAndPdeek 9; UnresolvedWilpId("A", 9) ]
     }
+
+// ---------------------------------------------------------------------------
+// Property: pdeek orthography normalization
+//
+// The MemberData theory above pins a curated set of known spellings. This
+// metamorphic property checks the normalizer's invariants directly: starting
+// from each canonical key, any combination of case changes, interspersed
+// non-letter noise (whitespace incl. NBSP, apostrophes/glottal markers,
+// hyphens, digits), and writing k as the precomposed underlined k (U+1E35)
+// must still resolve to the same Pdeek. All injected variations are dropped by
+// the NFD-decompose → lower-invariant → keep-only-ASCII-letters pipeline, so
+// the normalized key — and therefore the recognized Pdeek — is unchanged.
+// ---------------------------------------------------------------------------
+
+/// Canonical normalized keys (one per Pdeek) the normalizer recognizes.
+let private pdeekCanonicalKeys = [
+    "laxgibuu", LaxGibuu
+    "laxskiik", LaxSkiik
+    "ganeda", Ganeda
+    "giskaast", Giskaast
+]
+
+/// Characters that the normalizer discards (none are ASCII letters after
+/// NFD-decomposition), so interspersing them must not change recognition.
+let private pdeekNoiseChars = [ ' '; '\t'; '\u00A0'; '\''; '\u2019'; '\u02BC'; '-'; '0'; '9' ]
+
+let private pdeekNoiseRun =
+    gen {
+        let! count = Gen.choose (0, 2)
+        let! chars = Gen.arrayOfLength count (Gen.elements pdeekNoiseChars)
+        return String chars
+    }
+
+/// Renders one canonical letter as an equivalence-preserving variant: either
+/// case, and for k also the precomposed underlined k that NFD-decomposes to k.
+let private pdeekLetterVariant (c: char) =
+    if c = 'k' then
+        Gen.elements [ "k"; "K"; "\u1E35" ]
+    else
+        Gen.elements [ string c; string (Char.ToUpperInvariant c) ]
+
+let private pdeekVariantOf (canonicalKey: string) =
+    let rec build remaining acc =
+        match remaining with
+        | [] ->
+            gen {
+                let! trailing = pdeekNoiseRun
+                return acc + trailing
+            }
+        | c :: rest ->
+            gen {
+                let! noise = pdeekNoiseRun
+                let! letter = pdeekLetterVariant c
+                return! build rest (acc + noise + letter)
+            }
+
+    build (Seq.toList canonicalKey) ""
+
+let private pdeekVariantGen =
+    gen {
+        let! canonicalKey, expected = Gen.elements pdeekCanonicalKeys
+        let! variant = pdeekVariantOf canonicalKey
+        return variant, expected
+    }
+
+[<Property>]
+let ``pdeek recognition is invariant to case, noise, and underlined-k spelling`` () =
+    Prop.forAll (Arb.fromGen pdeekVariantGen) (fun (rawPdeek, expected) ->
+        let aliceWithWilp = aliceRaw |> withWilp 1
+        let w = { Id = 1; Name = Some "House"; Pdeek = Some rawPdeek }
+
+        let expectedAlice = {
+            alice with
+                Kinship = Wilp { Name = WilpName "House"; Pdeek = expected }
+        }
+
+        transform (rawFile [ aliceWithWilp ] [] [ w ]) = Ok {
+            PeopleAndCoupleIds = [ expectedAlice, None ]
+            Couples = []
+            Warnings = []
+        })
+
+// ---------------------------------------------------------------------------
+// Transform.toJson: FamilyGraph → JSON
+//
+// toJson is the inverse of fromJson for any graph built from a clean import.
+// The strongest test is the round trip: build a graph from model data, write
+// it out, read it back, and confirm the people and couples are reconstructed
+// with no warnings. The fixtures below are chosen to cover every Kinship case
+// (known Wilp, Pdeek-only UnknownWilp, NoneProvided), childless couples, dates,
+// and birth order. They all give every Person a Label, since the persistence
+// format requires a name.
+// ---------------------------------------------------------------------------
+
+/// A Pdeek-only affiliation and a fully-known Wilp sharing that Pdeek, both with
+/// a Label. TestData's UnknownWilp person has no Label, so it can't round-trip.
+let private pdeekOnlyPerson = {
+    Person.Empty with
+        Id = PersonId 300
+        Label = Some "PdeekOnly"
+        Kinship = UnknownWilp LaxGibuu
+}
+
+let private knownWilpPerson = {
+    Person.Empty with
+        Id = PersonId 301
+        Label = Some "Known"
+        Kinship = Wilp { Name = WilpName "M"; Pdeek = LaxGibuu }
+}
+
+let toJsonRoundTripCases =
+    TheoryData<(Person * CoupleId option) list, Couple list>(
+        // Known huwilp (two distinct), NoneProvided partner, dates, birth order.
+        struct (testPeopleAndParents, testCouples),
+        // Multiple couples and grandchildren.
+        struct (extendedFamily, extendedCouples),
+        // A childless couple plus a NoneProvided partner.
+        struct ([ childlessHead, None; childlessPartner, None ], [ childlessCouple ]),
+        // UnknownWilp alongside a known Wilp of the same Pdeek.
+        struct ([ pdeekOnlyPerson, None; knownWilpPerson, None ], List.empty<Couple>)
+    )
+
+[<Theory>]
+[<MemberData(nameof toJsonRoundTripCases)>]
+let ``toJson then fromJson reconstructs the original people and couples``
+    (peopleAndParents: (Person * CoupleId option) list)
+    (couples: Couple list)
+    =
+    let graph = FamilyGraph.createFamilyGraph peopleAndParents couples
+
+    let byPersonId = List.sortBy (fun (p: Person, _) -> p.Id.AsInt)
+    let byCoupleId = List.sortBy (fun (c: Couple) -> c.Id.AsInt)
+
+    match Transform.toJson graph |> fromJson with
+    | Ok result ->
+        byPersonId result.PeopleAndCoupleIds =! byPersonId peopleAndParents
+        byCoupleId result.Couples =! byCoupleId couples
+        result.Warnings =! []
+    | Error error -> failwithf "Round trip failed: %A" error
+
+[<Fact>]
+let ``toJson synthesizes one shared huwilp entry per distinct affiliation`` () =
+    // p0, p2 and p4 share Wilp "H"; p3 is Wilp "L"; p1 is NoneProvided. The
+    // three "H" members must collapse to a single huwilp entry, giving two
+    // entries total — the dedup the round-trip alone doesn't directly assert.
+    let graph = FamilyGraph.createFamilyGraph testPeopleAndParents testCouples
+
+    match Transform.toJson graph |> JsonReader.read with
+    | Ok raw -> raw.Huwilp |> List.length =! 2
+    | Error error -> failwithf "toJson produced unreadable JSON: %A" error

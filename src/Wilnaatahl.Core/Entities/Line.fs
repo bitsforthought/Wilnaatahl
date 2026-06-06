@@ -26,7 +26,7 @@ let spawn firstPos secondPos (world: IWorld) =
     secondEndpointId |> add (EndpointOf => lineId)
     lineId
 
-let spawnDynamic (world: IWorld) =
+let spawnAtOrigin (world: IWorld) =
     // NOTE: Many connectors have initial position at the origin for convenience. Those positions
     // will be dynamically updated the first time the Movement system runs.
     world |> spawn zeroPosition zeroPosition

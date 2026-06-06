@@ -2,6 +2,9 @@ module Wilnaatahl.Tests.Systems.MovementTests
 
 open System
 open Xunit
+open FsCheck
+open FsCheck.FSharp
+open FsCheck.Xunit
 open Swensen.Unquote
 open Wilnaatahl.ECS
 open Wilnaatahl.ECS.Entity
@@ -119,7 +122,7 @@ type Tests() =
         srcEp2 |> setValue Position {| x = 10.0; y = 0.0; z = 0.0 |}
 
         // Parallel line
-        let parallelLineId = world |> Line3.spawnDynamic
+        let parallelLineId = world |> Line3.spawnAtOrigin
         parallelLineId |> addWith (Parallels => sourceLineId) {| offset = offset |}
 
         srcEp1 |> touchPosition
@@ -139,7 +142,7 @@ type Tests() =
         srcEp1 |> setValue Position {| x = 0.0; y = 0.0; z = 0.0 |}
         srcEp2 |> setValue Position {| x = 0.0; y = 10.0; z = 0.0 |}
 
-        let parallelLineId = world |> Line3.spawnDynamic
+        let parallelLineId = world |> Line3.spawnAtOrigin
         parallelLineId |> addWith (Parallels => sourceLineId) {| offset = 1.0 |}
 
         srcEp1 |> touchPosition
@@ -161,7 +164,7 @@ type Tests() =
         srcEp1 |> setValue Position {| x = 0.0; y = 0.0; z = 0.0 |}
         srcEp2 |> setValue Position {| x = 0.0; y = 0.0; z = 10.0 |}
 
-        let parallelLineId = world |> Line3.spawnDynamic
+        let parallelLineId = world |> Line3.spawnAtOrigin
         parallelLineId |> addWith (Parallels => sourceLineId) {| offset = 1.0 |}
 
         srcEp1 |> touchPosition
@@ -184,7 +187,7 @@ type Tests() =
         srcEp1 |> setValue Position {| x = 0.0; y = 0.0; z = 0.0 |}
         srcEp2 |> setValue Position {| x = 0.0; y = 1.0; z = 1e-15 |}
 
-        let parallelLineId = world |> Line3.spawnDynamic
+        let parallelLineId = world |> Line3.spawnAtOrigin
         parallelLineId |> addWith (Parallels => sourceLineId) {| offset = 1.0 |}
 
         srcEp1 |> touchPosition
@@ -198,3 +201,97 @@ type Tests() =
 
     interface IDisposable with
         member _.Dispose() = (ecs :> IDisposable).Dispose()
+
+// ---------------------------------------------------------------------------
+// Property-based test
+//
+// The example tests above pin the specific perpendicular direction chosen for
+// each line orientation (horizontal, vertical, z-axis, near-vertical). This
+// property covers the orientation-independent invariant: a parallel line is the
+// source line shifted by one offset applied identically to both endpoints, so
+// the two lines point in the same direction for any source line and any offset.
+// ---------------------------------------------------------------------------
+
+// The parallel line is the source translated by one offset added to both
+// endpoints, so in exact arithmetic the two direction vectors are equal. This
+// tolerance only absorbs the floating-point rounding of those endpoint
+// additions, scaled by the magnitude of the coordinates involved.
+let private directionTolerance = 1e-9
+
+/// True when two line direction vectors (each running from a line's first
+/// endpoint to its second) are equal component by component, within a bound
+/// that scales with the size of the coordinates.
+let private directionVectorsApproximatelyEqual (first: Vector3) (second: Vector3) =
+    // Compares two floats with a tolerance that blends absolute and relative
+    // bounds: the allowed error is directionTolerance * (1 + larger magnitude).
+    // The `1` is an absolute floor so the bound doesn't collapse to ~0 near the
+    // origin (which would demand near-exact equality); the magnitude term scales
+    // the bound up for large coordinates, where floating-point rounding error is
+    // proportionally larger. A flat tolerance can't cover both ends of the
+    // generator's [-100, 100] range.
+    let componentsClose (a: float) (b: float) =
+        // Vector.max is in scope unqualified here, so spell out the larger magnitude.
+        let largerMagnitude = if abs a > abs b then abs a else abs b
+        abs (a - b) <= directionTolerance * (1.0 + largerMagnitude)
+
+    componentsClose first.x second.x
+    && componentsClose first.y second.y
+    && componentsClose first.z second.z
+
+/// Coordinates in [-100, 100] in steps of 0.01: bounded so endpoint additions
+/// stay well within double precision, with a fractional step so the generator
+/// exercises non-integer inputs.
+let private coordinateGen =
+    let coordinateBound = 100.0
+    let stepsPerUnit = 100.0
+    let maxStep = int (coordinateBound * stepsPerUnit)
+
+    Gen.choose (-maxStep, maxStep)
+    |> Gen.map (fun steps -> float steps / stepsPerUnit)
+
+let private pointGen =
+    gen {
+        let! x = coordinateGen
+        let! y = coordinateGen
+        let! z = coordinateGen
+        return Line3.pos x y z
+    }
+
+/// Builds a source line between the two given endpoints, attaches a parallel
+/// line at the given offset, runs Movement, and reports whether the parallel
+/// line ends up pointing in the same direction as the source.
+let private parallelLinePreservesDirection firstSourcePoint secondSourcePoint offset =
+    use ecs = new EcsWorld()
+    let world = ecs.World
+    let movementTracker = createChanged ()
+
+    let sourceLine = world |> Line3.spawn firstSourcePoint secondSourcePoint
+
+    let firstSourceEndpoint, secondSourceEndpoint =
+        sourceLine |> Line3.getEndpoints world
+
+    let parallelLine = world |> Line3.spawnAtOrigin
+    parallelLine |> addWith (Parallels => sourceLine) {| offset = offset |}
+
+    // Re-set the endpoint positions so Movement sees a Changed notification;
+    // spawning adds the Position trait but doesn't flag it as changed.
+    firstSourceEndpoint |> touchPosition
+    secondSourceEndpoint |> touchPosition
+    move movementTracker world |> ignore
+
+    let sourceStart, sourceEnd = sourceLine |> Line3.getPositions world
+    let parallelStart, parallelEnd = parallelLine |> Line3.getPositions world
+    directionVectorsApproximatelyEqual (sourceEnd - sourceStart) (parallelEnd - parallelStart)
+
+[<Property>]
+let ``parallel line preserves the source direction vector`` () =
+    let inputs =
+        gen {
+            let! firstSourcePoint = pointGen
+            let! secondSourcePoint = pointGen
+            let! offset = coordinateGen
+            return firstSourcePoint, secondSourcePoint, offset
+        }
+
+    Prop.forAll (Arb.fromGen inputs) (fun (firstSourcePoint, secondSourcePoint, offset) ->
+        parallelLinePreservesDirection firstSourcePoint secondSourcePoint offset)

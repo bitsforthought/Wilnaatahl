@@ -1,6 +1,9 @@
 module Wilnaatahl.Tests.ViewModel.PaletteTests
 
 open Xunit
+open FsCheck
+open FsCheck.FSharp
+open FsCheck.Xunit
 open Swensen.Unquote
 open Wilnaatahl.Model
 open Wilnaatahl.ViewModel
@@ -99,6 +102,20 @@ let ``lightnessOffsetFromHash maps the midpoint bucket to just above wilpMinLigh
     let actual = Palette.lightnessOffsetFromHash 500u
     let expected = 0.02 + (1.0 / 999.0) * (0.12 - 0.02)
     abs (actual - expected) <! 1e-12
+
+[<Property>]
+let ``lightnessOffsetFromHash stays within the wobble range and outside the zero band`` (hash: uint32) =
+    // wobble = Palette.wilpLightnessWobble, minMagnitude = Palette.wilpMinLightnessOffset
+    // (both private). For any hash the offset lands in
+    // [-wobble, -minMagnitude] ∪ [minMagnitude, wobble]; this also exercises the
+    // hash-mod-1000 wraparound that the bucket-range facts above don't reach.
+    let wobble = 0.12
+    let minMagnitude = 0.02
+    let comparisonTolerance = 1e-9
+    let offset = Palette.lightnessOffsetFromHash hash
+
+    abs offset <= wobble + comparisonTolerance
+    && abs offset >= minMagnitude - comparisonTolerance
 
 // ---- oklchToSrgb ----------------------------------------------------------
 //

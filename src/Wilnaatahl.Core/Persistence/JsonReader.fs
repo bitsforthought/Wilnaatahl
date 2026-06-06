@@ -1,4 +1,4 @@
-namespace Wilnaatahl.Import
+namespace Wilnaatahl.Persistence
 
 open Thoth.Json.Core
 
@@ -8,41 +8,9 @@ open Thoth.Json.Newtonsoft
 open Thoth.Json.JavaScript
 #endif
 
-module internal JsonParser =
+open Wilnaatahl.Persistence.JsonContracts
 
-    /// What Thoth.Json decodes into for one person. Source fields with no
-    /// representation here (`dateOfBirth`, `dateOfDeath`, `birthWilp`,
-    /// `deceased`) are silently dropped at decode time.
-    type RawPerson = {
-        Id: int
-        Name: string
-        Parents: int option
-        Wilp: int option
-        BirthOrder: int option
-        NormalizedDateOfBirth: string option
-        NormalizedDateOfDeath: string option
-        Gender: string
-    }
-
-    /// What Thoth.Json decodes into for one couple. `Member1` and `Member2`
-    /// are JSON person ids in source order; no ordering invariant is imposed.
-    type RawCouple = {
-        CoupleId: int
-        Member1: int
-        Member2: int
-        DateOfUnion: string option
-    }
-
-    /// What Thoth.Json decodes into for one entry in the top-level `huwilp`
-    /// array. Both `Name` and `Pdeek` are optional at the decoder level.
-    type RawWilp = { Id: int; Name: string option; Pdeek: string option }
-
-    /// Top-level decoded contents of an import file.
-    type RawFile = {
-        People: RawPerson list
-        Couples: RawCouple list
-        Huwilp: RawWilp list
-    }
+module internal JsonReader =
 
     /// Decodes a single person object. `get.Optional.Field` returns `None` for
     /// both absent and null fields (Thoth.Json.Core `decodeMaybeNull`
@@ -90,7 +58,7 @@ module internal JsonParser =
                 |> Option.defaultValue []
         })
 
-    /// Parses a JSON string into a RawFile. The Error branch carries the
+    /// Reads a JSON string into a RawFile. The Error branch carries the
     /// underlying decoder message verbatim. Reports syntactic problems only;
     /// semantic validity (empty arrays, duplicate ids, etc.) is downstream.
-    let parseJson (json: string) : Result<RawFile, string> = Decode.fromString rawFileDecoder json
+    let read (json: string) : Result<RawFile, string> = Decode.fromString rawFileDecoder json

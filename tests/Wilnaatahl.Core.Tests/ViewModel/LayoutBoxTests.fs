@@ -1,6 +1,9 @@
 module Wilnaatahl.Tests.ViewModel.LayoutBoxTests
 
 open Xunit
+open FsCheck
+open FsCheck.FSharp
+open FsCheck.Xunit
 open Swensen.Unquote
 open Wilnaatahl.Model
 open Wilnaatahl.ViewModel
@@ -361,3 +364,169 @@ let ``attachAbove with lower Composite and upper height zero or non-zero affects
 
     let actual = upper |> attachAbove lower options
     actual =! expected
+
+// ---------------------------------------------------------------------------
+// Property-based tests
+//
+// The example-driven tests above pin the specific corner-padding rules of
+// attachHorizontally/attachAbove, which a property could only restate. The
+// properties below cover the universal invariants over arbitrary inputs:
+// reframe is its own inverse, and horizontal attachment composes sizes and
+// follower lists predictably.
+// ---------------------------------------------------------------------------
+
+/// Combined absolute+relative tolerance for the floating-point reframe and
+/// size-composition properties.
+let private tolerance = 1e-6
+
+let private approxEqual (a: float) (b: float) =
+    abs (a - b) <= tolerance * (1.0 + max (abs a) (abs b))
+
+let private layoutVectorsApproxEqual (a: LayoutVector<'u>) (b: LayoutVector<'u>) =
+    approxEqual (float a.X) (float b.X)
+    && approxEqual (float a.Y) (float b.Y)
+    && approxEqual (float a.Z) (float b.Z)
+
+let rec private boxesApproxEqual (a: LayoutBox<'u>) (b: LayoutBox<'u>) =
+    layoutVectorsApproxEqual a.Size b.Size
+    && approxEqual (float a.ConnectX) (float b.ConnectX)
+    && match a.Payload, b.Payload with
+       | LeafBox(idA, offsetA), LeafBox(idB, offsetB) -> idA = idB && layoutVectorsApproxEqual offsetA offsetB
+       | CompositeBox compositeA, CompositeBox compositeB ->
+           approxEqual (float compositeA.TopLeftWidth) (float compositeB.TopLeftWidth)
+           && approxEqual (float compositeA.TopRightWidth) (float compositeB.TopRightWidth)
+           && compositeA.Followers.Length = compositeB.Followers.Length
+           && List.forall2
+               (fun (childA, childOffsetA) (childB, childOffsetB) ->
+                   boxesApproxEqual childA childB
+                   && layoutVectorsApproxEqual childOffsetA childOffsetB)
+               compositeA.Followers
+               compositeB.Followers
+       | _ -> false
+
+/// Coordinate components (offsets, connect-X) in [-100, 100] in steps of 0.01;
+/// signed because positions and connectors can sit either side of an origin.
+let private coordinateGen: Gen<float<w>> =
+    let maxStep = 10000
+
+    Gen.choose (-maxStep, maxStep)
+    |> Gen.map (fun steps -> float steps / 100.0 * 1.0<w>)
+
+/// Size components in [0, 100] in steps of 0.01; non-negative because a box
+/// extent is a magnitude.
+let private sizeComponentGen: Gen<float<w>> =
+    let maxStep = 10000
+    Gen.choose (0, maxStep) |> Gen.map (fun steps -> float steps / 100.0 * 1.0<w>)
+
+let private layoutVectorGen: Gen<LayoutVector<w>> =
+    gen {
+        let! x = coordinateGen
+        let! y = coordinateGen
+        let! z = coordinateGen
+        return { X = x; Y = y; Z = z }
+    }
+
+let private sizeVectorGen: Gen<LayoutVector<w>> =
+    gen {
+        let! x = sizeComponentGen
+        let! y = sizeComponentGen
+        let! z = sizeComponentGen
+        return { X = x; Y = y; Z = z }
+    }
+
+let private leafGen: Gen<LayoutBox<w>> =
+    gen {
+        let! size = sizeVectorGen
+        let! connectX = coordinateGen
+        let! personId = Gen.choose (0, 1000)
+        let! offset = layoutVectorGen
+        return createLeaf size connectX (PersonId personId) offset
+    }
+
+let rec private boxGenSized depth =
+    if depth <= 0 then
+        leafGen
+    else
+        Gen.oneof [ leafGen; compositeGenSized depth ]
+
+and private compositeGenSized depth =
+    // A composite has between one and a handful of followers; the count is kept
+    // small so generated trees stay legible when a counterexample shrinks.
+    let minFollowers = 1
+    let maxFollowers = 3
+
+    gen {
+        let! size = sizeVectorGen
+        let! connectX = coordinateGen
+        let! topLeftWidth = sizeComponentGen
+        let! topRightWidth = sizeComponentGen
+        let! followerCount = Gen.choose (minFollowers, maxFollowers)
+
+        let! followers =
+            Gen.listOfLength
+                followerCount
+                (gen {
+                    let! child = boxGenSized (depth - 1)
+                    let! offset = layoutVectorGen
+                    return child, offset
+                })
+
+        return
+            createComposite size connectX {
+                TopLeftWidth = topLeftWidth
+                TopRightWidth = topRightWidth
+                Followers = followers
+            }
+    }
+
+/// Recursion depth is capped so generated trees stay small enough to shrink
+/// into readable counterexamples.
+let private maxBoxDepth = 4
+let private boxGen = Gen.sized (fun size -> boxGenSized (min size maxBoxDepth))
+
+/// Conversion factors in [0.5, 10], away from zero so the inverse reframe
+/// doesn't amplify rounding error.
+let private factorGen: Gen<float> =
+    Gen.choose (50, 1000) |> Gen.map (fun steps -> float steps / 100.0)
+
+[<Property>]
+let ``LayoutVector.reframe is its own inverse`` () =
+    Prop.forAll (Arb.fromGen (Gen.zip layoutVectorGen factorGen)) (fun (v, rawFactor) ->
+        let k = rawFactor * 1.0<u / w>
+        let roundTripped = LayoutVector.reframe (1.0 / k) (LayoutVector.reframe k v)
+        layoutVectorsApproxEqual roundTripped v)
+
+[<Property>]
+let ``LayoutBox.reframe is its own inverse over arbitrary nested boxes`` () =
+    Prop.forAll (Arb.fromGen (Gen.zip boxGen factorGen)) (fun (box, rawFactor) ->
+        let k = rawFactor * 1.0<u / w>
+        let roundTripped = reframe (1.0 / k) (reframe k box)
+        boxesApproxEqual roundTripped box)
+
+[<Property>]
+let ``attachHorizontally over leaves sums widths and maxes height and depth`` () =
+    Prop.forAll (Arb.fromGen (Gen.nonEmptyListOf leafGen)) (fun leaves ->
+        let boxes = List.toArray leaves
+        let result = attachHorizontally boxes
+        let expectedX = boxes |> Array.sumBy (fun b -> b.Size.X)
+        let expectedY = boxes |> Array.map (fun b -> b.Size.Y) |> Array.max
+        let expectedZ = boxes |> Array.map (fun b -> b.Size.Z) |> Array.max
+
+        approxEqual (float result.Size.X) (float expectedX)
+        && approxEqual (float result.Size.Y) (float expectedY)
+        && approxEqual (float result.Size.Z) (float expectedZ))
+
+[<Property>]
+let ``attachHorizontally produces one follower per input box`` () =
+    let twoOrMoreLeaves =
+        gen {
+            let! count = Gen.choose (2, 6)
+            return! Gen.listOfLength count leafGen
+        }
+
+    Prop.forAll (Arb.fromGen twoOrMoreLeaves) (fun leaves ->
+        let boxes = List.toArray leaves
+
+        match (attachHorizontally boxes).Payload with
+        | CompositeBox composite -> composite.Followers.Length = boxes.Length
+        | LeafBox _ -> false)

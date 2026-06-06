@@ -31,8 +31,8 @@
     <Compile Include="Systems/LayoutTests.fs" />
     <Compile Include="Systems/RunnerTests.fs" />
     <Compile Include="Systems/LifeCycleTests.fs" />
-    <Compile Include="Import/JsonParserTests.fs" />
-    <Compile Include="Import/ImportTests.fs" />
+    <Compile Include="Persistence/JsonReadWriteTests.fs" />
+    <Compile Include="Persistence/TransformTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -44,6 +44,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="FsCheck.Xunit.v3" Version="3.3.3" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
     <PackageReference Include="xunit.v3" Version="3.2.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />

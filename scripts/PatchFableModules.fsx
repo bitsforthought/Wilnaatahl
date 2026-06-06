@@ -15,6 +15,14 @@
 // allow-list update — the same three files trigger the bug regardless of
 // version directory naming (`Thoth.Json.Core.0.8.0` vs `0.9.0`, etc.).
 //
+// First-party generated files inherit the same bug when they consume Thoth's
+// `inline` Encode combinators (`Encode.int`, `Encode.object`, …): the buggy
+// `IEncodable.Encode<$a>` object expressions are inlined straight into the
+// consumer's `.ts`. Those files (listed in `firstPartyBugTriggers`) are
+// authored by us, but the offending annotations are still pure Fable codegen,
+// so the same suppression applies. The F# source is fully type-checked by the
+// compiler and exercised by the .NET tests, so nothing of value is lost.
+//
 // This script runs as a post-fable step in package.json.
 
 open System.IO
@@ -35,6 +43,11 @@ let bugTriggers =
     [ "Thoth.Json.Core.*", [ "Decode.fs.ts"; "Encode.fs.ts" ]
       "Thoth.Json.JavaScript.*", [ "Encode.fs.ts" ] ]
 
+// First-party generated files (relative to `src/generated`) that inherit the
+// `$a` bug by consuming Thoth's inline Encode combinators. Keep this list as
+// narrow as possible — same rule as `bugTriggers`.
+let firstPartyBugTriggers = [ "Persistence/JsonWriter.ts" ]
+
 let resolveTargets (root: string) (triggers: (string * string list) list) =
     if not (Directory.Exists root) then
         []
@@ -47,6 +60,11 @@ let resolveTargets (root: string) (triggers: (string * string list) list) =
                 files
                 |> List.map (fun file -> Path.Combine(packageDir, file))
                 |> List.filter File.Exists))
+
+let resolveFirstPartyTargets (root: string) (files: string list) =
+    files
+    |> List.map (fun file -> Path.Combine(root, file))
+    |> List.filter File.Exists
 
 let isAlreadyPatched (path: string) =
     File.ReadAllText(path).StartsWith(marker)
@@ -66,13 +84,16 @@ let patchAll (paths: string list) =
 // --- Top-level I/O and control flow ---
 
 let repoRoot = Path.GetDirectoryName(Path.GetFullPath(__SOURCE_DIRECTORY__))
-let fableModulesRoot = Path.Combine(repoRoot, "src", "generated", "fable_modules")
+let generatedRoot = Path.Combine(repoRoot, "src", "generated")
+let fableModulesRoot = Path.Combine(generatedRoot, "fable_modules")
 
 let outcome =
     if not (Directory.Exists fableModulesRoot) then
         RootMissing fableModulesRoot
     else
-        let targets = resolveTargets fableModulesRoot bugTriggers
+        let targets =
+            resolveTargets fableModulesRoot bugTriggers
+            @ resolveFirstPartyTargets generatedRoot firstPartyBugTriggers
 
         if List.isEmpty targets then
             let patternStrings =

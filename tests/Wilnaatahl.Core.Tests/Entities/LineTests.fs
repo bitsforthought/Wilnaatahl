@@ -59,11 +59,11 @@ let ``spawn sets endpoint positions correctly`` () =
     v2 =! Vector3.FromComponents(4.0, 5.0, 6.0)
 
 [<Fact>]
-let ``spawnDynamic creates line at origin`` () =
+let ``spawnAtOrigin creates line at origin`` () =
     use ecs = new EcsWorld()
     let world = ecs.World
 
-    let lineId = world |> Line3.spawnDynamic
+    let lineId = world |> Line3.spawnAtOrigin
     let v1, v2 = lineId |> Line3.getPositions world
 
     v1 =! Vector3.FromComponents(0.0, 0.0, 0.0)

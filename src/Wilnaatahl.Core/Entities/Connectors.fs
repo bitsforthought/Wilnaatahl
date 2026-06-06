@@ -104,7 +104,7 @@ let spawnAllConnectors familyGraph (world: IWorld) =
 
             // 6. A visible Line that follows the Bisects Node and the Branch Node
             world
-            |> Line3.spawnDynamic
+            |> Line3.spawnAtOrigin
             |> Line3.snapTo world bisectingEntityId branchNodeId
             |> ignore
 
@@ -122,13 +122,13 @@ let spawnAllConnectors familyGraph (world: IWorld) =
 
                 // 8. A visible Line for each child that follows the Branch Node and that child's Junction Node
                 world
-                |> Line3.spawnDynamic
+                |> Line3.spawnAtOrigin
                 |> Line3.snapTo world junctionId branchNodeId
                 |> ignore
 
                 // 9. A visible Line for each child that follows that child's Junction Node and the Child Node itself.
                 world
-                |> Line3.spawnDynamic
+                |> Line3.spawnAtOrigin
                 |> Line3.snapTo world junctionId child.Entity
                 |> ignore
 

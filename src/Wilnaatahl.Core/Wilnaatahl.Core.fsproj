@@ -39,8 +39,10 @@
     <Compile Include="Systems/Movement.fs" />
     <Compile Include="Systems/Runner.fs" />
     <Compile Include="EntityLifeCycle.fs" />
-    <Compile Include="Import/JsonParser.fs" />
-    <Compile Include="Import/Transform.fs" />
+    <Compile Include="Persistence/JsonContracts.fs" />
+    <Compile Include="Persistence/JsonReader.fs" />
+    <Compile Include="Persistence/JsonWriter.fs" />
+    <Compile Include="Persistence/Transform.fs" />
   </ItemGroup>
 
   <ItemGroup>

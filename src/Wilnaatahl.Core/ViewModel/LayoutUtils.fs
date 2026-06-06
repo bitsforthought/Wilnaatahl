@@ -30,8 +30,15 @@ type LayoutVector<[<Measure>] 'u> = {
 /// Definies utilities for working with LayoutVectors.
 module LayoutVector =
 
-    /// Changes the units of a vector. Unlike changing units of scalars, this has a runtime cost because
-    /// it must allocate a new vector to hold the converted co-ordinates.
+    /// Reinterprets a vector from one unit-of-measure frame into another by
+    /// multiplying each component by the conversion factor. The factor is
+    /// intended to be a unit-relabel token of magnitude 1.0 (see the conversion
+    /// constants in the LayoutBox module), in which case the numbers are
+    /// preserved and only the measure changes. A factor of any other magnitude
+    /// would additionally scale the vector uniformly about the origin; no caller
+    /// does this, and it isn't part of the intended contract. Unlike changing
+    /// units of scalars, this has a runtime cost because it must allocate a new
+    /// vector to hold the converted co-ordinates.
     let reframe<[<Measure>] 'u, [<Measure>] 'v>
         (conversionFactor: float<'v / 'u>)
         (vec: LayoutVector<'u>)
@@ -138,8 +145,14 @@ module LayoutBox =
     /// Creates a composite LayoutBox with the given property values.
     let createComposite size connectX composite = { Size = size; ConnectX = connectX; Payload = CompositeBox composite }
 
-    /// Changes the units of a LayoutBox. Unlike changing units of scalars, this has a runtime cost because
-    /// it must allocate a new box to hold the converted co-ordinates and vectors.
+    /// Reinterprets a whole LayoutBox tree from one unit-of-measure frame into
+    /// another, recursing through followers. Like LayoutVector.reframe, the
+    /// conversion factor is intended to be a magnitude-1.0 unit-relabel token,
+    /// preserving every co-ordinate and changing only the measure; a non-1.0
+    /// magnitude would also scale the whole tree uniformly about the origin,
+    /// which no caller does and which is outside the intended contract. Unlike
+    /// changing units of scalars, this has a runtime cost because it must
+    /// allocate a new box to hold the converted co-ordinates and vectors.
     let rec reframe<[<Measure>] 'u, [<Measure>] 'v>
         (conversionFactor: float<'v / 'u>)
         (box: LayoutBox<'u>)
