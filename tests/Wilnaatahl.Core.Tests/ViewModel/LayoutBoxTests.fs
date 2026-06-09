@@ -25,8 +25,8 @@ let ``LayoutVector addition works`` () =
 [<Fact>]
 let ``LayoutVector.reframe changes units correctly`` () =
     let v = { X = 2.0<w>; Y = 3.0<w>; Z = 4.0<w> }
-    let expected = { X = 20.0<u>; Y = 30.0<u>; Z = 40.0<u> }
-    let actual = LayoutVector.reframe 10.0<u / w> v
+    let expected = { X = 2.0<u>; Y = 3.0<u>; Z = 4.0<u> }
+    let actual = LayoutVector.reframe Reframe.w2u v
     actual =! expected
 
 [<Fact>]
@@ -57,7 +57,7 @@ let ``createComposite creates correct LayoutBox`` () =
     actual =! expected
 
 [<Fact>]
-let ``reframe changes LayoutBox units recursively`` () =
+let ``reframe changes LayoutBox units correctly`` () =
     let size = { X = 1.0<w>; Y = 2.0<w>; Z = 3.0<w> }
     let connectX = 0.5<w>
     let offset = { X = 0.1<w>; Y = 0.2<w>; Z = 0.3<w> }
@@ -71,24 +71,50 @@ let ``reframe changes LayoutBox units recursively`` () =
         }
 
     let expected =
-        let size = { X = 2.0<u>; Y = 4.0<u>; Z = 6.0<u> }
+        let size = { X = 1.0<u>; Y = 2.0<u>; Z = 3.0<u> }
 
         let followers =
             let leaf =
-                createLeaf size 1.0<u> (PersonId 1) { X = 0.2<u>; Y = 0.4<u>; Z = 0.6<u> }
+                createLeaf size 0.5<u> (PersonId 1) { X = 0.1<u>; Y = 0.2<u>; Z = 0.3<u> }
 
             [ leaf, vecZeroU ]
 
         let composite = {
-            TopLeftWidth = 0.2<u>
-            TopRightWidth = 0.4<u>
+            TopLeftWidth = 0.1<u>
+            TopRightWidth = 0.2<u>
             Followers = followers
         }
 
-        { Size = size; ConnectX = 1.0<u>; Payload = CompositeBox composite }
+        { Size = size; ConnectX = 0.5<u>; Payload = CompositeBox composite }
 
-    let actual = reframe 2.0<u / w> composite
+    let actual = reframe Reframe.w2u composite
     actual =! expected
+
+[<Fact>]
+let ``LayoutVector.reframe round-trip relabel returns the same object`` () =
+    let v = { X = 2.0<w>; Y = 3.0<w>; Z = 4.0<w> }
+
+    let roundTripped =
+        v |> LayoutVector.reframe Reframe.w2u |> LayoutVector.reframe Reframe.u2w
+
+    LanguagePrimitives.PhysicalEquality v roundTripped =! true
+
+[<Fact>]
+let ``reframe round-trip relabel returns the same LayoutBox`` () =
+    let size = { X = 1.0<w>; Y = 2.0<w>; Z = 3.0<w> }
+
+    let leaf =
+        createLeaf size 0.5<w> (PersonId 1) { X = 0.1<w>; Y = 0.2<w>; Z = 0.3<w> }
+
+    let box =
+        createComposite size 0.5<w> {
+            TopLeftWidth = 0.1<w>
+            TopRightWidth = 0.2<w>
+            Followers = [ leaf, vecZeroW ]
+        }
+
+    let roundTripped = box |> reframe Reframe.w2u |> reframe Reframe.u2w
+    LanguagePrimitives.PhysicalEquality box roundTripped =! true
 
 [<Fact>]
 let ``visit visits all boxes and passes correct positions`` () =
@@ -303,8 +329,8 @@ let ``attachAbove attaches boxes vertically and produces expected box`` useUpper
     let options = { UseUpperConnectX = useUpperConnectX; UpperOffset = 1.0<l> }
 
     let expected =
-        let lower' = reframe 1.0<w / l> lower
-        let upper' = reframe 1.0<w / u> upper
+        let lower' = reframe Reframe.l2w lower
+        let upper' = reframe Reframe.u2w upper
 
         let followers = [ lower', vecZeroW; upper', { X = 1.0<w>; Y = 1.0<w>; Z = 0.0<w> } ]
 
@@ -345,8 +371,8 @@ let ``attachAbove with lower Composite and upper height zero or non-zero affects
         }
 
     let options = { UseUpperConnectX = true; UpperOffset = 1.0<l> }
-    let lower' = reframe 1.0<w / l> lower
-    let upper' = reframe 1.0<w / u> upper
+    let lower' = reframe Reframe.l2w lower
+    let upper' = reframe Reframe.u2w upper
 
     let expected =
         let expectedSizeY =
@@ -371,8 +397,7 @@ let ``attachAbove with lower Composite and upper height zero or non-zero affects
 // The example-driven tests above pin the specific corner-padding rules of
 // attachHorizontally/attachAbove, which a property could only restate. The
 // properties below cover the universal invariants over arbitrary inputs:
-// reframe is its own inverse, and horizontal attachment composes sizes and
-// follower lists predictably.
+// horizontal attachment composes sizes and follower lists predictably.
 // ---------------------------------------------------------------------------
 
 /// Combined absolute+relative tolerance for the floating-point reframe and
@@ -381,28 +406,6 @@ let private tolerance = 1e-6
 
 let private approxEqual (a: float) (b: float) =
     abs (a - b) <= tolerance * (1.0 + max (abs a) (abs b))
-
-let private layoutVectorsApproxEqual (a: LayoutVector<'u>) (b: LayoutVector<'u>) =
-    approxEqual (float a.X) (float b.X)
-    && approxEqual (float a.Y) (float b.Y)
-    && approxEqual (float a.Z) (float b.Z)
-
-let rec private boxesApproxEqual (a: LayoutBox<'u>) (b: LayoutBox<'u>) =
-    layoutVectorsApproxEqual a.Size b.Size
-    && approxEqual (float a.ConnectX) (float b.ConnectX)
-    && match a.Payload, b.Payload with
-       | LeafBox(idA, offsetA), LeafBox(idB, offsetB) -> idA = idB && layoutVectorsApproxEqual offsetA offsetB
-       | CompositeBox compositeA, CompositeBox compositeB ->
-           approxEqual (float compositeA.TopLeftWidth) (float compositeB.TopLeftWidth)
-           && approxEqual (float compositeA.TopRightWidth) (float compositeB.TopRightWidth)
-           && compositeA.Followers.Length = compositeB.Followers.Length
-           && List.forall2
-               (fun (childA, childOffsetA) (childB, childOffsetB) ->
-                   boxesApproxEqual childA childB
-                   && layoutVectorsApproxEqual childOffsetA childOffsetB)
-               compositeA.Followers
-               compositeB.Followers
-       | _ -> false
 
 /// Coordinate components (offsets, connect-X) in [-100, 100] in steps of 0.01;
 /// signed because positions and connectors can sit either side of an origin.
@@ -442,66 +445,6 @@ let private leafGen: Gen<LayoutBox<w>> =
         let! offset = layoutVectorGen
         return createLeaf size connectX (PersonId personId) offset
     }
-
-let rec private boxGenSized depth =
-    if depth <= 0 then
-        leafGen
-    else
-        Gen.oneof [ leafGen; compositeGenSized depth ]
-
-and private compositeGenSized depth =
-    // A composite has between one and a handful of followers; the count is kept
-    // small so generated trees stay legible when a counterexample shrinks.
-    let minFollowers = 1
-    let maxFollowers = 3
-
-    gen {
-        let! size = sizeVectorGen
-        let! connectX = coordinateGen
-        let! topLeftWidth = sizeComponentGen
-        let! topRightWidth = sizeComponentGen
-        let! followerCount = Gen.choose (minFollowers, maxFollowers)
-
-        let! followers =
-            Gen.listOfLength
-                followerCount
-                (gen {
-                    let! child = boxGenSized (depth - 1)
-                    let! offset = layoutVectorGen
-                    return child, offset
-                })
-
-        return
-            createComposite size connectX {
-                TopLeftWidth = topLeftWidth
-                TopRightWidth = topRightWidth
-                Followers = followers
-            }
-    }
-
-/// Recursion depth is capped so generated trees stay small enough to shrink
-/// into readable counterexamples.
-let private maxBoxDepth = 4
-let private boxGen = Gen.sized (fun size -> boxGenSized (min size maxBoxDepth))
-
-/// Conversion factors in [0.5, 10], away from zero so the inverse reframe
-/// doesn't amplify rounding error.
-let private factorGen: Gen<float> =
-    Gen.choose (50, 1000) |> Gen.map (fun steps -> float steps / 100.0)
-
-[<Property>]
-let ``LayoutVector.reframe is its own inverse`` () =
-    Prop.forAll (Arb.fromGen (Gen.zip layoutVectorGen factorGen)) (fun (v, rawFactor) ->
-        let k = rawFactor * 1.0<u / w>
-        let roundTripped = LayoutVector.reframe (1.0 / k) (LayoutVector.reframe k v)
-        layoutVectorsApproxEqual roundTripped v)
-
-[<Property>]
-let ``LayoutBox.reframe is its own inverse over arbitrary nested boxes`` () =
-    Prop.forAll (Arb.fromGen (Gen.zip boxGen factorGen)) (fun (box, rawFactor) ->
-        let k = rawFactor * 1.0<u / w>
-        let roundTripped = reframe (1.0 / k) (reframe k box)
-        boxesApproxEqual roundTripped box)
 
 [<Property>]
 let ``attachHorizontally over leaves sums widths and maxes height and depth`` () =

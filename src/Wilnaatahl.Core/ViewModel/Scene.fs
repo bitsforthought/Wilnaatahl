@@ -133,7 +133,7 @@ module Scene =
                         Followers = []
                     }
                 else
-                    childBoxArray |> attachHorizontally |> reframe w2l
+                    childBoxArray |> attachHorizontally |> reframe Reframe.w2l
 
             let direction = if i < familyCount / 2 then -1.0 else 1.0
 
@@ -149,7 +149,7 @@ module Scene =
             partnerAndChildGroupBoxes
             |> Array.mapi attachPartnerAndChildGroupBoxes
             |> attachHorizontally
-            |> reframe w2l
+            |> reframe Reframe.w2l
 
         let parentConnectXOffset =
             let partnerWidth = spacing.X * w2l
@@ -179,7 +179,7 @@ module Scene =
     /// can process the returned LayoutBox using the LayoutBox.visit function.
     let layoutGraph wilp familyGraph =
         let spacing = { X = defaultXSpacing; Y = defaultYSpacing; Z = defaultZSpacing }
-        let upperSpacing = spacing |> LayoutVector.reframe w2u
+        let upperSpacing = spacing |> LayoutVector.reframe Reframe.w2u
 
         let visitLeaf = leafBox spacing 0.0<w>
         let visitParent = leafBox upperSpacing 0.0<u>

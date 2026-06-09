@@ -27,27 +27,24 @@ type LayoutVector<[<Measure>] 'u> = {
         Z = LanguagePrimitives.FloatWithMeasure<'u> 0.0
     }
 
+/// Type-level evidence of a unit relabel from 'from to 'into. Carries the
+/// frames in its type but no magnitude, so it can only relabel, never scale.
+type ReframeWitness<[<Measure>] 'from, [<Measure>] 'into> = private | Witness
+
 /// Definies utilities for working with LayoutVectors.
 module LayoutVector =
 
-    /// Reinterprets a vector from one unit-of-measure frame into another by
-    /// multiplying each component by the conversion factor. The factor is
-    /// intended to be a unit-relabel token of magnitude 1.0 (see the conversion
-    /// constants in the LayoutBox module), in which case the numbers are
-    /// preserved and only the measure changes. A factor of any other magnitude
-    /// would additionally scale the vector uniformly about the origin; no caller
-    /// does this, and it isn't part of the intended contract. Unlike changing
-    /// units of scalars, this has a runtime cost because it must allocate a new
-    /// vector to hold the converted co-ordinates.
-    let reframe<[<Measure>] 'u, [<Measure>] 'v>
-        (conversionFactor: float<'v / 'u>)
-        (vec: LayoutVector<'u>)
-        : LayoutVector<'v> =
-        {
-            X = vec.X * conversionFactor
-            Y = vec.Y * conversionFactor
-            Z = vec.Z * conversionFactor
-        }
+    /// Relabels a vector from one unit-of-measure frame into another. This is an
+    /// O(1), zero-allocation operation that only changes the measure: the numbers
+    /// are preserved and the value can never be scaled.
+    let reframe (_: ReframeWitness<'from, 'into>) (vec: LayoutVector<'from>) : LayoutVector<'into> =
+        // unbox (box vec) is statically unchecked but always succeeds: units of
+        // measure are erased at runtime, so LayoutVector<'from> and
+        // LayoutVector<'into> are the same runtime type. It only relabels and
+        // allocates nothing (records are reference types, so box is a no-op
+        // upcast and unbox is a cast that always succeeds), returning the same
+        // object.
+        unbox (box vec)
 
 /// Unit of measure (w means "world") that represents relative co-ordinates in the frame of reference of
 /// the box resulting from a horizontal or vertical attach operation.
@@ -63,6 +60,22 @@ type u
 /// the lower box during a vertical attach operation.
 [<Measure>]
 type l
+
+/// Blessed unit relabels used by the layout code. Each witness carries only the
+/// frames it converts between, so reframing can relabel but never scale.
+[<RequireQualifiedAccess>]
+module Reframe =
+    /// Relabels lower co-ordinates as world co-ordinates.
+    let l2w: ReframeWitness<l, w> = Witness
+
+    /// Relabels upper co-ordinates as world co-ordinates.
+    let u2w: ReframeWitness<u, w> = Witness
+
+    /// Relabels world co-ordinates as lower co-ordinates.
+    let w2l: ReframeWitness<w, l> = Witness
+
+    /// Relabels world co-ordinates as upper co-ordinates.
+    let w2u: ReframeWitness<w, u> = Witness
 
 /// Defines a frame of reference to help set the positions of points and other LayoutBoxes in world space.
 type LayoutBox<[<Measure>] 'u> = {
@@ -145,36 +158,18 @@ module LayoutBox =
     /// Creates a composite LayoutBox with the given property values.
     let createComposite size connectX composite = { Size = size; ConnectX = connectX; Payload = CompositeBox composite }
 
-    /// Reinterprets a whole LayoutBox tree from one unit-of-measure frame into
-    /// another, recursing through followers. Like LayoutVector.reframe, the
-    /// conversion factor is intended to be a magnitude-1.0 unit-relabel token,
-    /// preserving every co-ordinate and changing only the measure; a non-1.0
-    /// magnitude would also scale the whole tree uniformly about the origin,
-    /// which no caller does and which is outside the intended contract. Unlike
-    /// changing units of scalars, this has a runtime cost because it must
-    /// allocate a new box to hold the converted co-ordinates and vectors.
-    let rec reframe<[<Measure>] 'u, [<Measure>] 'v>
-        (conversionFactor: float<'v / 'u>)
-        (box: LayoutBox<'u>)
-        : LayoutBox<'v> =
-        let reframePayload payload =
-            let reframeFollower (follower, offset) =
-                follower |> reframe conversionFactor, offset |> LayoutVector.reframe conversionFactor
-
-            match payload with
-            | LeafBox(personId, offset) -> LeafBox(personId, offset |> LayoutVector.reframe conversionFactor)
-            | CompositeBox composite ->
-                CompositeBox {
-                    TopLeftWidth = composite.TopLeftWidth * conversionFactor
-                    TopRightWidth = composite.TopRightWidth * conversionFactor
-                    Followers = composite.Followers |> List.map reframeFollower
-                }
-
-        {
-            Size = box.Size |> LayoutVector.reframe conversionFactor
-            ConnectX = box.ConnectX * conversionFactor
-            Payload = box.Payload |> reframePayload
-        }
+    /// Relabels a whole LayoutBox tree from one unit-of-measure frame into
+    /// another in a single O(1), zero-allocation retag. Units of measure are
+    /// erased at runtime, so LayoutBox<'from> and LayoutBox<'into> are the same
+    /// runtime type and the tree need not be rebuilt; every co-ordinate is preserved
+    /// and only the measure changes. It can only relabel, never scale.
+    let reframe (_: ReframeWitness<'from, 'into>) (layoutBox: LayoutBox<'from>) : LayoutBox<'into> =
+        // unbox (box layoutBox) is statically unchecked but always succeeds:
+        // units of measure are erased at runtime, so LayoutBox<'from> and
+        // LayoutBox<'into> are the same runtime type. The single retag relabels the
+        // whole tree at once and allocates nothing (records are reference types,
+        // so box is a no-op upcast and unbox is a cast that always succeeds).
+        unbox (box layoutBox)
 
     /// Visits a LayoutBox and all its nested boxes, if any. The given callbacks are invoked for leaf and
     /// composite boxes, respectively. Each callback also takes a position for the box, which is taken
@@ -302,8 +297,8 @@ module LayoutBox =
         let upperFollowerOffset = { X = upperOffsetX; Y = lowerBox.Size.Y * l2w; Z = 0.0<w> }
 
         let followers = [
-            lowerBox |> reframe l2w, lowerFollowerOffset
-            upperBox |> reframe u2w, upperFollowerOffset
+            lowerBox |> reframe Reframe.l2w, lowerFollowerOffset
+            upperBox |> reframe Reframe.u2w, upperFollowerOffset
         ]
 
         // Distance to the right edge of the upper box relative to the combined box.

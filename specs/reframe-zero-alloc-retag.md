@@ -7,7 +7,7 @@ Replace the factor-multiplication in `LayoutVector.reframe` and
 O(1), zero-allocation measure relabel.
 
 Units of measure are erased at runtime, so `LayoutBox<w>` and `LayoutBox<l>` are
-the *same* CLR type. Reframing therefore only needs to retag the value, not
+the _same_ CLR type. Reframing therefore only needs to retag the value, not
 rebuild it. The conversion stays type-checked, and scaling becomes
 unrepresentable. (Measured: deep-tree rebuild ≈ 786 KB vs retag 0 bytes; retag
 returns the same object.)
@@ -19,7 +19,7 @@ behaviour-preserving.
 
 ### 1. Conversion witness (replaces the `float<'v/'u>` factor parameter)
 
-The factor's *type* gave the safety; its *value* was the only thing that allowed
+The factor's _type_ gave the safety; its _value_ was the only thing that allowed
 scaling. Replace it with a phantom witness that carries the frames in its type
 but has no magnitude.
 
