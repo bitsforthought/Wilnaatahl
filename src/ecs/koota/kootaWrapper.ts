@@ -7,7 +7,7 @@ import {
   createRemoved,
   Entity,
   InstancesFromParameters,
-  ModifierData,
+  Modifier,
   Not,
   Or,
   QueryParameter,
@@ -59,7 +59,7 @@ type KootaValueFactoryTrait<T> = Trait<KootaValueFactory<T>>;
 type KootaQueryParameters<S> = S extends QueryParameter[] ? S : [];
 type KootaTracker<TType extends string = string> = <T extends Trait[] = Trait[]>(
   ...traits: T
-) => ModifierData<T, TType>;
+) => Modifier;
 
 type WrappedTracker = { Tracker: TrackerType; kootaTracker: KootaTracker };
 
@@ -67,6 +67,19 @@ type WrappedTrait<TKootaTrait extends Trait<any>> = { IsTag: boolean; trait: TKo
 type WrappedTagTrait = WrappedTrait<TagTrait>;
 type WrappedValueTrait<T> = WrappedTrait<KootaValueTrait<T>>;
 type WrappedValueFactoryTrait<T> = WrappedTrait<KootaValueFactoryTrait<T>>;
+
+// A wrapped relation pair additionally carries the Koota relation function and its target so that
+// Spawn can rebuild the pair in "params" form (rel(target, value)) when an initial value is given.
+// In 0.6.x the pair object is opaque and a [pair, value] tuple is not a valid spawn argument, so
+// the value must be supplied as relation params instead.
+type WrappedRelationPair = WrappedTrait<Trait<any>> & {
+  relationFn: Relation<Trait<any>>;
+  relationTarget: Entity;
+};
+
+function isWrappedRelationPair(wrapper: unknown): wrapper is WrappedRelationPair {
+  return typeof wrapper === "object" && wrapper !== null && "relationFn" in wrapper;
+}
 
 type WrappedRelation<TKootaTrait extends Trait<any>, TTrait extends ITrait> = IRelation<TTrait> & {
   IsTag: boolean;
@@ -277,18 +290,33 @@ export function createTraitFactory(): ITraitFactory {
     rel: Relation<TKootaTrait>,
     isTag: boolean
   ): IRelation<TTrait> {
+    // A relation pair (rel(target)) is freshly allocated by Koota on every call, so — unlike
+    // the stable trait objects fromKootaTrait caches a wrapper on — we must NOT cache here:
+    // the cache would never hit. We also bypass fromKootaTrait's Trait<any> constraint because
+    // a pair is a RelationPair, not a Trait; Koota accepts a pair anywhere a Trait is valid for
+    // add/remove/has/get/set and queries, so we expose it through the wrapper's trait slot.
     function WithTarget(entity: EntityId & Entity): TTrait {
-      return fromKootaTrait(rel(entity), isTag) as TTrait;
+      const wrapped: WrappedRelationPair = {
+        IsTag: isTag,
+        trait: rel(entity) as unknown as Trait<any>,
+        relationFn: rel as Relation<Trait<any>>,
+        relationTarget: entity,
+      };
+      return wrapped as unknown as TTrait;
     }
 
     function Wildcard(): TTrait {
-      return fromKootaTrait(rel("*"), true) as TTrait;
+      const wrapped: WrappedTrait<Trait<any>> = {
+        IsTag: true,
+        trait: rel("*") as unknown as Trait<any>,
+      };
+      return wrapped as unknown as TTrait;
     }
 
     return getOrCreateWrapper(rel, (r) => ({ IsTag: isTag, rel: r, WithTarget, Wildcard }));
   }
 
-  function fromKootaTagRelation(rel: Relation<TagTrait>): IRelation<ITagTrait> {
+  function fromKootaTagRelation(rel: Relation<Trait<any>>): IRelation<ITagTrait> {
     return fromKootaRelation(rel, true);
   }
 
@@ -314,7 +342,8 @@ export function createTraitFactory(): ITraitFactory {
   }
 
   function Relation(config: RelationConfig): IRelation<ITagTrait> {
-    const rel: Relation<TagTrait> = config.IsExclusive ? relation({ exclusive: true }) : relation();
+    // A storeless relation's underlying trait is Trait<Record<string, never>>, not TagTrait.
+    const rel = config.IsExclusive ? relation({ exclusive: true }) : relation();
     return fromKootaTagRelation(rel);
   }
 
@@ -447,6 +476,10 @@ export function fromKootaWorld(world: World): IWorld {
       valueTrait: KootaValueTrait<T>
     ): IQueryResult<T, TMutable> {
       function ForEach(callback: (state: [T, EntityId]) => void): void {
+        // Read values via entity.get rather than readEach's state array: Koota does not surface a
+        // relation pair's store in the state array when the pair is the sole/leading query value
+        // (state is empty), whereas entity.get(pair) returns it. entity.get is correct for both
+        // plain value traits and relation pairs.
         for (const entity of result) {
           const value = entity.get(valueTrait)!; // Trait must exist per the query that created this result.
           callback([value, entity]);
@@ -680,13 +713,22 @@ export function fromKootaWorld(world: World): IWorld {
       }
 
       Spawn(...traits: TraitSpec[]): EntityId {
+        function unwrapValueSpec([traitWrapper, value]: [ITrait, unknown]): ConfigurableTrait<
+          Trait<any>
+        > {
+          // A value-relation pair must be spawned in params form rel(target, value); a
+          // [pair, value] tuple is rejected by Koota 0.6.x. Plain value traits still use the tuple.
+          if (isWrappedRelationPair(traitWrapper)) {
+            return traitWrapper.relationFn(
+              traitWrapper.relationTarget,
+              value as Record<string, unknown>
+            ) as ConfigurableTrait<Trait<any>>;
+          }
+          return [toKootaTrait(traitWrapper), value] as ConfigurableTrait<Trait<any>>;
+        }
+
         function unwrapTraitSpec(c: TraitSpec): ConfigurableTrait<Trait<any>> {
-          return TraitSpec_Map(
-            toKootaTrait,
-            ([traitWrapper, value]) =>
-              [toKootaTrait(traitWrapper), value] as ConfigurableTrait<Trait<any>>,
-            c
-          );
+          return TraitSpec_Map(toKootaTrait, unwrapValueSpec, c);
         }
 
         return this.world.spawn(...traits.map(unwrapTraitSpec));

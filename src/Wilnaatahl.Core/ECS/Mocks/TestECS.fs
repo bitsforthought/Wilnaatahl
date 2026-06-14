@@ -141,16 +141,20 @@ module private Ids =
 /// Tracks per-(entity, trait) events for a single tracker instance.
 /// Each tracker has its own independent set of flagged entities, keyed by trait.
 type private TestTracker(trackerType: TrackerType) =
-    // Used as a concurrent set (only key presence matters; the bool value is unused).
-    // .NET has no built-in ConcurrentHashSet, so ConcurrentDictionary is the standard substitute.
-    let flags = ConcurrentDictionary<ITrait, ConcurrentDictionary<int, bool>>()
+    // For each flagged (trait, entity) we also record a snapshot of the entity's other traits at
+    // the instant the tracked event fired. Koota's event-driven tracking queries require their
+    // With/Or/Not filters to have held at that moment (they are then re-checked against the current
+    // state at drain time), so the snapshot is what the event-time half of that check runs against.
+    // The snapshot is a small list of trait references.
+    let flags = ConcurrentDictionary<ITrait, ConcurrentDictionary<int, ITrait list>>()
+
     let drainedWorlds = ConcurrentDictionary<int, bool>()
 
-    member _.Flag(someTrait: ITrait, EntityId entityId) =
+    member _.Flag(someTrait: ITrait, EntityId entityId, snapshot: ITrait list) =
         let traitFlags =
-            flags.GetOrAdd(someTrait, fun _ -> ConcurrentDictionary<int, bool>())
+            flags.GetOrAdd(someTrait, fun _ -> ConcurrentDictionary<int, ITrait list>())
 
-        traitFlags[entityId] <- true
+        traitFlags[entityId] <- snapshot
 
     member _.Unflag(someTrait: ITrait, EntityId entityId) =
         match flags.TryGetValue someTrait with
@@ -162,21 +166,24 @@ type private TestTracker(trackerType: TrackerType) =
     /// them on subsequent drains (event-driven path).
     member _.HasBeenDrained(worldId: int) = drainedWorlds.ContainsKey worldId
 
-    member _.DrainTrait(someTrait: ITrait, worldId: int) : Set<int> =
+    /// Drains the given trait for the given world, returning each flagged entity together with
+    /// the snapshot of its traits at the time the tracked event fired.
+    member _.DrainTrait(someTrait: ITrait, worldId: int) : Map<int, ITrait list> =
         drainedWorlds[worldId] <- true
 
         match flags.TryGetValue someTrait with
         | true, traitFlags ->
             let matching =
-                traitFlags.Keys
-                |> Seq.filter (fun eid -> (EntityId eid) |> getWorldId = worldId)
-                |> Set.ofSeq
+                traitFlags
+                |> Seq.filter (fun kvp -> (EntityId kvp.Key) |> getWorldId = worldId)
+                |> Seq.map (fun kvp -> kvp.Key, kvp.Value)
+                |> Map.ofSeq
 
-            for eid in matching do
+            for eid in matching |> Map.toSeq |> Seq.map fst do
                 traitFlags.TryRemove eid |> ignore
 
             matching
-        | false, _ -> Set.empty
+        | false, _ -> Map.empty
 
     interface ITracker with
         member _.Tracker = trackerType
@@ -200,13 +207,16 @@ module private TrackerRegistry =
 
         tracker
 
-    let notifyAdded someTrait entity =
+    // The snapshot is passed lazily: computing it scans every trait store. It is forced only by
+    // the loop body below, which doesn't run when no tracker of the relevant kind is registered,
+    // so the scan is skipped entirely in that (common) case.
+    let notifyAdded someTrait entity (snapshot: Lazy<ITrait list>) =
         for kvp in addedTrackers do
-            kvp.Key.Flag(someTrait, entity)
+            kvp.Key.Flag(someTrait, entity, snapshot.Value)
 
-    let notifyRemoved someTrait entity =
+    let notifyRemoved someTrait entity (snapshot: Lazy<ITrait list>) =
         for kvp in removedTrackers do
-            kvp.Key.Flag(someTrait, entity)
+            kvp.Key.Flag(someTrait, entity, snapshot.Value)
 
     let cancelRemoved someTrait entity =
         for kvp in removedTrackers do
@@ -216,9 +226,9 @@ module private TrackerRegistry =
         for kvp in addedTrackers do
             kvp.Key.Unflag(someTrait, entity)
 
-    let notifyChanged someTrait entity =
+    let notifyChanged someTrait entity (snapshot: Lazy<ITrait list>) =
         for kvp in changedTrackers do
-            kvp.Key.Flag(someTrait, entity)
+            kvp.Key.Flag(someTrait, entity, snapshot.Value)
 
 type private TestTraitFactory() =
     let findConversionMethods (value: obj) (mutableValue: obj) =
@@ -295,6 +305,18 @@ module private World =
     let private allEntities world =
         world.TraitStores.Values |> Seq.map _.Keys |> Seq.concat |> Set.ofSeq
 
+    /// Snapshot of the traits the given entity currently has. Captured when a tracked event fires
+    /// so that event-driven tracking queries can evaluate their With/Or/Not filters as of that
+    /// moment (the result is then also re-checked against the current state), matching Koota.
+    let entityTraitSnapshot (EntityId entityId) world =
+        world.TraitStores
+        |> Seq.choose (fun kvp ->
+            if kvp.Value.ContainsKey entityId then
+                Some kvp.Key
+            else
+                None)
+        |> List.ofSeq
+
     let private allocEntity world =
         let entityId = Interlocked.Increment(&world.NextEntityId)
         packEntityId world.WorldId entityId
@@ -328,7 +350,8 @@ module private World =
         let existed, _ = store.TryRemove(entityId)
 
         if existed then
-            TrackerRegistry.notifyRemoved someTrait (EntityId entityId)
+            let snapshot = lazy (world |> entityTraitSnapshot (EntityId entityId))
+            TrackerRegistry.notifyRemoved someTrait (EntityId entityId) snapshot
             TrackerRegistry.cancelAdded someTrait (EntityId entityId)
 
     let addTrait (someTrait: ITrait) entity world =
@@ -357,7 +380,7 @@ module private World =
                 | None -> ()
             | _ -> ()
 
-            TrackerRegistry.notifyAdded someTrait entity
+            TrackerRegistry.notifyAdded someTrait entity (lazy (world |> entityTraitSnapshot entity))
             TrackerRegistry.cancelRemoved someTrait entity
 
     let destroy entity world =
@@ -387,7 +410,8 @@ module private World =
             let testTrait = valueTrait :?> ITestValueTrait<'T>
 
             if store.TryUpdate(entityId, Some(value |> testTrait.UnfreezeValue), oldValue) then
-                TrackerRegistry.notifyChanged valueTrait (EntityId entityId)
+                let snapshot = lazy (world |> entityTraitSnapshot (EntityId entityId))
+                TrackerRegistry.notifyChanged valueTrait (EntityId entityId) snapshot
         | false, _ -> invalidArg (nameof valueTrait) $"Trait not present on entity {entityId}"
 
     let setTraitValueWith (valueTrait: IValueTrait<'T>) (update: 'T -> 'T) (EntityId entityId) world =
@@ -399,7 +423,8 @@ module private World =
             let newValue = update (v |> testTrait.FreezeValue)
 
             if store.TryUpdate(entityId, Some(newValue |> testTrait.UnfreezeValue), value) then
-                TrackerRegistry.notifyChanged valueTrait (EntityId entityId)
+                let snapshot = lazy (world |> entityTraitSnapshot (EntityId entityId))
+                TrackerRegistry.notifyChanged valueTrait (EntityId entityId) snapshot
         | _ -> invalidArg (nameof valueTrait) $"Trait value not set on entity {entityId}"
 
     let targetsFor (relation: IRelation<'TTrait>) entity world =
@@ -415,12 +440,13 @@ module private World =
             Some(targets |> Seq.head)
 
     type private MatchedEntities = {
-        With: Set<int> list
-        Or: Set<int>
-        Not: Set<int>
-        /// Each entry is a set of entity IDs that matched ALL traits for a single tracking modifier.
+        WithTraits: ITrait list
+        OrTraits: ITrait list
+        NotTraits: ITrait list
+        /// Each entry maps the entities matched by a single tracking modifier (ANDed across its
+        /// tracked traits) to the snapshot of their traits at the time the tracked event fired.
         /// Multiple tracking modifiers are ANDed together.
-        Tracking: Set<int> list
+        Tracking: Map<int, ITrait list> list
         /// True if any tracker in the query is being drained for the first time (initial population).
         /// Koota skips With/Or filters during initial population.
         IsInitialPopulation: bool
@@ -428,9 +454,9 @@ module private World =
 
         static member val Empty =
             {
-                With = []
-                Or = Set.empty
-                Not = Set.empty
+                WithTraits = []
+                OrTraits = []
+                NotTraits = []
                 Tracking = []
                 IsInitialPopulation = false
             }
@@ -443,52 +469,66 @@ module private World =
                 let store = world |> getStore someTrait
                 store.Keys |> Set.ofSeq
 
-        and getEntitySetUnion traits =
+        and getEntitySetUnion (traits: seq<ITrait>) =
             traits |> Seq.map getEntitySet |> Set.unionMany
 
-        let drainForWorld (testTracker: TestTracker) (traits: ITrait[]) =
-            let perTrait =
-                traits |> Array.map (fun t -> testTracker.DrainTrait(t, world.WorldId))
+        // True if a snapshot (the traits an entity held when a tracked event fired) satisfies the
+        // given filter trait, expanding relation wildcards the same way getEntitySet does so that
+        // With/Or(relation.Wildcard()) work on the event-driven tracking path too.
+        let snapshotHasTrait (snapshot: ITrait list) (filterTrait: ITrait) =
+            match filterTrait with
+            | :? TestWildcardTrait as wildcard ->
+                wildcard.Relation.TargetToTraitMap.Values
+                |> Seq.exists (fun targetTrait -> snapshot |> List.contains targetTrait)
+            | _ -> snapshot |> List.contains filterTrait
 
-            if perTrait.Length = 0 then
-                Set.empty
-            else
-                Set.intersectMany perTrait
+        // ANDs a set of per-trait/per-modifier drain results by keeping only entities present in
+        // every map, and merges (unions) their at-event-time snapshots.
+        let intersectSnapshots (maps: Map<int, ITrait list> seq) : Map<int, ITrait list> =
+            let maps = maps |> Seq.toList
+
+            match maps with
+            | [] -> Map.empty
+            | _ ->
+                let commonKeys = maps |> List.map (Map.keys >> Set.ofSeq) |> Set.intersectMany
+
+                commonKeys
+                |> Set.toSeq
+                |> Seq.map (fun eid -> eid, maps |> List.choose (Map.tryFind eid) |> List.concat |> List.distinct)
+                |> Map.ofSeq
+
+        let drainForWorld (testTracker: TestTracker) (traits: ITrait[]) =
+            // Drain every tracked trait (side-effecting) before ANDing their results.
+            traits
+            |> Array.map (fun t -> testTracker.DrainTrait(t, world.WorldId))
+            |> intersectSnapshots
+
+        // Drains a tracking modifier (ANDing its tracked traits) and records whether this is the
+        // tracker's first drain for this world (initial population, which skips With/Or filters).
+        let withTracking acc (traits: ITrait[]) (tracker: ITracker) =
+            let t = tracker :?> TestTracker
+            let wasInitial = not (t.HasBeenDrained world.WorldId)
+
+            {
+                acc with
+                    Tracking = drainForWorld t traits :: acc.Tracking
+                    IsInitialPopulation = acc.IsInitialPopulation || wasInitial
+            }
 
         let collect acc queryOp =
             match queryOp with
-            | With someTrait -> { acc with With = (someTrait |> getEntitySet) :: acc.With }
-            | Or traits -> { acc with Or = traits |> getEntitySetUnion |> Set.union acc.Or }
-            | Not traits -> { acc with Not = traits |> getEntitySetUnion |> Set.union acc.Not }
-            | Added(traits, tracker) ->
-                let t = tracker :?> TestTracker
-                let wasInitial = not (t.HasBeenDrained world.WorldId)
-
-                {
-                    acc with
-                        Tracking = drainForWorld t traits :: acc.Tracking
-                        IsInitialPopulation = acc.IsInitialPopulation || wasInitial
-                }
-            | Removed(traits, tracker) ->
-                let t = tracker :?> TestTracker
-                let wasInitial = not (t.HasBeenDrained world.WorldId)
-
-                {
-                    acc with
-                        Tracking = drainForWorld t traits :: acc.Tracking
-                        IsInitialPopulation = acc.IsInitialPopulation || wasInitial
-                }
-            | Changed(traits, tracker) ->
-                let t = tracker :?> TestTracker
-                let wasInitial = not (t.HasBeenDrained world.WorldId)
-
-                {
-                    acc with
-                        Tracking = drainForWorld t traits :: acc.Tracking
-                        IsInitialPopulation = acc.IsInitialPopulation || wasInitial
-                }
+            | With someTrait -> { acc with WithTraits = someTrait :: acc.WithTraits }
+            | Or traits -> { acc with OrTraits = List.ofArray traits @ acc.OrTraits }
+            | Not traits -> { acc with NotTraits = List.ofArray traits @ acc.NotTraits }
+            | Added(traits, tracker) -> withTracking acc traits tracker
+            | Removed(traits, tracker) -> withTracking acc traits tracker
+            | Changed(traits, tracker) -> withTracking acc traits tracker
 
         let matches = where |> Array.fold collect MatchedEntities.Empty
+
+        let withSets = matches.WithTraits |> List.map getEntitySet
+        let orSet = matches.OrTraits |> getEntitySetUnion
+        let notSet = matches.NotTraits |> getEntitySetUnion
 
         // When tracking modifiers are present, they define the candidate set
         // (since tracked entities may no longer have traits — e.g. Removed/Changed+removed).
@@ -496,13 +536,14 @@ module private World =
         let positiveMatches =
             match matches.Tracking with
             | [] ->
-                match matches.With, matches.Or.IsEmpty with
+                match withSets, matches.OrTraits.IsEmpty with
                 | [], true -> world |> allEntities // No positive criteria, so match all.
-                | [], false -> matches.Or // No With criteria, so only Or matches count.
-                | _, true -> Set.intersectMany matches.With // No Or criteria, so only With matches count.
-                | _, false -> Set.intersect matches.Or (Set.intersectMany matches.With) // Apply both With and Or.
-            | trackingSets ->
-                let trackedEntities = Set.intersectMany trackingSets
+                | [], false -> orSet // No With criteria, so only Or matches count.
+                | _, true -> Set.intersectMany withSets // No Or criteria, so only With matches count.
+                | _, false -> Set.intersect orSet (Set.intersectMany withSets) // Apply both With and Or.
+            | trackingMaps ->
+                let tracked = intersectSnapshots trackingMaps
+                let trackedEntities = tracked |> Map.keys |> Set.ofSeq
 
                 // Koota's initial population path for tracking queries only checks tracking
                 // bitmasks, skipping With/Or filters. This is a known bug:
@@ -512,18 +553,35 @@ module private World =
                 if matches.IsInitialPopulation then
                     trackedEntities
                 else
-                    match matches.With, matches.Or.IsEmpty with
-                    | [], true -> trackedEntities
-                    | [], false -> Set.intersect trackedEntities matches.Or
-                    | _, true -> Set.intersect trackedEntities (Set.intersectMany matches.With)
-                    | _, false ->
-                        Set.intersect trackedEntities (Set.intersect matches.Or (Set.intersectMany matches.With))
+                    // Event-driven path: Koota includes an entity only if the query's With/Or/Not
+                    // filters held at the moment the tracked event fired (checked against the
+                    // entity's snapshot) AND still hold against the current state at drain time
+                    // (Koota evicts an entity when a later structural change — including destroy —
+                    // breaks a filter). We therefore require both. Drain-time Not is applied by the
+                    // final Set.difference below; the per-entity checks here add the event-time
+                    // With/Or/Not and the drain-time With/Or.
+                    trackedEntities
+                    |> Set.filter (fun eid ->
+                        let snapshot = tracked[eid]
+                        let eventWithOk = matches.WithTraits |> List.forall (snapshotHasTrait snapshot)
+
+                        let eventOrOk =
+                            matches.OrTraits.IsEmpty
+                            || matches.OrTraits |> List.exists (snapshotHasTrait snapshot)
+
+                        let eventNotOk =
+                            matches.NotTraits |> List.forall (fun t -> not (snapshotHasTrait snapshot t))
+
+                        let drainWithOk = withSets |> List.forall (Set.contains eid)
+                        let drainOrOk = matches.OrTraits.IsEmpty || Set.contains eid orSet
+
+                        eventWithOk && eventOrOk && eventNotOk && drainWithOk && drainOrOk)
 
         // Exclude the world entity from query results.
         let (EntityId worldEntityId) = world.EntityId
 
         let finalMatches =
-            Set.difference positiveMatches (matches.Not |> Set.union (set [ worldEntityId ]))
+            Set.difference positiveMatches (notSet |> Set.union (set [ worldEntityId ]))
 
         finalMatches |> Seq.map EntityId
 
@@ -544,7 +602,7 @@ module private World =
             let mutableValue = testTrait.UnfreezeUntypedValue value
 
             if store.TryAdd(entityId, Some mutableValue) then
-                TrackerRegistry.notifyAdded someTrait entity
+                TrackerRegistry.notifyAdded someTrait entity (lazy (world |> entityTraitSnapshot entity))
                 TrackerRegistry.cancelRemoved someTrait entity
 
         for someTrait in traits do
@@ -693,7 +751,7 @@ type TestWorld() =
 
             let notifyChanges _ entity before after =
                 if not (obj.Equals(before, after)) then
-                    TrackerRegistry.notifyChanged someTrait entity
+                    TrackerRegistry.notifyChanged someTrait entity (lazy (world |> entityTraitSnapshot entity))
 
             let getReadResilient before entity =
                 world |> getTraitValue someTrait entity |> Option.defaultValue before
@@ -727,11 +785,13 @@ type TestWorld() =
                 | _ -> changedTraits |> Array.exists (fun t -> obj.ReferenceEquals(t, someTrait))
 
             let notifyChanges option entity (beforeFirst, beforeSecond) (afterFirst, afterSecond) =
+                let snapshot = lazy (world |> entityTraitSnapshot entity)
+
                 if isTracked option firstTrait && not (obj.Equals(beforeFirst, afterFirst)) then
-                    TrackerRegistry.notifyChanged firstTrait entity
+                    TrackerRegistry.notifyChanged firstTrait entity snapshot
 
                 if isTracked option secondTrait && not (obj.Equals(beforeSecond, afterSecond)) then
-                    TrackerRegistry.notifyChanged secondTrait entity
+                    TrackerRegistry.notifyChanged secondTrait entity snapshot
 
             let hasChanged = changedTraits.Length > 0
 
@@ -785,14 +845,16 @@ type TestWorld() =
                 | _ -> changedTraits |> Array.exists (fun t -> obj.ReferenceEquals(t, someTrait))
 
             let notifyChanges option entity (b1, b2, b3) (a1, a2, a3) =
+                let snapshot = lazy (world |> entityTraitSnapshot entity)
+
                 if isTracked option firstTrait && not (obj.Equals(b1, a1)) then
-                    TrackerRegistry.notifyChanged firstTrait entity
+                    TrackerRegistry.notifyChanged firstTrait entity snapshot
 
                 if isTracked option secondTrait && not (obj.Equals(b2, a2)) then
-                    TrackerRegistry.notifyChanged secondTrait entity
+                    TrackerRegistry.notifyChanged secondTrait entity snapshot
 
                 if isTracked option thirdTrait && not (obj.Equals(b3, a3)) then
-                    TrackerRegistry.notifyChanged thirdTrait entity
+                    TrackerRegistry.notifyChanged thirdTrait entity snapshot
 
             let hasChanged = changedTraits.Length > 0
 
@@ -850,17 +912,19 @@ type TestWorld() =
                 | _ -> changedTraits |> Array.exists (fun t -> obj.ReferenceEquals(t, someTrait))
 
             let notifyChanges option entity (b1, b2, b3, b4) (a1, a2, a3, a4) =
+                let snapshot = lazy (world |> entityTraitSnapshot entity)
+
                 if isTracked option firstTrait && not (obj.Equals(b1, a1)) then
-                    TrackerRegistry.notifyChanged firstTrait entity
+                    TrackerRegistry.notifyChanged firstTrait entity snapshot
 
                 if isTracked option secondTrait && not (obj.Equals(b2, a2)) then
-                    TrackerRegistry.notifyChanged secondTrait entity
+                    TrackerRegistry.notifyChanged secondTrait entity snapshot
 
                 if isTracked option thirdTrait && not (obj.Equals(b3, a3)) then
-                    TrackerRegistry.notifyChanged thirdTrait entity
+                    TrackerRegistry.notifyChanged thirdTrait entity snapshot
 
                 if isTracked option fourthTrait && not (obj.Equals(b4, a4)) then
-                    TrackerRegistry.notifyChanged fourthTrait entity
+                    TrackerRegistry.notifyChanged fourthTrait entity snapshot
 
             let hasChanged = changedTraits.Length > 0
 

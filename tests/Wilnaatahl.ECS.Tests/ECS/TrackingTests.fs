@@ -4,6 +4,7 @@ open System
 open Wilnaatahl.ECS
 open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Extensions
+open Wilnaatahl.ECS.Relation
 open Wilnaatahl.ECS.Tracking
 open Wilnaatahl.ECS.Trait
 open Wilnaatahl.Tests.ECS.TestInfra
@@ -779,8 +780,11 @@ type TrackingTests() =
     // for tracking queries. This is a known Koota bug:
     // https://github.com/pmndrs/koota/issues/241
     // We intentionally match this behavior so tests are consistent across the
-    // mock and real Koota. M4-M5 test the event-driven path (after first drain),
-    // which correctly applies With/Or filters.
+    // mock and real Koota. M4, M5 and M10 test the event-driven path (after the first
+    // drain), where Koota evaluates the With/Or filters as of the moment the tracked
+    // trait is added — not at drain time. An entity is matched only if it already
+    // satisfies the filters when the tracked trait is added; adding a filter trait
+    // afterwards does not retro-match it.
     // ================================================================
 
     [<Fact>]
@@ -821,25 +825,30 @@ type TrackingTests() =
         results =! set [ a; b; c; d ]
 
     [<Fact>]
-    member _.``M4: After drain, event-driven Added + With filters correctly``() =
+    member _.``M4: After drain, event-driven Added + With filters at add time``() =
         let Added = createAdded ()
         // Drain initial state
         world.Query(Added <=> [| Age |], With Name) |> ignore
-        // Now add entities — these go through the event-driven path
-        let a = world.Spawn [| Age.Val {| age = 0 |}; Name.Val {| name = "" |} |]
-        let _ = world.Spawn [| Age.Val {| age = 0 |} |] // has Age but no Name
+        // a has Name present BEFORE Age is added → matches (filter satisfied at add time).
+        let a = world.Spawn [| Name.Val {| name = "" |} |]
+        a |> add Age
+        // b has Age added while Name is absent → no match, even though Name is added afterwards.
+        let b = world.Spawn [| Age.Val {| age = 0 |} |]
+        b |> add Name
         let results = world.Query(Added <=> [| Age |], With Name) |> Set.ofSeq
-        // Event-driven path should check both tracking AND With
         results =! set [ a ]
 
     [<Fact>]
-    member _.``M5: After drain, event-driven Added + Or filters correctly``() =
+    member _.``M5: After drain, event-driven Added + Or filters at add time``() =
         let Added = createAdded ()
         // Drain initial state
         world.Query(Added <=> [| Age |], Or [| Name; IsTagged |]) |> ignore
-        // Now add entities
-        let a = world.Spawn [| Age.Val {| age = 0 |}; Name.Val {| name = "" |} |] // Age + Name
-        let _ = world.Spawn [| Age.Val {| age = 0 |} |] // Age only, no Or match
+        // a has an Or trait (Name) present before Age is added → matches.
+        let a = world.Spawn [| Name.Val {| name = "" |} |]
+        a |> add Age
+        // b has no Or trait when Age is added → no match, even after IsTagged is added.
+        let b = world.Spawn [| Age.Val {| age = 0 |} |]
+        b |> add IsTagged
         let results = world.Query(Added <=> [| Age |], Or [| Name; IsTagged |]) |> Set.ofSeq
         results =! set [ a ]
 
@@ -894,21 +903,74 @@ type TrackingTests() =
         results =! set [ a ]
 
     [<Fact>]
-    member _.``M10: After drain, event-driven Added + With + Or filters correctly``() =
+    member _.``M10: After drain, event-driven Added + With + Or filters at add time``() =
         let Added = createAdded ()
         // Drain initial state
         world.Query(Added <=> [| Age |], With Name, Or [| IsTagged |]) |> ignore
-        // Event-driven path
-        let a =
-            world.Spawn [| Age.Val {| age = 0 |}; Name.Val {| name = "" |}; IsTagged.Tag() |]
-
-        let _ = world.Spawn [| Age.Val {| age = 0 |}; Name.Val {| name = "" |} |] // no Or match
-        let _ = world.Spawn [| Age.Val {| age = 0 |}; IsTagged.Tag() |] // no With match
-        let _ = world.Spawn [| Age.Val {| age = 0 |} |] // neither
+        // a has Name (With) AND IsTagged (Or) present before Age is added → matches.
+        let a = world.Spawn [| Name.Val {| name = "" |}; IsTagged.Tag() |]
+        a |> add Age
+        // b has Name but no IsTagged when Age is added → Or fails → no match.
+        let b = world.Spawn [| Name.Val {| name = "" |} |]
+        b |> add Age
+        // c has IsTagged but no Name when Age is added → With fails → no match.
+        let c = world.Spawn [| IsTagged.Tag() |]
+        c |> add Age
 
         let results =
             world.Query(Added <=> [| Age |], With Name, Or [| IsTagged |]) |> Set.ofSeq
-        // Must have Added(Age) AND Name AND IsTagged. Only A has all three.
+        // Must have Added(Age) AND Name AND IsTagged all present when Age is added. Only a qualifies.
+        results =! set [ a ]
+
+    // M11-M13 lock in further event-driven filtering rules confirmed against real Koota 0.6.x:
+    //  - Not is evaluated at the tracked event's moment (and the entity is evicted if the Not
+    //    trait is present at drain time).
+    //  - A filter that was satisfied only between separate tracked events of a multi-trait modifier
+    //    does not retro-match; the filter must also hold at drain time.
+    //  - Relation wildcard filters (With/Or relation.Wildcard()) work on the event-driven path.
+
+    [<Fact>]
+    member _.``M11: event-driven Added + Not evaluated at add time``() =
+        let Added = createAdded ()
+        world.Query(Added <=> [| Age |], Not [| IsTagged |]) |> ignore
+        // a has IsTagged when Age is added → Not fails at add time → excluded, even after IsTagged is removed.
+        let a = world.Spawn [| IsTagged.Tag() |]
+        a |> add Age
+        a |> remove IsTagged
+        // b never had IsTagged → matches.
+        let b = world.Spawn [| Age.Val {| age = 0 |} |]
+        let results = world.Query(Added <=> [| Age |], Not [| IsTagged |]) |> Set.ofSeq
+        results =! set [ b ]
+
+    [<Fact>]
+    member _.``M12: event-driven multi-trait Added + With requires the filter through drain``() =
+        let Added = createAdded ()
+        world.Query(Added <=> [| Age; Name |], With IsTagged) |> ignore
+        // a has IsTagged only when Age is added (removed before Name, absent at drain) → no match.
+        let a = world.Spawn [| IsTagged.Tag() |]
+        a |> add Age
+        a |> remove IsTagged
+        a |> add Name
+        // b keeps IsTagged throughout → matches.
+        let b = world.Spawn [| IsTagged.Tag() |]
+        b |> add Age
+        b |> add Name
+        let results = world.Query(Added <=> [| Age; Name |], With IsTagged) |> Set.ofSeq
+        results =! set [ b ]
+
+    [<Fact>]
+    member _.``M13: event-driven tracking works with a relation wildcard filter``() =
+        let Added = createAdded ()
+        let Likes = tagRelation ()
+        world.Query(Added <=> [| Age |], With(Likes.Wildcard())) |> ignore
+        let target = world.Spawn [||]
+        // a has the Likes relation before Age is added → wildcard With holds at add time → matches.
+        let a = world.Spawn [||]
+        a |> add (Likes => target)
+        a |> add Age
+        // b has no Likes relation when Age is added → wildcard With fails → no match.
+        let b = world.Spawn [| Age.Val {| age = 0 |} |]
+        let results = world.Query(Added <=> [| Age |], With(Likes.Wildcard())) |> Set.ofSeq
         results =! set [ a ]
 
     // ================================================================

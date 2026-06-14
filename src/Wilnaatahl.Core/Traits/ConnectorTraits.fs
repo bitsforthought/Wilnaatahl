@@ -15,7 +15,7 @@ let Line = tagTrait ()
 let EndpointOf = tagRelationWith { IsExclusive = true }
 
 /// Relationship from a Bounding Box to an entity with Position that it contains.
-let BoundingBoxOn = tagRelation () // TODO: Upgrade Koota so it doesn't kill perf to have one trait per node
+let BoundingBoxOn = tagRelation ()
 
 /// Relationship from one entity with Position to another entity with Position, where the subject's X co-ordinate
 /// will automatically track the target's with the given distance.
