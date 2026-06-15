@@ -54,9 +54,31 @@ type RelationTests() =
         entity1 |> targetsFor Owes =! [||]
 
     [<Fact>]
-    member _.``QueryTrait over a value-relation pair reads its store value``() =
-        // Regression: querying with a relation pair as the sole read trait must surface the pair's
-        // store value to ForEach. The Movement system relies on this via QueryTrait(Parallels => line).
+    member _.``A value-relation pair's value is read by querying subjects then getting per entity``() =
+        // The membership read pattern (used by the UndoRedo system): filter to a relation's subjects
+        // with Query(With(pair)), then read each subject's value with get. This works for any value
+        // relation, exclusive or not.
+        let lender = world.Spawn [||]
+        let debtor1 = world.Spawn [||]
+        let debtor2 = world.Spawn [||]
+        debtor1 |> addWith (Owes => lender) {| amount = 10 |}
+        debtor2 |> addWith (Owes => lender) {| amount = 20 |}
+
+        let owedByEntity =
+            world.Query(With(Owes => lender)).ToSequence()
+            |> Seq.map (fun (_, entity) ->
+                let owed = entity |> get (Owes => lender) |> Option.get
+                entity, owed.amount)
+            |> Map.ofSeq
+
+        owedByEntity =! Map.ofList [ debtor1, 10; debtor2, 20 ]
+
+    [<Fact>]
+    member _.``A sole relation-pair query reads via ForEach but fails fast on UpdateEach``() =
+        // A sole concrete-target relation pair takes Koota's relation-only fast path, which yields no
+        // iterable trait state. ForEach sidesteps this by reading each value with get and works; the
+        // Movement system relies on this via QueryTrait(Parallels => line). UpdateEach mutates the
+        // (absent) state, so it fails fast rather than surface a wrong value. Mock and real Koota agree.
         let lender = world.Spawn [||]
         let debtor1 = world.Spawn [||]
         let debtor2 = world.Spawn [||]
@@ -69,6 +91,12 @@ type RelationTests() =
             |> Map.ofSeq
 
         owedByEntity =! Map.ofList [ debtor1, 10; debtor2, 20 ]
+
+        let message =
+            captureExceptionMessage (fun () ->
+                world.QueryTrait(Owes => lender).UpdateEachWith AlwaysTrack (fun _ -> ()))
+
+        message =! Some relationValueUpdateEachError
 
     [<Fact>]
     member _.``Spawn with a value-relation pair sets the relation and its value``() =

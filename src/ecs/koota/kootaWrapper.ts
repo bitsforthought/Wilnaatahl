@@ -75,11 +75,22 @@ type WrappedValueFactoryTrait<T> = WrappedTrait<KootaValueFactoryTrait<T>>;
 type WrappedRelationPair = WrappedTrait<Trait<any>> & {
   relationFn: Relation<Trait<any>>;
   relationTarget: Entity;
+  isExclusive: boolean;
 };
 
 function isWrappedRelationPair(wrapper: unknown): wrapper is WrappedRelationPair {
   return typeof wrapper === "object" && wrapper !== null && "relationFn" in wrapper;
 }
+
+function isNonExclusiveRelationPair(wrapper: unknown): boolean {
+  return isWrappedRelationPair(wrapper) && !wrapper.isExclusive;
+}
+
+// A relation pair used as a query's value slot cannot have its per-target value surfaced through
+// the query's iteration state, so UpdateEach (which iterates that state) fails fast. ForEach is
+// unaffected: it reads each entity's value individually, which is always correct.
+const relationValueUpdateEachError =
+  "Cannot UpdateEach a query whose value is a relation pair. Read the relation's value with ForEach instead; UpdateEach cannot read a relation pair's per-target value.";
 
 type WrappedRelation<TKootaTrait extends Trait<any>, TTrait extends ITrait> = IRelation<TTrait> & {
   IsTag: boolean;
@@ -288,7 +299,8 @@ export function createTraitFactory(): ITraitFactory {
 
   function fromKootaRelation<TKootaTrait extends Trait<any>, TTrait extends ITrait>(
     rel: Relation<TKootaTrait>,
-    isTag: boolean
+    isTag: boolean,
+    isExclusive: boolean
   ): IRelation<TTrait> {
     // A relation pair (rel(target)) is freshly allocated by Koota on every call, so — unlike
     // the stable trait objects fromKootaTrait caches a wrapper on — we must NOT cache here:
@@ -301,6 +313,7 @@ export function createTraitFactory(): ITraitFactory {
         trait: rel(entity) as unknown as Trait<any>,
         relationFn: rel as Relation<Trait<any>>,
         relationTarget: entity,
+        isExclusive,
       };
       return wrapped as unknown as TTrait;
     }
@@ -316,14 +329,18 @@ export function createTraitFactory(): ITraitFactory {
     return getOrCreateWrapper(rel, (r) => ({ IsTag: isTag, rel: r, WithTarget, Wildcard }));
   }
 
-  function fromKootaTagRelation(rel: Relation<Trait<any>>): IRelation<ITagTrait> {
-    return fromKootaRelation(rel, true);
+  function fromKootaTagRelation(
+    rel: Relation<Trait<any>>,
+    isExclusive: boolean
+  ): IRelation<ITagTrait> {
+    return fromKootaRelation(rel, true, isExclusive);
   }
 
   function fromKootaValueRelation<T, TMutable>(
-    rel: Relation<KootaValueTrait<T>>
+    rel: Relation<KootaValueTrait<T>>,
+    isExclusive: boolean
   ): IRelation<IMutableValueTrait<T, TMutable>> {
-    return fromKootaRelation(rel, false);
+    return fromKootaRelation(rel, false, isExclusive);
   }
 
   function CreateAdded(): IAddedTracker {
@@ -344,7 +361,7 @@ export function createTraitFactory(): ITraitFactory {
   function Relation(config: RelationConfig): IRelation<ITagTrait> {
     // A storeless relation's underlying trait is Trait<Record<string, never>>, not TagTrait.
     const rel = config.IsExclusive ? relation({ exclusive: true }) : relation();
-    return fromKootaTagRelation(rel);
+    return fromKootaTagRelation(rel, config.IsExclusive);
   }
 
   // We ignore the mutableStore parameter; It's only there for type inference on the F# side.
@@ -356,7 +373,7 @@ export function createTraitFactory(): ITraitFactory {
     const rel = config.IsExclusive
       ? relation({ exclusive: true, store: typedStore })
       : relation({ store: typedStore });
-    return fromKootaValueRelation(rel);
+    return fromKootaValueRelation(rel, config.IsExclusive);
   }
 
   function TagTrait(): ITagTrait {
@@ -473,13 +490,12 @@ export function fromKootaWorld(world: World): IWorld {
 
     function wrapQueryResult1<S, T, TMutable>(
       result: QueryResult<KootaQueryParameters<S>>,
-      valueTrait: KootaValueTrait<T>
+      valueTrait: KootaValueTrait<T>,
+      updateEachError: string | undefined
     ): IQueryResult<T, TMutable> {
       function ForEach(callback: (state: [T, EntityId]) => void): void {
-        // Read values via entity.get rather than readEach's state array: Koota does not surface a
-        // relation pair's store in the state array when the pair is the sole/leading query value
-        // (state is empty), whereas entity.get(pair) returns it. entity.get is correct for both
-        // plain value traits and relation pairs.
+        // entity.get is correct for both plain value traits and relation pairs, including the
+        // relation-only and non-exclusive cases where the iteration state can't surface the value.
         for (const entity of result) {
           const value = entity.get(valueTrait)!; // Trait must exist per the query that created this result.
           callback([value, entity]);
@@ -490,6 +506,9 @@ export function fromKootaWorld(world: World): IWorld {
         changeOption: ChangeDetectionOption,
         callback: (state: [TMutable, EntityId]) => void
       ): void {
+        if (updateEachError) {
+          throw new Error(updateEachError);
+        }
         function thunk(state: InstancesFromParameters<KootaQueryParameters<S>>, entity: Entity) {
           callback([state[0], entity]);
         }
@@ -507,7 +526,8 @@ export function fromKootaWorld(world: World): IWorld {
 
     function wrapQueryResult2<S, T, TMutable, U, UMutable>(
       result: QueryResult<KootaQueryParameters<S>>,
-      valueTraits: [KootaValueTrait<T>, KootaValueTrait<U>]
+      valueTraits: [KootaValueTrait<T>, KootaValueTrait<U>],
+      updateEachError: string | undefined
     ): IQueryResult<[T, U], [TMutable, UMutable]> {
       function ForEach(callback: (state: [[T, U], EntityId]) => void): void {
         for (const entity of result) {
@@ -521,6 +541,9 @@ export function fromKootaWorld(world: World): IWorld {
         changeOption: ChangeDetectionOption,
         callback: (state: [[TMutable, UMutable], EntityId]) => void
       ): void {
+        if (updateEachError) {
+          throw new Error(updateEachError);
+        }
         function thunk(state: InstancesFromParameters<KootaQueryParameters<S>>, entity: Entity) {
           callback([state.slice(0, 2) as [TMutable, UMutable], entity]);
         }
@@ -538,7 +561,8 @@ export function fromKootaWorld(world: World): IWorld {
 
     function wrapQueryResult3<S, T, TMutable, U, UMutable, V, VMutable>(
       result: QueryResult<KootaQueryParameters<S>>,
-      valueTraits: [KootaValueTrait<T>, KootaValueTrait<U>, KootaValueTrait<V>]
+      valueTraits: [KootaValueTrait<T>, KootaValueTrait<U>, KootaValueTrait<V>],
+      updateEachError: string | undefined
     ): IQueryResult<[T, U, V], [TMutable, UMutable, VMutable]> {
       function ForEach(callback: (state: [[T, U, V], EntityId]) => void): void {
         for (const entity of result) {
@@ -553,6 +577,9 @@ export function fromKootaWorld(world: World): IWorld {
         changeOption: ChangeDetectionOption,
         callback: (state: [[TMutable, UMutable, VMutable], EntityId]) => void
       ): void {
+        if (updateEachError) {
+          throw new Error(updateEachError);
+        }
         function thunk(state: InstancesFromParameters<KootaQueryParameters<S>>, entity: Entity) {
           callback([state.slice(0, 3) as [TMutable, UMutable, VMutable], entity]);
         }
@@ -570,7 +597,8 @@ export function fromKootaWorld(world: World): IWorld {
 
     function wrapQueryResult4<S, T, TMutable, U, UMutable, V, VMutable, W, WMutable>(
       result: QueryResult<KootaQueryParameters<S>>,
-      valueTraits: [KootaValueTrait<T>, KootaValueTrait<U>, KootaValueTrait<V>, KootaValueTrait<W>]
+      valueTraits: [KootaValueTrait<T>, KootaValueTrait<U>, KootaValueTrait<V>, KootaValueTrait<W>],
+      updateEachError: string | undefined
     ): IQueryResult<[T, U, V, W], [TMutable, UMutable, VMutable, WMutable]> {
       function ForEach(callback: (state: [[T, U, V, W], EntityId]) => void): void {
         for (const entity of result) {
@@ -586,6 +614,9 @@ export function fromKootaWorld(world: World): IWorld {
         changeOption: ChangeDetectionOption,
         callback: (state: [[TMutable, UMutable, VMutable, WMutable], EntityId]) => void
       ): void {
+        if (updateEachError) {
+          throw new Error(updateEachError);
+        }
         function thunk(state: InstancesFromParameters<KootaQueryParameters<S>>, entity: Entity) {
           callback([state.slice(0, 4) as [TMutable, UMutable, VMutable, WMutable], entity]);
         }
@@ -634,7 +665,14 @@ export function fromKootaWorld(world: World): IWorld {
         const queryParameters = unwrapQueryOperators(where);
         const kootaValueTrait = toKootaValueTrait(someTrait);
         const result = this.world.query(kootaValueTrait, ...queryParameters);
-        return wrapQueryResult1(result, kootaValueTrait);
+        // A relation pair in the value slot can't surface its per-target value through iteration when
+        // it's the sole query trait, or whenever it's non-exclusive. UpdateEach fails fast in both.
+        const updateEachError =
+          (queryParameters.length === 0 && isWrappedRelationPair(someTrait)) ||
+          isNonExclusiveRelationPair(someTrait)
+            ? relationValueUpdateEachError
+            : undefined;
+        return wrapQueryResult1(result, kootaValueTrait, updateEachError);
       }
 
       QueryTraits<T, TMutable, U, UMutable>(
@@ -650,7 +688,15 @@ export function fromKootaWorld(world: World): IWorld {
           secondKootaValueTrait,
           ...queryParameters
         );
-        return wrapQueryResult2(result, [firstKootaValueTrait, secondKootaValueTrait]);
+        const updateEachError =
+          isNonExclusiveRelationPair(firstTrait) || isNonExclusiveRelationPair(secondTrait)
+            ? relationValueUpdateEachError
+            : undefined;
+        return wrapQueryResult2(
+          result,
+          [firstKootaValueTrait, secondKootaValueTrait],
+          updateEachError
+        );
       }
 
       QueryTraits3<T, TMutable, U, UMutable, V, VMutable>(
@@ -669,11 +715,17 @@ export function fromKootaWorld(world: World): IWorld {
           thirdKootaValueTrait,
           ...queryParameters
         );
-        return wrapQueryResult3(result, [
-          firstKootaValueTrait,
-          secondKootaValueTrait,
-          thirdKootaValueTrait,
-        ]);
+        const updateEachError =
+          isNonExclusiveRelationPair(firstTrait) ||
+          isNonExclusiveRelationPair(secondTrait) ||
+          isNonExclusiveRelationPair(thirdTrait)
+            ? relationValueUpdateEachError
+            : undefined;
+        return wrapQueryResult3(
+          result,
+          [firstKootaValueTrait, secondKootaValueTrait, thirdKootaValueTrait],
+          updateEachError
+        );
       }
 
       QueryTraits4<T, TMutable, U, UMutable, V, VMutable, W, WMutable>(
@@ -695,12 +747,23 @@ export function fromKootaWorld(world: World): IWorld {
           fourthKootaValueTrait,
           ...queryParameters
         );
-        return wrapQueryResult4(result, [
-          firstKootaValueTrait,
-          secondKootaValueTrait,
-          thirdKootaValueTrait,
-          fourthKootaValueTrait,
-        ]);
+        const updateEachError =
+          isNonExclusiveRelationPair(firstTrait) ||
+          isNonExclusiveRelationPair(secondTrait) ||
+          isNonExclusiveRelationPair(thirdTrait) ||
+          isNonExclusiveRelationPair(fourthTrait)
+            ? relationValueUpdateEachError
+            : undefined;
+        return wrapQueryResult4(
+          result,
+          [
+            firstKootaValueTrait,
+            secondKootaValueTrait,
+            thirdKootaValueTrait,
+            fourthKootaValueTrait,
+          ],
+          updateEachError
+        );
       }
 
       Remove(someTrait: ITrait): void {

@@ -84,7 +84,7 @@ type private TestValueRelation<'T, 'TMutable>(config, freeze, unfreeze, defaultV
         )
 
 type private QueryResult<'T, 'TMutable>
-    private (entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient) =
+    private (entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient, updateEachError) =
 
     static member Create
         (
@@ -93,16 +93,34 @@ type private QueryResult<'T, 'TMutable>
             getMutable: EntityId -> 'TMutable,
             notifyChanges: ChangeDetectionOption -> EntityId -> 'T -> 'T -> unit,
             hasChangedModifier: bool,
-            getReadResilient: 'T -> EntityId -> 'T
+            getReadResilient: 'T -> EntityId -> 'T,
+            updateEachError: string option
         ) =
-        QueryResult<'T, 'TMutable>(entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient)
+        QueryResult<'T, 'TMutable>(
+            entities,
+            getRead,
+            getMutable,
+            notifyChanges,
+            hasChangedModifier,
+            getReadResilient,
+            updateEachError
+        )
 
     interface IQueryResult<'T, 'TMutable> with
         member _.ForEach callback =
+            // ForEach reads each value with get (getRead), which is correct even for the relation-only
+            // and non-exclusive cases that UpdateEach can't surface — so it never fails fast.
             for entity in entities do
                 callback (getRead entity, entity)
 
         member _.UpdateEachWith changeDetectionOption callback =
+            // A relation pair used as a query value slot can't always surface its per-target value
+            // through iteration (relation-only fast path or a non-exclusive array). UpdateEach mutates
+            // that state, so it fails fast in those cases for parity with real Koota.
+            match updateEachError with
+            | Some message -> failwith message
+            | None -> ()
+
             let detectChanges =
                 match changeDetectionOption with
                 | AlwaysTrack -> true
@@ -707,6 +725,36 @@ type private Universe private () =
         member _.TargetsFor relation entity =
             findWorld entity |> targetsFor relation entity
 
+[<AutoOpen>]
+module private QueryGuards =
+    // A relation pair used as a query's value slot cannot have its per-target value surfaced through
+    // the query's iteration state, so UpdateEach fails fast for parity with real Koota. ForEach is
+    // unaffected (it reads each entity's value individually). The text matches the wrapper's message
+    // and the test's expected contract (TestInfra.relationValueUpdateEachError).
+    let relationValueUpdateEachError =
+        "Cannot UpdateEach a query whose value is a relation pair. Read the relation's value with ForEach instead; UpdateEach cannot read a relation pair's per-target value."
+
+    // The relation backing a value trait, if it is a relation pair. Query traits are always TestTrait
+    // (the query methods hard-cast them), so this mirrors that with a direct cast.
+    let private relationOf (someTrait: obj) = (someTrait :?> TestTrait).Relation
+
+    // The UpdateEach failure (if any) for a query over the given value traits. A relation pair in a
+    // value slot is broken when it is the sole query trait, or whenever the relation is non-exclusive.
+    let updateEachErrorFor whereIsEmpty (valueTraits: obj list) =
+        let isSoleRelationPair =
+            match valueTraits with
+            | [ single ] -> whereIsEmpty && relationOf single |> Option.isSome
+            | _ -> false
+
+        let hasNonExclusivePair =
+            valueTraits
+            |> List.exists (relationOf >> Option.exists (fun r -> not r.Config.IsExclusive))
+
+        if isSoleRelationPair || hasNonExclusivePair then
+            Some relationValueUpdateEachError
+        else
+            None
+
 type TestWorld() =
     let world = Universe.Instance.CreateWorld()
     let worldEntity = world.EntityId
@@ -725,9 +773,22 @@ type TestWorld() =
 
         member _.Query where =
             let entities = world |> query where
-            QueryResult.Create(entities, (fun _ -> ()), (fun _ -> ()), (fun _ _ _ _ -> ()), false, fun _ _ -> ())
+
+            QueryResult.Create(
+                entities,
+                (fun _ -> ()),
+                (fun _ -> ()),
+                (fun _ _ _ _ -> ()),
+                false,
+                (fun _ _ -> ()),
+                None
+            )
 
         member _.QueryTrait(someTrait, where) =
+            // A relation pair used as a query value can't always surface its per-target value through
+            // iteration, so UpdateEach fails fast for parity with real Koota; ForEach reads via get.
+            let updateEachError = updateEachErrorFor (Array.isEmpty where) [ someTrait ]
+
             let entities = world |> query [| With someTrait; yield! where |]
             let testTrait = someTrait :?> ITestValueTrait<'T>
 
@@ -756,9 +817,21 @@ type TestWorld() =
             let getReadResilient before entity =
                 world |> getTraitValue someTrait entity |> Option.defaultValue before
 
-            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged, getReadResilient)
+            QueryResult.Create(
+                entities,
+                getRead,
+                getMutable,
+                notifyChanges,
+                hasChanged,
+                getReadResilient,
+                updateEachError
+            )
 
         member _.QueryTraits(firstTrait, secondTrait, where) =
+            // A multi-trait query is never relation-only, but a non-exclusive value relation in any
+            // slot still breaks UpdateEach; updateEachErrorFor detects that.
+            let updateEachError = updateEachErrorFor false [ firstTrait; secondTrait ]
+
             let entities = world |> query [| With firstTrait; With secondTrait; yield! where |]
             let firstTestTrait = firstTrait :?> ITestValueTrait<'T>
             let secondTestTrait = secondTrait :?> ITestValueTrait<'U>
@@ -807,9 +880,20 @@ type TestWorld() =
 
                 afterFirst, afterSecond
 
-            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged, getReadResilient)
+            QueryResult.Create(
+                entities,
+                getRead,
+                getMutable,
+                notifyChanges,
+                hasChanged,
+                getReadResilient,
+                updateEachError
+            )
 
         member _.QueryTraits3(firstTrait, secondTrait, thirdTrait, where) =
+            let updateEachError =
+                updateEachErrorFor false [ firstTrait; secondTrait; thirdTrait ]
+
             let entities =
                 world
                 |> query [| With firstTrait; With secondTrait; With thirdTrait; yield! where |]
@@ -864,9 +948,19 @@ type TestWorld() =
                 let a3 = world |> getTraitValue thirdTrait entity |> Option.defaultValue b3
                 a1, a2, a3
 
-            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged, getReadResilient)
+            QueryResult.Create(
+                entities,
+                getRead,
+                getMutable,
+                notifyChanges,
+                hasChanged,
+                getReadResilient,
+                updateEachError
+            )
 
         member _.QueryTraits4(firstTrait, secondTrait, thirdTrait, fourthTrait, where) =
+            let updateEachError =
+                updateEachErrorFor false [ firstTrait; secondTrait; thirdTrait; fourthTrait ]
 
             let entities =
                 world
@@ -935,7 +1029,15 @@ type TestWorld() =
                 let a4 = world |> getTraitValue fourthTrait entity |> Option.defaultValue b4
                 a1, a2, a3, a4
 
-            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged, getReadResilient)
+            QueryResult.Create(
+                entities,
+                getRead,
+                getMutable,
+                notifyChanges,
+                hasChanged,
+                getReadResilient,
+                updateEachError
+            )
 
         member _.QueryFirst where = world |> queryFirst where
 

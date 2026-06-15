@@ -214,6 +214,64 @@ type QueryTests() =
 
         updated =! set [ 10, entity1; 20, entity2 ]
 
+    [<Fact>]
+    member _.``Query UpdateEach visits exactly the matching entities``() =
+        let entity1 = world.Spawn [| Age.Val {| age = 1 |}; IsTagged.Tag() |]
+        let entity2 = world.Spawn [| Age.Val {| age = 2 |}; IsTagged.Tag() |]
+        let _ = world.Spawn [| Age.Val {| age = 3 |} |] // no tag → excluded
+
+        // A void (trait-less) query still iterates with UpdateEach; AlwaysTrack exercises the
+        // change-detection path. The callback value is unit; only the visited entities matter.
+        let visited = ResizeArray<EntityId>()
+        world.Query(With IsTagged).UpdateEachWith AlwaysTrack (fun (_, entity) -> visited.Add entity)
+
+        Set.ofSeq visited =! set [ entity1; entity2 ]
+
+    [<Fact>]
+    member _.``A non-exclusive value relation as a query value: ForEach reads, UpdateEach fails fast``() =
+        // Owes is non-exclusive, so Koota's multi-trait query state surfaces a target-agnostic array
+        // for its slot rather than the per-target value. ForEach reads each value with get and works;
+        // UpdateEach fails fast rather than expose the wrong value. Mock and real Koota agree.
+        let lender = world.Spawn [||]
+        let debtor = world.Spawn [| Age.Val {| age = 7 |} |]
+        debtor |> addWith (Owes => lender) {| amount = 99.0 |}
+
+        let read =
+            world.QueryTraits(Age, Owes => lender).ToSequence()
+            |> Seq.map (fun ((age, owed), entity) -> entity, age.age, owed.amount)
+            |> List.ofSeq
+
+        read =! [ debtor, 7, 99.0 ]
+
+        let message =
+            captureExceptionMessage (fun () ->
+                world.QueryTraits(Age, Owes => lender).UpdateEachWith AlwaysTrack (fun _ -> ()))
+
+        message =! Some relationValueUpdateEachError
+
+    [<Fact>]
+    member _.``A relation pair as a single query value with a filter: ForEach reads, UpdateEach fails fast``() =
+        // The relation pair is the query's value but an extra filter (With IsTagged) means it is not
+        // the sole query trait. A relation's per-target value still can't be surfaced through
+        // iteration, so UpdateEach fails fast while ForEach reads it correctly. This pins the
+        // single-trait QueryTrait relation-value path (the multi-trait path is covered above).
+        let lender = world.Spawn [||]
+        let debtor = world.Spawn [| IsTagged.Tag() |]
+        debtor |> addWith (Owes => lender) {| amount = 42.0 |}
+
+        let read =
+            world.QueryTrait(Owes => lender, With IsTagged).ToSequence()
+            |> Seq.map (fun (owed, entity) -> entity, owed.amount)
+            |> List.ofSeq
+
+        read =! [ debtor, 42.0 ]
+
+        let message =
+            captureExceptionMessage (fun () ->
+                world.QueryTrait(Owes => lender, With IsTagged).UpdateEachWith AlwaysTrack (fun _ -> ()))
+
+        message =! Some relationValueUpdateEachError
+
     // ------------------------------------------------------------------
     // .NET-only tests (use Unquote quotations)
     // ------------------------------------------------------------------
