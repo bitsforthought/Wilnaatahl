@@ -1,0 +1,10 @@
+<Project>
+
+  <!-- Pin the F# language version so there is a known, explicit target to write
+       for (rather than silently tracking whatever the installed SDK defaults to).
+       Bump this deliberately when adopting a newer F# version. -->
+  <PropertyGroup>
+    <LangVersion>10.0</LangVersion>
+  </PropertyGroup>
+
+</Project>
