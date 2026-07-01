@@ -104,6 +104,15 @@ plan (tests before implementation, never batched to the end)
 The adversarial review is **not optional** and **not something to wait to be
 prompted for** — it is part of every change.
 
+## Committing and source hygiene
+
+- **Wrap commit messages at a maximum of 80 columns.** `git commit -m` keeps each
+  `-m` argument as one unwrapped line; use `git commit -F <file>` (or `\n` inside
+  `-m`) to wrap properly. Include the `Co-authored-by: Copilot` trailer.
+- **Source files use LF line endings and spaces (never tabs) for indentation**,
+  enforced by `.editorconfig` (plus `.gitattributes` for line endings). Don't
+  fight the formatters — Prettier owns `.ts`/`.tsx`, Fantomas owns `.fs`/`.fsx`.
+
 ## When to use which skill / agent
 
 | Doing this                                                                        | Use                                                            |

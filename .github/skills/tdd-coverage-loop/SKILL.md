@@ -38,10 +38,3 @@ build`** and **`npm test`** before considering a change complete. Fable can emit
   full-suite runs only when targeted validation shows they're needed.
 - **Allow Prettier to update `.md` files.** That's part of its job; keep its
   markdown reformatting rather than reverting it as "unrelated".
-
-## Other process rules
-
-- **Line endings must be LF**, not CRLF (`.gitattributes` enforces `eol=lf`).
-- **Wrap commit messages at a maximum of 80 columns.** `git commit -m` keeps each
-  `-m` argument as one unwrapped line; use `git commit -F file` (or `\n` inside
-  `-m`) to wrap properly. Include the `Co-authored-by: Copilot` trailer.
