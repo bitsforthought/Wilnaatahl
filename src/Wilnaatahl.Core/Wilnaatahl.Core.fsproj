@@ -46,13 +46,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Condition="'$(FABLE_COMPILER)'=='true'" Include="Fable.Core" Version="5.0.0" />
+    <PackageReference Condition="'$(FABLE_COMPILER)'=='true'" Include="Fable.Core" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Thoth.Json.Core" Version="0.9.0" />
-    <PackageReference Condition="'$(FABLE_COMPILER)'!='true'" Include="Thoth.Json.Newtonsoft" Version="0.3.3" />
-    <PackageReference Condition="'$(FABLE_COMPILER)'=='true'" Include="Thoth.Json.JavaScript" Version="0.4.1" />
+    <PackageReference Include="Thoth.Json.Core" />
+    <PackageReference Condition="'$(FABLE_COMPILER)'!='true'" Include="Thoth.Json.Newtonsoft" />
+    <PackageReference Condition="'$(FABLE_COMPILER)'=='true'" Include="Thoth.Json.JavaScript" />
   </ItemGroup>
 
 </Project>

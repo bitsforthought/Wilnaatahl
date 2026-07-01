@@ -38,3 +38,14 @@ build`** and **`npm test`** before considering a change complete. Fable can emit
   full-suite runs only when targeted validation shows they're needed.
 - **Allow Prettier to update `.md` files.** That's part of its job; keep its
   markdown reformatting rather than reverting it as "unrelated".
+- **Warnings fail the build.** `dotnet build`/`dotnet test` run with
+  `TreatWarningsAsErrors` and every `dotnet fsi` script with `--warnaserror` (both
+  with FS3886 — the `[ a, b ]` single-tuple-list typo — elevated via `WarnOn` /
+  `--warnon:3886`), so warnings can't accumulate silently. Fix the warning rather
+  than suppressing it. `TreatWarningsAsErrors` is an MSBuild property, so it also
+  covers restore/NuGet warnings and Fable's `dotnet msbuild` project crack — only
+  Fable's F#→TS emission is exempt (that output is checked by `tsc`). The
+  NuGetAudit warnings (NU1900–NU1905) are kept non-fatal via `WarningsNotAsErrors`
+  so an external CVE advisory — or an audit that couldn't run (feed unreachable, or
+  a source with no vulnerability database) — can't redden a green build with no code
+  change.

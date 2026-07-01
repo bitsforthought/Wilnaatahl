@@ -67,7 +67,7 @@ let ``reframe changes LayoutBox units correctly`` () =
         createComposite size connectX {
             TopLeftWidth = 0.1<w>
             TopRightWidth = 0.2<w>
-            Followers = [ leaf, vecZeroW ]
+            Followers = [ (leaf, vecZeroW) ]
         }
 
     let expected =
@@ -77,7 +77,7 @@ let ``reframe changes LayoutBox units correctly`` () =
             let leaf =
                 createLeaf size 0.5<u> (PersonId 1) { X = 0.1<u>; Y = 0.2<u>; Z = 0.3<u> }
 
-            [ leaf, vecZeroU ]
+            [ (leaf, vecZeroU) ]
 
         let composite = {
             TopLeftWidth = 0.1<u>
@@ -110,7 +110,7 @@ let ``reframe round-trip relabel returns the same LayoutBox`` () =
         createComposite size 0.5<w> {
             TopLeftWidth = 0.1<w>
             TopRightWidth = 0.2<w>
-            Followers = [ leaf, vecZeroW ]
+            Followers = [ (leaf, vecZeroW) ]
         }
 
     let roundTripped = box |> reframe Reframe.w2u |> reframe Reframe.u2w
@@ -175,7 +175,7 @@ let ``attachHorizontally combines two composite boxes correctly`` () =
         createComposite size 0.5<w> {
             TopLeftWidth = 0.5<w>
             TopRightWidth = 0.25<w>
-            Followers = [ leaf, vecZeroW ]
+            Followers = [ (leaf, vecZeroW) ]
         }
 
     let composite2 =
@@ -185,7 +185,7 @@ let ``attachHorizontally combines two composite boxes correctly`` () =
         createComposite size 1.0<w> {
             TopLeftWidth = 0.25<w>
             TopRightWidth = 0.5<w>
-            Followers = [ leaf, vecZeroW ]
+            Followers = [ (leaf, vecZeroW) ]
         }
 
     let expected =
@@ -222,7 +222,7 @@ let ``attachHorizontally: Composite on left, Leaf on right, TopRightWidth zero o
         createComposite size 0.5<w> {
             TopLeftWidth = 0.0<w>
             TopRightWidth = topRightWidth
-            Followers = [ leaf, vecZeroW ]
+            Followers = [ (leaf, vecZeroW) ]
         }
 
     let leaf =
@@ -262,7 +262,7 @@ let ``attachHorizontally: Leaf on left, Composite on right, TopLeftWidth zero or
         createComposite size 1.0<w> {
             TopLeftWidth = topLeftWidth
             TopRightWidth = 0.0<w>
-            Followers = [ leaf, vecZeroW ]
+            Followers = [ (leaf, vecZeroW) ]
         }
 
     let expected =
@@ -360,7 +360,7 @@ let ``attachAbove with lower Composite and upper height zero or non-zero affects
         createComposite size 1.0<l> {
             TopLeftWidth = 0.0<l>
             TopRightWidth = 0.0<l>
-            Followers = [ lowerLeaf, vecZeroL ]
+            Followers = [ (lowerLeaf, vecZeroL) ]
         }
 
     let upper =

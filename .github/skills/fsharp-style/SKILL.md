@@ -68,6 +68,14 @@ away from C#-in-F# habits. Each is a hard convention for this codebase.
   `choose`-ing the errors and then `choose`-ing the successes separately.
   - ✅ `let kept, dropped = items |> List.partition predicate`
   - ❌ `let kept = items |> List.filter predicate` then `let dropped = items |> List.filter (predicate >> not)`
+- **Parenthesize tuple elements in a single-item list.** A one-element list of a
+  tuple written `[ a, b ]` (e.g. `Map [ "k", v ]`) triggers compiler info `FS3886`
+  ("This list expression contains a single tuple element. Did you mean to use ';'
+  instead of ','...?"), because `,` in a list is a common typo for `;`. Write the
+  tuple explicitly to state intent and clear the diagnostic; the ambiguity
+  disappears with two or more entries.
+  - ✅ `Map [ ("k", v) ]`
+  - ❌ `Map [ "k", v ]`
 - **Naming: spell things out.** `makeComparatorGraph` over `mkComparatorGraph`,
   `child` over `kid`, `wilpHead` over `mWilp`. Hungarian-style prefixes (`m`, `p`)
   and abbreviation prefixes (`mk`) save almost no characters while obscuring

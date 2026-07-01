@@ -256,7 +256,7 @@ let private makeComparatorGraph (couples: Couple list) (procreativeChild: (Perso
     let people, descendants =
         match procreativeChild with
         | None -> baseEntries, []
-        | Some(child, parentCouple) -> baseEntries @ [ child, Some parentCouple.Id ], [ Leaf child.Id ]
+        | Some(child, parentCouple) -> baseEntries @ [ (child, Some parentCouple.Id) ], [ Leaf child.Id ]
 
     createFamilyGraph people couples, descendants
 

@@ -170,7 +170,7 @@ let nestedMappingKeys = set [ "github"; "metadata"; "mcp-servers" ]
 /// message) keeps a future retirement a genuine one-line addition with correct
 /// guidance.
 let retiredKeys =
-    Map [ "infer", "use 'disable-model-invocation' and 'user-invocable' instead" ]
+    Map [ ("infer", "use 'disable-model-invocation' and 'user-invocable' instead") ]
 
 // --- Pure validation rules ---
 

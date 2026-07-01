@@ -241,7 +241,7 @@ type QueryTests() =
             |> Seq.map (fun ((age, owed), entity) -> entity, age.age, owed.amount)
             |> List.ofSeq
 
-        read =! [ debtor, 7, 99.0 ]
+        read =! [ (debtor, 7, 99.0) ]
 
         let message =
             captureExceptionMessage (fun () ->
@@ -264,7 +264,7 @@ type QueryTests() =
             |> Seq.map (fun (owed, entity) -> entity, owed.amount)
             |> List.ofSeq
 
-        read =! [ debtor, 42.0 ]
+        read =! [ (debtor, 42.0) ]
 
         let message =
             captureExceptionMessage (fun () ->

@@ -351,4 +351,4 @@ let ``buildWilpTree exposes childless Couples as empty PartnersAndDescendants en
         visitWilpForest (WilpName "M") CapturedLeaf id id visitFamily neverCompareTrees neverCompareGroups graph
         |> Seq.toList
 
-    results =! [ CapturedFamily(mWilp.Id, [ pOutsider.Id, [] ]) ]
+    results =! [ CapturedFamily(mWilp.Id, [ (pOutsider.Id, []) ]) ]

@@ -185,7 +185,7 @@ let ``transform unknown CoupleId on person emits UnresolvedCoupleId and person b
 
     transform (rawFile [ kidRaw ] [] [])
     =! Ok {
-        PeopleAndCoupleIds = [ kid, None ]
+        PeopleAndCoupleIds = [ (kid, None) ]
         Couples = []
         Warnings = [ UnresolvedCoupleId("Kid", 999) ]
     }
@@ -209,7 +209,7 @@ let ``transform couple with both members unknown emits two UnresolvedMember warn
 
     transform (rawFile [ aliceRaw ] [ c ] [])
     =! Ok {
-        PeopleAndCoupleIds = [ alice, None ]
+        PeopleAndCoupleIds = [ (alice, None) ]
         Couples = []
         Warnings = [ UnresolvedMember(100, 99); UnresolvedMember(100, 98) ]
     }
@@ -221,7 +221,7 @@ let ``transform duplicate person id keeps first occurrence and emits DuplicatePe
 
     transform (rawFile [ aliceFirst; aliceDup ] [] [])
     =! Ok {
-        PeopleAndCoupleIds = [ alice, None ]
+        PeopleAndCoupleIds = [ (alice, None) ]
         Couples = []
         Warnings = [ DuplicatePersonId 0 ]
     }
@@ -259,7 +259,7 @@ let ``transform person with wilp reference to fully-specified huwilp gets that W
 
     transform (rawFile [ aliceWithWilp ] [] [ w ])
     =! Ok {
-        PeopleAndCoupleIds = [ expectedAlice, None ]
+        PeopleAndCoupleIds = [ (expectedAlice, None) ]
         Couples = []
         Warnings = []
     }
@@ -269,7 +269,11 @@ let ``transform person without wilp reference gets Kinship NoneProvided without 
     let w = rawWilp 7 "A" "Giskaast"
 
     transform (rawFile [ aliceRaw ] [] [ w ])
-    =! Ok { PeopleAndCoupleIds = [ alice, None ]; Couples = []; Warnings = [] }
+    =! Ok {
+        PeopleAndCoupleIds = [ (alice, None) ]
+        Couples = []
+        Warnings = []
+    }
 
 [<Fact>]
 let ``transform person referencing missing wilp id emits UnresolvedWilpId and Kinship is NoneProvided`` () =
@@ -277,7 +281,7 @@ let ``transform person referencing missing wilp id emits UnresolvedWilpId and Ki
 
     transform (rawFile [ aliceWithMissingWilp ] [] [])
     =! Ok {
-        PeopleAndCoupleIds = [ alice, None ]
+        PeopleAndCoupleIds = [ (alice, None) ]
         Couples = []
         Warnings = [ UnresolvedWilpId("Alice", 999) ]
     }
@@ -289,7 +293,7 @@ let ``transform huwilp with only name emits WilpMissingPdeek and references go u
 
     transform (rawFile [ aliceWithLonely ] [] [ lonely ])
     =! Ok {
-        PeopleAndCoupleIds = [ alice, None ]
+        PeopleAndCoupleIds = [ (alice, None) ]
         Couples = []
         Warnings = [ WilpMissingPdeek 1; UnresolvedWilpId("Alice", 1) ]
     }
@@ -302,7 +306,7 @@ let ``transform huwilp with only pdeek resolves references as UnknownWilp withou
 
     transform (rawFile [ aliceWithUnknown ] [] [ w ])
     =! Ok {
-        PeopleAndCoupleIds = [ expectedAlice, None ]
+        PeopleAndCoupleIds = [ (expectedAlice, None) ]
         Couples = []
         Warnings = []
     }
@@ -314,7 +318,7 @@ let ``transform huwilp with only unknown pdeek emits UnknownPdeek and references
 
     transform (rawFile [ aliceWithBadPdeek ] [] [ w ])
     =! Ok {
-        PeopleAndCoupleIds = [ alice, None ]
+        PeopleAndCoupleIds = [ (alice, None) ]
         Couples = []
         Warnings = [ UnknownPdeek(2, "NotAClan"); UnresolvedWilpId("Alice", 2) ]
     }
@@ -328,7 +332,7 @@ let ``UnknownWilp kinship does not contribute to FamilyGraph's named-huwilp set`
     let expectedAlice = { alice with Kinship = UnknownWilp Ganeda }
 
     let importResult = {
-        PeopleAndCoupleIds = [ expectedAlice, None ]
+        PeopleAndCoupleIds = [ (expectedAlice, None) ]
         Couples = []
         Warnings = []
     }
@@ -347,7 +351,7 @@ let ``transform huwilp with neither name nor pdeek emits WilpMissingNameAndPdeek
 
     transform (rawFile [ aliceWithEmpty ] [] [ empty ])
     =! Ok {
-        PeopleAndCoupleIds = [ alice, None ]
+        PeopleAndCoupleIds = [ (alice, None) ]
         Couples = []
         Warnings = [ WilpMissingNameAndPdeek 3; UnresolvedWilpId("Alice", 3) ]
     }
@@ -365,7 +369,7 @@ let ``transform continues validating huwilp entries after one with missing field
 
     transform (rawFile [ aliceWithLater ] [] [ dropped; later ])
     =! Ok {
-        PeopleAndCoupleIds = [ expectedAlice, None ]
+        PeopleAndCoupleIds = [ (expectedAlice, None) ]
         Couples = []
         Warnings = [ WilpMissingNameAndPdeek 3 ]
     }
@@ -377,7 +381,7 @@ let ``transform huwilp with both name and unknown pdeek emits UnknownPdeek`` () 
 
     transform (rawFile [ aliceWithMystery ] [] [ w ])
     =! Ok {
-        PeopleAndCoupleIds = [ alice, None ]
+        PeopleAndCoupleIds = [ (alice, None) ]
         Couples = []
         Warnings = [ UnknownPdeek(4, "NotAClan"); UnresolvedWilpId("Alice", 4) ]
     }
@@ -395,7 +399,7 @@ let ``transform recognizes raw pdeek string and resolves it to the Pdeek DU`` (r
 
     transform (rawFile [ aliceWithWilp ] [] [ w ])
     =! Ok {
-        PeopleAndCoupleIds = [ expectedAlice, None ]
+        PeopleAndCoupleIds = [ (expectedAlice, None) ]
         Couples = []
         Warnings = []
     }
@@ -413,7 +417,7 @@ let ``transform duplicate huwilp id keeps first occurrence and emits DuplicateWi
 
     transform (rawFile [ aliceWithDup ] [] [ first; dup ])
     =! Ok {
-        PeopleAndCoupleIds = [ expectedAlice, None ]
+        PeopleAndCoupleIds = [ (expectedAlice, None) ]
         Couples = []
         Warnings = [ DuplicateWilpId 5 ]
     }
@@ -443,7 +447,7 @@ let ``transform multiple people referencing different huwilp each get their own 
 let ``transform gender maps to shape`` (gender: string) (expected: NodeShape) =
     transform (rawFile [ rawPerson 0 "A" gender ] [] [])
     =! Ok {
-        PeopleAndCoupleIds = [ personOf 0 "A" expected, None ]
+        PeopleAndCoupleIds = [ (personOf 0 "A" expected, None) ]
         Couples = []
         Warnings = []
     }
@@ -465,7 +469,7 @@ let ``transform person date field parses ISO or emits UnparseableDate``
 
     transform (rawFile [ p ] [] [])
     =! Ok {
-        PeopleAndCoupleIds = [ expectedPerson, None ]
+        PeopleAndCoupleIds = [ (expectedPerson, None) ]
         Couples = []
         Warnings = expectedWarnings
     }
@@ -504,7 +508,7 @@ let ``transform BirthOrder uses supplied value or defaults to zero`` (supplied: 
 
     transform (rawFile [ p ] [] [])
     =! Ok {
-        PeopleAndCoupleIds = [ expectedPerson, None ]
+        PeopleAndCoupleIds = [ (expectedPerson, None) ]
         Couples = []
         Warnings = []
     }
@@ -584,7 +588,7 @@ let ``fromJson surfaces WilpMissingNameAndPdeek as a warning, not an error`` () 
 
     fromJson json
     =! Ok {
-        PeopleAndCoupleIds = [ personOf 0 "A" Sphere, None ]
+        PeopleAndCoupleIds = [ (personOf 0 "A" Sphere, None) ]
         Couples = []
         Warnings = [ WilpMissingNameAndPdeek 9; UnresolvedWilpId("A", 9) ]
     }
@@ -665,7 +669,7 @@ let ``pdeek recognition is invariant to case, noise, and underlined-k spelling``
         }
 
         transform (rawFile [ aliceWithWilp ] [] [ w ]) = Ok {
-            PeopleAndCoupleIds = [ expectedAlice, None ]
+            PeopleAndCoupleIds = [ (expectedAlice, None) ]
             Couples = []
             Warnings = []
         })

@@ -7,4 +7,38 @@
     <LangVersion>10.0</LangVersion>
   </PropertyGroup>
 
+  <!-- Fail the .NET build on any warning, so they can't accumulate silently.
+       WarnOn promotes selected informational diagnostics to warnings first:
+       FS3886 flags a single-element list of a tuple (`[ a, b ]`), a common
+       `,`-for-`;` typo. There is no blanket "enable every off-by-default
+       diagnostic" switch, and that suits us: because TreatWarningsAsErrors makes
+       each WarnOn code fatal, WarnOn is a curated allowlist — add codes one at a
+       time as they prove worth enforcing, rather than opting into whatever a new
+       SDK turns on.
+
+       This is an MSBuild property, so it governs every MSBuild-driven step:
+       `dotnet build`/`dotnet test` (the fsc compile) AND restore/NuGet, including
+       Fable's project cracker (`dotnet fable` runs `dotnet msbuild` to crack the
+       project, so a restore-level warning there fails the Fable step too — that
+       is how a stale Fable.Core downgrade first surfaced). Fable's own F#->TS
+       *emission* has no warning-as-error mode; that output is checked by tsc.
+       The `.fsx` scripts aren't built by MSBuild, so they pass the equivalent
+       flags on the `dotnet fsi` command line instead.
+
+       WarningsNotAsErrors keeps the NuGetAudit warnings visible but non-fatal:
+       NU1901-NU1904 are vulnerability advisories driven by external CVE data,
+       while NU1900 (advisory feed unreachable — offline / proxy / outage) and
+       NU1905 (a configured audit source provides no vulnerability database) mean
+       the audit itself could not run. All are external conditions that would
+       otherwise turn a green build red with no code change — and since a *found*
+       critical advisory is already non-fatal, a failed or skipped audit mustn't be
+       fatal either. Deterministic restore warnings such as the NU1605 package
+       downgrade stay fatal on purpose (that is a real repo defect worth failing
+       on). -->
+  <PropertyGroup>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarnOn>3886</WarnOn>
+    <WarningsNotAsErrors>NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsNotAsErrors>
+  </PropertyGroup>
+
 </Project>
