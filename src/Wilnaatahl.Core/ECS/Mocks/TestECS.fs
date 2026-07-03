@@ -380,7 +380,7 @@ module private World =
             TrackerRegistry.notifyAdded someTrait entity (lazy (world |> entityTraitSnapshot entity))
             TrackerRegistry.cancelRemoved someTrait entity
 
-    let addRelation (relation: IRelation<'T, 'TMutable>) target (EntityId subjectId) world =
+    let addRelation (relation: IRelation) target (EntityId subjectId) world =
         let testRelation = relation :?> ITestRelation
         let store = world |> getRelationStore relation
         let (EntityId targetId) = target
@@ -418,19 +418,23 @@ module private World =
         | true, Some boxedMutable -> Some(testRelation.FreezeUntyped boxedMutable :?> 'T)
         | _ -> None
 
-    let setRelationValue (relation: IRelation<'T, 'TMutable>) target (value: 'T) (EntityId subjectId) world =
+    let setRelationValueUntyped (relation: IRelation) target (value: obj) (EntityId subjectId) world =
         let testRelation = relation :?> ITestRelation
         let store = world |> getRelationStore relation
         let (EntityId targetId) = target
         let key = struct (subjectId, targetId)
 
         match store.TryGetValue key with
-        | true, _ -> store[key] <- Some(testRelation.UnfreezeUntyped(value :> obj))
+        | true, _ -> store[key] <- Some(testRelation.UnfreezeUntyped value)
         | false, _ ->
             // Setting a value for an absent relation throws. The message prefix (up to the entity
             // id) is the cross-backend contract, mirrored verbatim in src/ecs/koota/kootaWrapper.ts;
             // the trailing entity id is non-deterministic across backends and not part of it.
             failwith $"Cannot set a value for a relation that is not present on the subject entity {subjectId}"
+
+    let setRelationValue (relation: IRelation<'T, 'TMutable>) target (value: 'T) entity world =
+        world
+        |> setRelationValueUntyped (relation :> IRelation) target (value :> obj) entity
 
     let destroy entity world =
         for someTrait in world.TraitStores.Keys do
@@ -680,7 +684,7 @@ module private World =
         let results = world |> query where
         if Seq.isEmpty results then None else Some(Seq.head results)
 
-    let spawn traits world =
+    let spawn specs world =
         let entity = world |> allocEntity
 
         let addTagTrait tag = world |> addTrait tag entity
@@ -696,8 +700,15 @@ module private World =
                 TrackerRegistry.notifyAdded someTrait entity (lazy (world |> entityTraitSnapshot entity))
                 TrackerRegistry.cancelRemoved someTrait entity
 
-        for someTrait in traits do
-            someTrait |> TraitSpec.Map addTagTrait addValueTrait
+        let addRel (relation: IRelation, target) =
+            world |> addRelation relation target entity
+
+        let addValRel (relation: IRelation, target, value: obj) =
+            world |> addRelation relation target entity
+            world |> setRelationValueUntyped relation target value entity
+
+        for spec in specs do
+            spec |> SpawnSpec.Map addTagTrait addValueTrait addRel addValRel
 
         entity
 
@@ -793,7 +804,7 @@ type private Universe private () =
             findWorld entity |> setTraitValueWith valueTrait update entity
 
         member _.AddRelation relation target entity =
-            findWorld entity |> addRelation relation target entity
+            findWorld entity |> addRelation (relation :> IRelation) target entity
 
         member _.RemoveRelation relation target entity =
             findWorld entity |> removeRelation relation target entity

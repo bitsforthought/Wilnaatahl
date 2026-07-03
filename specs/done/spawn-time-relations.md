@@ -1,8 +1,8 @@
 # Spawn-time relations
 
-> Status: **proposal**, not yet implemented. Two audiences: the repo owner
-> (review/tweak the design) and a future agent session (implement it). Proposed as
-> a follow-up within the current relations PR.
+> Status: **implemented**. Originally a proposal for two audiences — the repo owner
+> (review/tweak the design) and a future agent session (implement it) — proposed as
+> a follow-up within the current relations PR, now delivered.
 
 ## Motivation
 
@@ -24,7 +24,7 @@ dragEntity |> addRelationWith Dragging nodeEntity origin
 
 The two-step shape is a small papercut, but it is repeated at every relation-at-
 birth site, it leaves the entity momentarily in a half-initialised state, and — for
-the `Dragging` case — it spawns a bare entity whose *only* purpose is to carry a
+the `Dragging` case — it spawns a bare entity whose _only_ purpose is to carry a
 relation, which reads awkwardly. We want:
 
 ```fsharp
@@ -134,7 +134,7 @@ arity-overloaded `.ToTarget` — overloads are discouraged in this codebase (`fs
 - `People.fs` `spawnTreeNode`: fold `addRelation RenderedIn wilp` into the `Spawn`
   call as `RenderedIn.ToTarget wilp`.
 - `Dragging.fs` `handleDragStart`: replace `world.Spawn()` + `addRelationWith
-  Dragging nodeEntity origin` with `world.Spawn(Dragging.ToTargetWith(nodeEntity, origin))`.
+Dragging nodeEntity origin` with `world.Spawn(Dragging.ToTargetWith(nodeEntity, origin))`.
 - No other call sites spawn-then-relate today; `addRelation`/`addRelationWith`
   remain for relating an entity that already exists (the common case), so they are
   **not** removed.
@@ -146,13 +146,13 @@ arity-overloaded `.ToTarget` — overloads are discouraged in this codebase (`fs
   - `TagRel(rel, target)` → `toKootaRelation(rel)(target as Entity)`
   - `ValRel(rel, target, value)` → `toKootaRelation(rel)(target as Entity, value)`
     (the params form Koota requires for a value pair at spawn/add).
-  Both are `ConfigurableTrait`s that flow straight into `this.world.spawn(...)`.
-  Update the `TraitSpec_$union as TraitSpec` / `TraitSpec_Map` imports to the
-  `SpawnSpec_*` names.
+    Both are `ConfigurableTrait`s that flow straight into `this.world.spawn(...)`.
+    Update the `TraitSpec_$union as TraitSpec` / `TraitSpec_Map` imports to the
+    `SpawnSpec_*` names.
 - **`TestECS.fs`**: `spawn` (which folds `TraitSpec.Map addTagTrait addValueTrait`
   over each spec) gains `addTagRel (rel, target) = world |> addRelation rel target
-  entity` and `addValRel (rel, target, value) = world |> addRelationWith rel target
-  (unbox value) entity`, reusing the relation ops that already exist. The value
+entity` and `addValRel (rel, target, value) = world |> addRelationWith rel target
+(unbox value) entity`, reusing the relation ops that already exist. The value
   unbox mirrors `addValueTrait`'s existing `obj`-erasure handling.
 
 ## New tests (TDD, portable across both backends)

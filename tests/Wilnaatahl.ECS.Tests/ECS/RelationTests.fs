@@ -5,6 +5,7 @@ open Wilnaatahl.ECS
 open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.ECS.Relation
+open Wilnaatahl.ECS.Trait
 open Wilnaatahl.Tests.ECS.TestInfra
 
 #if FABLE_COMPILER
@@ -222,3 +223,80 @@ type RelationTests() =
         match message with
         | Some text -> text.StartsWith relationNotPresentError =! true
         | None -> failwith "Expected setRelationValue on an absent relation to throw."
+
+    [<Fact>]
+    member _.``Spawning with a tag relation makes the new entity a subject of it``() =
+        let target = world.Spawn [||]
+        let subject = world.Spawn [| FriendsWith.ToTarget target |]
+
+        subject |> hasRelation FriendsWith target =! true
+        subject |> targetFor FriendsWith =! Some target
+        subject |> targetsFor FriendsWith =! [| target |]
+        // A Related query over the target sees the freshly spawned subject.
+        world.Query(Related(FriendsWith, target)).ToSequence()
+        |> Seq.map snd
+        |> List.ofSeq
+        =! [ subject ]
+
+    [<Fact>]
+    member _.``Spawning with a value relation via ToTargetWith carries the supplied value``() =
+        let target = world.Spawn [||]
+        // A non-default amount so the assertion distinguishes the supplied value from the schema default (0).
+        let subject = world.Spawn [| Owes.ToTargetWith(target, {| amount = 42 |}) |]
+
+        subject |> hasRelation Owes target =! true
+        subject |> getRelationValue Owes target =! Some {| amount = 42 |}
+
+    [<Fact>]
+    member _.``Spawning with a value relation via ToTarget uses the schema default value``() =
+        let target = world.Spawn [||]
+        let subject = world.Spawn [| Owes.ToTarget target |]
+
+        subject |> hasRelation Owes target =! true
+        // Owes' schema default is { amount = 0 }, distinct from the ToTargetWith value above.
+        subject |> getRelationValue Owes target =! Some {| amount = 0 |}
+
+    [<Fact>]
+    member _.``Spawning with an exclusive relation keeps only the last target``() =
+        let ChildOf = tagRelationWith { IsExclusive = true }
+        let parent1 = world.Spawn [||]
+        let parent2 = world.Spawn [||]
+
+        // Two pairs of the same exclusive relation in one spawn: exclusivity keeps only the last.
+        let child = world.Spawn [| ChildOf.ToTarget parent1; ChildOf.ToTarget parent2 |]
+
+        child |> targetsFor ChildOf =! [| parent2 |]
+        child |> hasRelation ChildOf parent1 =! false
+        child |> hasRelation ChildOf parent2 =! true
+
+    [<Fact>]
+    member _.``Spawning with an exclusive value relation keeps only the last target and its value``() =
+        let MarriedTo = valueRelationWith {| yearsMarried = 0 |} { IsExclusive = true }
+        let spouse1 = world.Spawn [||]
+        let spouse2 = world.Spawn [||]
+
+        // Two value pairs of the same exclusive relation in one spawn: exclusivity keeps only the last,
+        // and the survivor retains the value supplied to ToTargetWith rather than the schema default (0).
+        let person =
+            world.Spawn [|
+                MarriedTo.ToTargetWith(spouse1, {| yearsMarried = 3 |})
+                MarriedTo.ToTargetWith(spouse2, {| yearsMarried = 7 |})
+            |]
+
+        person |> targetsFor MarriedTo =! [| spouse2 |]
+        person |> hasRelation MarriedTo spouse1 =! false
+        person |> getRelationValue MarriedTo spouse2 =! Some {| yearsMarried = 7 |}
+
+    [<Fact>]
+    member _.``Spawning applies traits and relation specs together``() =
+        let Marker = tagTrait ()
+        let Score = valueTrait {| score = 0 |}
+        let target = world.Spawn [||]
+
+        let entity =
+            world.Spawn [| Score.Val {| score = 5 |}; FriendsWith.ToTarget target; Marker.Tag() |]
+
+        entity |> has Marker =! true
+        entity |> get Score =! Some {| score = 5 |}
+        entity |> hasRelation FriendsWith target =! true
+        entity |> targetFor FriendsWith =! Some target

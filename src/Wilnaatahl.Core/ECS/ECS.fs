@@ -237,12 +237,21 @@ module Extensions =
     open Entity
 
     type ITagTrait with
-        /// Creates a TraitSpec instance for the given tag trait.
+        /// Creates a spawn spec that adds this tag trait to the new entity.
         member this.Tag() = Tag this
 
     type IValueTrait<'T> with
-        /// Creates a TraitSpec instance for the given value trait and value.
+        /// Creates a spawn spec that adds this value trait to the new entity, carrying the given value.
         member this.Val(value: 'T) = Val(this, value :> obj)
+
+    type IRelation<'T, 'TMutable> with
+        /// Creates a spawn spec relating the new entity, as the subject, to the given target via this
+        /// relation, taking the relation's schema default value (for a tag relation, no value).
+        member this.ToTarget(target: EntityId) = Rel(this, target)
+
+        /// Creates a spawn spec relating the new entity, as the subject, to the given target via this
+        /// relation, carrying the given value.
+        member this.ToTargetWith(target: EntityId, value: 'T) = ValRel(this, target, value :> obj)
 
     type IQueryResult<'T, 'TMutable> with
         /// Returns a sequence over the results of the query, including trait values. Note that this fully

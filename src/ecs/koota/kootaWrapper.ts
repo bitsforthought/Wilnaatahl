@@ -42,8 +42,8 @@ import {
   QueryOperator,
   RelationConfig,
   TrackerType,
-  TraitSpec_$union as TraitSpec,
-  TraitSpec_Map,
+  SpawnSpec_$union as SpawnSpec,
+  SpawnSpec_Map,
   ITracker,
 } from "../../generated/ECS/Types";
 
@@ -743,18 +743,37 @@ export function fromKootaWorld(world: World): IWorld {
         world.set(toKootaValueTraitForRead(valueTrait), valueToSet);
       }
 
-      Spawn(...traits: TraitSpec[]): EntityId {
+      Spawn(...specs: SpawnSpec[]): EntityId {
         function unwrapValueSpec([traitWrapper, value]: [ITrait, unknown]): ConfigurableTrait<
           Trait<any>
         > {
           return [toKootaTrait(traitWrapper), value] as ConfigurableTrait<Trait<any>>;
         }
 
-        function unwrapTraitSpec(c: TraitSpec): ConfigurableTrait<Trait<any>> {
-          return TraitSpec_Map(toKootaTrait, unwrapValueSpec, c);
+        function unwrapRel([relation, target]: [IRelation, EntityId]): ConfigurableTrait<
+          Trait<any>
+        > {
+          return toKootaRelation(relation)(target as Entity) as ConfigurableTrait<Trait<any>>;
         }
 
-        return this.world.spawn(...traits.map(unwrapTraitSpec));
+        function unwrapValRel([relation, target, value]: [
+          IRelation,
+          EntityId,
+          unknown,
+        ]): ConfigurableTrait<Trait<any>> {
+          // Koota requires the params form rel(target, value) for a value pair at spawn/add; a
+          // [pair, value] tuple throws.
+          return toKootaRelation(relation)(
+            target as Entity,
+            value as Record<string, unknown>
+          ) as ConfigurableTrait<Trait<any>>;
+        }
+
+        function unwrapSpawnSpec(c: SpawnSpec): ConfigurableTrait<Trait<any>> {
+          return SpawnSpec_Map(toKootaTrait, unwrapValueSpec, unwrapRel, unwrapValRel, c);
+        }
+
+        return this.world.spawn(...specs.map(unwrapSpawnSpec));
       }
     })();
   }
