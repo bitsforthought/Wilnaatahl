@@ -45,6 +45,11 @@ module internal TestSupport =
             member _.Remove _ _ = raise (NotImplementedException())
             member _.Set _ _ _ = raise (NotImplementedException())
             member _.SetWith _ _ _ = raise (NotImplementedException())
+            member _.AddRelation _ _ _ = raise (NotImplementedException())
+            member _.RemoveRelation _ _ _ = raise (NotImplementedException())
+            member _.HasRelation _ _ _ = raise (NotImplementedException())
+            member _.GetRelationValue _ _ _ = raise (NotImplementedException())
+            member _.SetRelationValue _ _ _ _ = raise (NotImplementedException())
             member _.TargetFor _ _ = raise (NotImplementedException())
             member _.TargetsFor _ _ = raise (NotImplementedException())
         }
@@ -99,14 +104,8 @@ module Relation =
     let valueRelation store =
         valueRelationWith store RelationConfig.Default
 
-    /// Returns the trait that represents the relation with the given entity as target. The returned
-    /// trait can be used to set a value for the relation if it's a value trait, to add the relation
-    /// with the given target to a subject entity, or anything else a trait can be used for.
-    let inline (=>) (rel: IRelation<'TTrait>) targetEntity = rel.WithTarget targetEntity
-
 /// Provides convenience functions for working with entities and traits.
 module Entity =
-    open Relation
 
     /// Adds the given trait to the entity.
     let add someTrait entity =
@@ -151,14 +150,39 @@ module Entity =
     let targetFor relation entity =
         entity |> Globals.Instance.Entities.TargetFor relation
 
+    /// Adds the given relation with the given target to the entity.
+    let addRelation relation target entity =
+        entity |> Globals.Instance.Entities.AddRelation relation target
+
+    /// Removes the given relation with the given target from the entity.
+    let removeRelation relation target entity =
+        entity |> Globals.Instance.Entities.RemoveRelation relation target
+
+    /// Returns true if the entity has the given relation with the given target.
+    let hasRelation relation target entity =
+        entity |> Globals.Instance.Entities.HasRelation relation target
+
+    /// Gets the value of the given relation with the given target on the entity, if present.
+    let getRelationValue relation target entity =
+        entity |> Globals.Instance.Entities.GetRelationValue relation target
+
+    /// Sets the value of the given relation with the given target on the entity. Throws if the relation is absent.
+    let setRelationValue relation target value entity =
+        entity |> Globals.Instance.Entities.SetRelationValue relation target value
+
+    /// Adds the given relation with the given target to the entity and sets its value in a single operation.
+    let addRelationWith relation target value entity =
+        entity |> addRelation relation target
+        entity |> setRelationValue relation target value
+
     /// Returns the target entity for the given relation on the entity along with the relation value, if present.
     let targetWithValueFor relation entity =
         match entity |> targetFor relation with
         | Some target ->
-            match entity |> get (relation => target) with
+            match entity |> getRelationValue relation target with
             | Some value -> Some(target, value)
             | None ->
-                // Value traits are initialized with their schema default on add, so get should
+                // Value relations are initialized with their schema default on add, so getRelationValue should
                 // always return Some if the relation exists. This would indicate a bug.
                 failwith $"Relation value not found on entity {entity} despite relation existing."
         | None -> None // Entity may not have the relation, which is a legit case.
@@ -255,17 +279,20 @@ module Extensions =
             | None -> None // Legit case where no entities meet the criteria.
 
         /// Queries for the first entity matching the given criteria that has the given relation (i.e. acts as the
-        /// subject of the relation) and returns the subject entity, target entity, and the trait value.
-        member this.QueryFirstTarget<'T, 'TTrait when 'TTrait :> IValueTrait<'T>>
-            (relation: IRelation<'TTrait>, [<ParamArray>] where: QueryOperator[])
+        /// subject of the relation) and returns the subject entity, target entity, and the relation value.
+        /// NOTE: for a NON-exclusive relation (one subject related to many targets) this returns an ARBITRARY
+        /// target/value — it resolves via targetFor, which returns the first target in unspecified order. It is
+        /// intended for exclusive relations, where a subject has at most one target.
+        member this.QueryFirstTarget<'T, 'TMutable>
+            (relation: IRelation<'T, 'TMutable>, [<ParamArray>] where: QueryOperator[])
             =
-            match this.QueryFirst [| With(relation.Wildcard()); yield! where |] with
+            match this.QueryFirst [| RelatedToAny relation; yield! where |] with
             | Some entity ->
                 match entity |> targetWithValueFor relation with
                 | Some(target, value) -> Some(entity, target, value)
                 | None ->
                     // targetWithValueFor should always return Some if the entity matched the
-                    // wildcard query, since value traits are initialized on add. This would
+                    // wildcard query, since value relations are initialized on add. This would
                     // indicate a bug.
                     failwith $"Relation target/value not found on entity {entity} despite matching wildcard query."
             | None -> None // Legit case where no entities have the relation.

@@ -23,12 +23,12 @@ let spawn size (world: IWorld) =
         world.Spawn(Position.Val zeroPosition, Hidden.Tag(), Connector.Tag())
 
     let boxId = world.Spawn(Size.Val size, Hidden.Tag(), Connector.Tag())
-    boxPosId |> addWith (CornerOf => boxId) {| IsBounds = false |}
-    boundPosId |> addWith (CornerOf => boxId) {| IsBounds = true |}
+    boxPosId |> addRelationWith CornerOf boxId {| IsBounds = false |}
+    boundPosId |> addRelationWith CornerOf boxId {| IsBounds = true |}
     boxId, boxPosId, boundPosId
 
 let getCorners (world: IWorld) boxId =
-    let corners = world.Query(With(CornerOf => boxId)) |> Array.ofSeq
+    let corners = world.Query(Related(CornerOf, boxId)) |> Array.ofSeq
 
     if corners.Length = 2 then
         corners[0], corners[1]
@@ -38,9 +38,10 @@ let getCorners (world: IWorld) boxId =
 let updateCorners (world: IWorld) changeOption f boxId =
     let mutable i = 0
 
-    world.QueryTraits(Position, CornerOf => boxId).UpdateEachWith changeOption
-    <| fun ((pos, which), _) ->
+    world.QueryTrait(Position, Related(CornerOf, boxId)).UpdateEachWith changeOption
+    <| fun (pos, entity) ->
         i <- i + 1
+        let which = entity |> getRelationValue CornerOf boxId |> Option.get
 
         match i with
         | 1 -> f pos which.IsBounds

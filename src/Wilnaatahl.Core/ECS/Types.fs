@@ -78,7 +78,28 @@ type IAddedTracker =
 type IRemovedTracker =
     inherit ITracker
 
-/// Represents a query criteria consisting of traits or combinations thereof.
+/// Uniquely identifies an entity in the World; Entities may have zero or more traits.
+#if FABLE_COMPILER
+[<Erase>]
+#endif
+type EntityId = EntityId of int
+
+/// A relation between entities, optionally carrying a per-(subject, target) value. This non-generic
+/// supertype exists so query operators can refer to a relation without knowing its value type.
+type IRelation =
+    /// True if this relation permits at most one target per subject; false if a subject may relate to many targets.
+    abstract IsExclusive: bool
+
+/// A relation between entities parameterised by the "read" and "mutable" types of its per-(subject, target)
+/// value. Tag relations carry unit. Values are read and written through the relation accessors on
+/// IEntityOperations, keyed by (relation, target); relations themselves are used only as query filters.
+type IRelation<'T, 'TMutable> =
+    inherit IRelation
+
+/// A relation that carries no value (a Koota storeless relation).
+type ITagRelation = IRelation<unit, unit>
+
+/// Represents a query criteria consisting of traits, relations, or combinations thereof.
 #if FABLE_COMPILER
 [<TypeScriptTaggedUnion("type")>]
 #endif
@@ -96,6 +117,10 @@ type QueryOperator =
     /// Matches entities that have had all of the given traits removed since the last time the same tracker was used,
     /// including entities that have been destroyed.
     | Removed of ITrait[] * IRemovedTracker
+    /// Matches subjects related to the given target via the given relation.
+    | Related of IRelation * EntityId
+    /// Matches subjects related to any target via the given relation (wildcard).
+    | RelatedToAny of IRelation
 
 /// Represents an instance of a trait used to initialize an entity; Tag traits are their own instances.
 type TraitSpec = // NOTE: We can't use TypeScriptTaggedUnion here as it breaks the generated TypeScript code for functions returning a TraitSpec.
@@ -108,12 +133,6 @@ type TraitSpec = // NOTE: We can't use TypeScriptTaggedUnion here as it breaks t
         match config with
         | Tag t -> fTag t
         | Val v -> fValue v
-
-/// Uniquely identifies an entity in the World; Entities may have zero or more traits.
-#if FABLE_COMPILER
-[<Erase>]
-#endif
-type EntityId = EntityId of int
 
 /// Represent operations on entities in the World. For all entity operations, if an invalid entity ID
 /// is provided, the operation will throw an exception.
@@ -144,30 +163,32 @@ type IEntityOperations =
     /// Throws an exception if the given trait hasn't been added to the entity.
     abstract SetWith: valueTrait: IValueTrait<'T> -> update: ('T -> 'T) -> entity: EntityId -> unit
 
+    /// Adds the given relation with the given target to the given entity. If it already exists, this has no effect.
+    /// For an exclusive relation, any existing target for the same relation on the entity is removed first.
+    abstract AddRelation: relation: IRelation<'T, 'TMutable> -> target: EntityId -> entity: EntityId -> unit
+
+    /// Removes the given relation with the given target from the given entity, if it exists. Otherwise, no effect.
+    abstract RemoveRelation: relation: IRelation<'T, 'TMutable> -> target: EntityId -> entity: EntityId -> unit
+
+    /// Returns true if the given entity has the given relation with the given target, false otherwise.
+    abstract HasRelation: relation: IRelation<'T, 'TMutable> -> target: EntityId -> entity: EntityId -> bool
+
+    /// Gets the value of the given relation with the given target for the given entity, or None if the entity
+    /// is not related to that target via that relation.
+    abstract GetRelationValue: relation: IRelation<'T, 'TMutable> -> target: EntityId -> entity: EntityId -> 'T option
+
+    /// Sets the value of the given relation with the given target on the given entity. Throws an exception if the
+    /// entity is not related to that target via that relation.
+    abstract SetRelationValue:
+        relation: IRelation<'T, 'TMutable> -> target: EntityId -> value: 'T -> entity: EntityId -> unit
+
     /// Returns the first entity that is the target of the given relation for the given entity, or None if no target exists
     /// or the entity doesn't have the given relation.
-    abstract TargetFor: relation: IRelation<'TTrait> -> entity: EntityId -> EntityId option
+    abstract TargetFor: relation: IRelation<'T, 'TMutable> -> entity: EntityId -> EntityId option
 
     /// Returns the all entities that are targets of the given relation for the given entity, if any. Returns an empty
     /// array if no target exists or the entity doesn't have the given relation.
-    abstract TargetsFor: relation: IRelation<'TTrait> -> entity: EntityId -> EntityId[]
-
-/// Represents a special trait that relates entitites.
-and IRelation<'TTrait when 'TTrait :> ITrait> =
-    // NOTE: IsTag is used to distinguish relations carrying ITagTrait from those carrying IValueTrait
-    // in TypeScript type tests. We could use a discriminated union of two interfaces
-    // instead, but doing it this way makes the F# types line up better.
-
-    /// True if this relation is defined in terms of an ITagTrait type, false otherwise.
-    abstract IsTag: bool
-
-    /// Returns the trait that represents the relation with the given entity as target. The returned
-    /// trait can be used to set a value for the relation if it's a value trait, to add the relation
-    /// with the given target to a subject entity, or anything else a trait can be used for.
-    abstract WithTarget: entity: EntityId -> 'TTrait
-
-    /// Used in queries to request all entities that are a subject of this relation across all targets.
-    abstract Wildcard: unit -> ITagTrait
+    abstract TargetsFor: relation: IRelation<'T, 'TMutable> -> entity: EntityId -> EntityId[]
 
 /// Specifies whether UpdateEach will apply change detection. The default is Auto.
 #if FABLE_COMPILER
@@ -217,13 +238,12 @@ type ITraitFactory =
     /// Creates a new Removed tracker.
     abstract CreateRemoved: unit -> IRemovedTracker
 
-    /// Defines a new relation of tag trait type with the given configuration.
-    abstract Relation: config: RelationConfig -> IRelation<ITagTrait>
+    /// Defines a new tag relation (carrying no value) with the given configuration.
+    abstract Relation: config: RelationConfig -> ITagRelation
 
-    /// Defines a new relation of value trait type with the given configuration and value stores.
+    /// Defines a new relation of value type with the given configuration and value stores.
     /// The given values are used for type inference only and are not stored anywhere.
-    abstract RelationWith:
-        config: RelationConfig * store: 'T * mutableStore: 'TMutable -> IRelation<IMutableValueTrait<'T, 'TMutable>>
+    abstract RelationWith: config: RelationConfig * store: 'T * mutableStore: 'TMutable -> IRelation<'T, 'TMutable>
     // NOTE: We're avoiding overloading here too to make things easier on the TypeScript side.
 
     /// Defines a new tag trait.

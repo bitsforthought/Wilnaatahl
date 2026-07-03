@@ -36,7 +36,8 @@ let private handleDragStart (world: IWorld) =
         // A node ought to have been touched before starting a drag; if not, we can't proceed.
         match world.QueryFirstTrait(Position, With Touched) with
         | Some(nodeEntity, origin) ->
-            world.Spawn((Dragging => nodeEntity).Val origin) |> ignore
+            let dragEntity = world.Spawn()
+            dragEntity |> addRelationWith Dragging nodeEntity origin
             world
         | None ->
             // There really should be a Touched node at this point. If there isn't, we should hear about it.

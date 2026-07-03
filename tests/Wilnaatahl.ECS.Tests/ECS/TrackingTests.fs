@@ -927,7 +927,11 @@ type TrackingTests() =
     //    trait is present at drain time).
     //  - A filter that was satisfied only between separate tracked events of a multi-trait modifier
     //    does not retro-match; the filter must also hold at drain time.
-    //  - Relation wildcard filters (With/Or relation.Wildcard()) work on the event-driven path.
+    //  - A relation filter (RelatedToAny) narrows an event-driven query's results. NOTE: M13 does
+    //    NOT prove relation filters are evaluated at event time vs. drain time — it adds the relation
+    //    BEFORE the tracked Age event, so the relation holds at both moments and the two
+    //    interpretations are indistinguishable. The mock evaluates relation filters at drain time
+    //    (see RelatedSets in TestECS.fs); no app query depends on the distinction.
 
     [<Fact>]
     member _.``M11: event-driven Added + Not evaluated at add time``() =
@@ -959,18 +963,58 @@ type TrackingTests() =
         results =! set [ b ]
 
     [<Fact>]
-    member _.``M13: event-driven tracking works with a relation wildcard filter``() =
+    member _.``M13: event-driven tracking works with a RelatedToAny filter``() =
         let Added = createAdded ()
         let Likes = tagRelation ()
-        world.Query(Added <=> [| Age |], With(Likes.Wildcard())) |> ignore
+        world.Query(Added <=> [| Age |], RelatedToAny Likes) |> ignore
         let target = world.Spawn [||]
-        // a has the Likes relation before Age is added → wildcard With holds at add time → matches.
+        // a has the Likes relation before Age is added → RelatedToAny holds at drain time → matches.
         let a = world.Spawn [||]
-        a |> add (Likes => target)
+        a |> addRelation Likes target
         a |> add Age
-        // b has no Likes relation when Age is added → wildcard With fails → no match.
+        // b has no Likes relation → RelatedToAny fails → no match.
         let b = world.Spawn [| Age.Val {| age = 0 |} |]
-        let results = world.Query(Added <=> [| Age |], With(Likes.Wildcard())) |> Set.ofSeq
+        let results = world.Query(Added <=> [| Age |], RelatedToAny Likes) |> Set.ofSeq
+        results =! set [ a ]
+
+    // M14/M15 pin real Koota's INITIAL-population behavior when a tracking modifier is combined
+    // with a relation filter — the tracker's very FIRST drain (no pre-drain), unlike M13. This is
+    // the only place that decides whether Koota's initial-population skip
+    // (https://github.com/pmndrs/koota/issues/241), which drops With/Or filters, ALSO drops
+    // relation (Related/RelatedToAny) filters. Verified against real Koota 0.6.x
+    // (npm run test:koota): it does NOT — relation filters are applied even on initial population, so
+    // b (unrelated) is excluded. The mock must agree.
+
+    [<Fact>]
+    member _.``M14: initial-population tracking still applies a RelatedToAny filter``() =
+        let Added = createAdded ()
+        let Likes = tagRelation ()
+        let target = world.Spawn [||]
+        // a has the Likes relation and Added(Age).
+        let a = world.Spawn [||]
+        a |> addRelation Likes target
+        a |> add Age
+        // b has Added(Age) but no Likes relation.
+        let b = world.Spawn [| Age.Val {| age = 0 |} |]
+        // First drain of this tracker → initial population. Unlike With/Or
+        // (https://github.com/pmndrs/koota/issues/241), the relation filter IS still applied, so b
+        // (no Likes) is excluded.
+        let results = world.Query(Added <=> [| Age |], RelatedToAny Likes) |> Set.ofSeq
+        results =! set [ a ]
+
+    [<Fact>]
+    member _.``M15: initial-population tracking still applies a concrete Related filter``() =
+        let Added = createAdded ()
+        let Likes = tagRelation ()
+        let target = world.Spawn [||]
+        // a is related to target via Likes and has Added(Age).
+        let a = world.Spawn [||]
+        a |> addRelation Likes target
+        a |> add Age
+        // b has Added(Age) but is not related to target.
+        let b = world.Spawn [| Age.Val {| age = 0 |} |]
+        // First drain → initial population: the concrete Related filter is still applied, so b is excluded.
+        let results = world.Query(Added <=> [| Age |], Related(Likes, target)) |> Set.ofSeq
         results =! set [ a ]
 
     // ================================================================

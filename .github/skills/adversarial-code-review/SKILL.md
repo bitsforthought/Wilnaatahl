@@ -50,6 +50,12 @@ Check the diff against the `fsharp-style` skill. Common regressions to hunt for:
   assembly-scoped `internal` was meant.
 - Abbreviated/Hungarian names (`mk*`, `m*`, `p*`, `kid`), single-letter record
   fields, magic numbers without a named binding.
+- **`obj` / `box` / `unbox` / `:?>` used to erase types for convenience** where a
+  shared base type or a flexible `#Base` parameter would keep static checking.
+  Every `obj` (parameter, field, generic argument, collection key/value) and every
+  downcast should trace to genuine heterogeneity, not avoidance of upcast ceremony
+  — a mismatch on an erased type fails at runtime (a Fable throw in the browser),
+  not at build. Flag the ones chosen for convenience.
 - Legacy `.[ ]` indexing (use `expr[i]` / `expr[i..j]`); gratuitous `let mutable`
   / `while` where a fold, `takeWhile`/`choose`, or tail recursion fits.
 - Unnecessary `Seq.toArray`/`List.ofSeq`; unnecessary type annotations; inline

@@ -2,6 +2,7 @@ namespace Wilnaatahl.Tests.ECS
 
 open System
 open Wilnaatahl.ECS
+open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.ECS.Relation
 open Wilnaatahl.ECS.Trait
@@ -55,6 +56,44 @@ type WorldTests() =
         world.QueryTrait(Age).ToSequence() |> Set.ofSeq
         =! set [ {| age = 27 |}, entity1; {| age = 44 |}, entity2 ]
 
+    [<Fact>]
+    member _.``Bare and relation-only entities are live members of the world``() =
+        // Real Koota tracks live entities independent of their traits: an entity created with no
+        // traits (or whose only data is a relation) is still returned by an unfiltered Query() and by
+        // a Not-only query, and stays live until destroyed. The mock must agree so conformance tests
+        // are portable.
+        let Likes = tagRelation ()
+
+        let bare = world.Spawn [||]
+        let target = world.Spawn [||]
+        let relationOnly = world.Spawn [||]
+        relationOnly |> addRelation Likes target
+        let tagged = world.Spawn [| IsTagged.Tag() |]
+
+        let allEntities = world.Query().ToSequence() |> Seq.map snd |> Set.ofSeq
+        // The world's membership is EXACTLY the spawned entities — every spawn is a live member
+        // regardless of whether it carries any trait, and nothing else is surfaced.
+        allEntities =! set [ bare; target; relationOnly; tagged ]
+
+        // A relation-only subject is reachable through the relation filters.
+        world.Query(Related(Likes, target)).ToSequence() |> Seq.map snd |> Set.ofSeq
+        =! set [ relationOnly ]
+
+        world.Query(RelatedToAny Likes).ToSequence() |> Seq.map snd |> Set.ofSeq
+        =! set [ relationOnly ]
+
+        // Not narrows out the tagged entity and keeps exactly the bare and relation-only ones.
+        let untagged =
+            world.Query(Not [| IsTagged |]).ToSequence() |> Seq.map snd |> Set.ofSeq
+
+        untagged =! set [ bare; target; relationOnly ]
+
+        // Destroying a bare entity removes it from the world; removing a trait does not.
+        bare |> destroy
+        tagged |> remove IsTagged
+        let afterChanges = world.Query().ToSequence() |> Seq.map snd |> Set.ofSeq
+        afterChanges =! set [ target; relationOnly; tagged ]
+
 // ------------------------------------------------------------------
 // .NET-only tests (use Unquote quotations or TestECS internals)
 // ------------------------------------------------------------------
@@ -103,6 +142,11 @@ type WorldTests() =
         threw (fun () -> ops.Remove trait' entity) =! true
         threw (fun () -> ops.Set vt {| x = 1 |} entity) =! true
         threw (fun () -> ops.SetWith vt id entity) =! true
+        threw (fun () -> ops.AddRelation rel entity entity) =! true
+        threw (fun () -> ops.RemoveRelation rel entity entity) =! true
+        threw (fun () -> ops.HasRelation rel entity entity) =! true
+        threw (fun () -> ops.GetRelationValue rel entity entity) =! true
+        threw (fun () -> ops.SetRelationValue rel entity () entity) =! true
         threw (fun () -> ops.TargetFor rel entity) =! true
         threw (fun () -> ops.TargetsFor rel entity) =! true
 

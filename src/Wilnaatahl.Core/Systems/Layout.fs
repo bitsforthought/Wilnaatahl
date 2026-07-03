@@ -25,7 +25,7 @@ let layoutNodes (world: IWorld) familyGraph =
         let wilp = WilpName wilpData.wilpName
         let layoutMap = Scene.layoutGraph wilp familyGraph |> setPositions |> Map.ofSeq
 
-        world.QueryTrait(PersonRef, With(RenderedIn => wilpId)).ForEach
+        world.QueryTrait(PersonRef, Related(RenderedIn, wilpId)).ForEach
         <| fun (person: Person, treeNodeId) ->
             let pos = layoutMap |> Map.find person.Id
 

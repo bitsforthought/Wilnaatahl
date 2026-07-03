@@ -22,8 +22,8 @@ let spawn firstPos secondPos (world: IWorld) =
         world.Spawn(Position.Val secondPos, Hidden.Tag(), Connector.Tag())
 
     let lineId = world.Spawn(Line.Tag(), Connector.Tag())
-    firstEndpointId |> add (EndpointOf => lineId)
-    secondEndpointId |> add (EndpointOf => lineId)
+    firstEndpointId |> addRelation EndpointOf lineId
+    secondEndpointId |> addRelation EndpointOf lineId
     lineId
 
 let spawnAtOrigin (world: IWorld) =
@@ -37,12 +37,12 @@ let spawnHidden firstPos secondPos (world: IWorld) =
     lineId
 
 let snapToWithOffset targetId (x, y, z) subjectId =
-    subjectId |> addWith (SnapToX => targetId) {| x = x |}
-    subjectId |> addWith (SnapToY => targetId) {| y = y |}
-    subjectId |> addWith (SnapToZ => targetId) {| z = z |}
+    subjectId |> addRelationWith SnapToX targetId {| x = x |}
+    subjectId |> addRelationWith SnapToY targetId {| y = y |}
+    subjectId |> addRelationWith SnapToZ targetId {| z = z |}
 
 let getEndpoints (world: IWorld) lineId =
-    let endpoints = world.Query(With(EndpointOf => lineId)) |> Array.ofSeq
+    let endpoints = world.Query(Related(EndpointOf, lineId)) |> Array.ofSeq
 
     if endpoints.Length = 2 then
         endpoints[0], endpoints[1]
@@ -52,7 +52,7 @@ let getEndpoints (world: IWorld) lineId =
 let updateEndpoints (world: IWorld) changeOption f1 f2 lineId =
     let mutable i = 0
 
-    world.QueryTrait(Position, With(EndpointOf => lineId)).UpdateEachWith changeOption
+    world.QueryTrait(Position, Related(EndpointOf, lineId)).UpdateEachWith changeOption
     <| fun (pos, _) ->
         i <- i + 1
 

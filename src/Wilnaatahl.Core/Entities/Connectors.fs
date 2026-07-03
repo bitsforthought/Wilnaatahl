@@ -34,7 +34,7 @@ let private queryFamilies familyGraph (world: IWorld) =
             | None -> failwith $"Found Wilp {wilpId} without a name."
         | None -> failwith $"Found tree node {entity} with no Wilp."
 
-    world.QueryTraits(PersonRef, Position, With(RenderedIn.Wildcard())).ToSequence()
+    world.QueryTraits(PersonRef, Position, RelatedToAny RenderedIn).ToSequence()
     |> Seq.map createFamilyNode
     |> Scene.extractFamilies familyGraph
 
@@ -69,10 +69,10 @@ let spawnAllConnectors familyGraph (world: IWorld) =
         let bottomLineId = world |> Line3.spawn parent1.Position parent2.Position
 
         topLineId
-        |> addWith (Parallels => hiddenLineId) {| offset = parentConnectorOffset / 2.0 |}
+        |> addRelationWith Parallels hiddenLineId {| offset = parentConnectorOffset / 2.0 |}
 
         bottomLineId
-        |> addWith (Parallels => hiddenLineId) {| offset = -(parentConnectorOffset / 2.0) |}
+        |> addRelationWith Parallels hiddenLineId {| offset = -(parentConnectorOffset / 2.0) |}
 
         // 3. A Hidden entity with Position that Bisects the bottom line, which will stay below
         //    the other line even when the parent nodes have been dragged due to how the Parallels
@@ -81,7 +81,7 @@ let spawnAllConnectors familyGraph (world: IWorld) =
         let bisectingEntityId =
             world.Spawn(Position.Val zeroPosition, Hidden.Tag(), Connector.Tag())
 
-        bisectingEntityId |> add (Bisects => bottomLineId)
+        bisectingEntityId |> addRelation Bisects bottomLineId
 
         // Steps 4-9 below build the elbow + branch + child scaffolding hanging beneath
         // the spouse bar. They are all skipped for childless Couples — those render as
@@ -99,8 +99,8 @@ let spawnAllConnectors familyGraph (world: IWorld) =
             let branchNodeId =
                 world.Spawn(Position.Val zeroPosition, Elbow.Tag(), Connector.Tag())
 
-            branchNodeId |> addWith (SnapToX => bisectingEntityId) {| x = 0.0 |}
-            branchNodeId |> addWith (SnapToY => boxBoundId) {| y = 0.0 |}
+            branchNodeId |> addRelationWith SnapToX bisectingEntityId {| x = 0.0 |}
+            branchNodeId |> addRelationWith SnapToY boxBoundId {| y = 0.0 |}
 
             // 6. A visible Line that follows the Bisects Node and the Branch Node
             world
@@ -110,15 +110,15 @@ let spawnAllConnectors familyGraph (world: IWorld) =
 
             for child in family.Children do
                 // Finish step 4 above by adding each child to the bounding box.
-                boundingBoxId |> add (BoundingBoxOn => child.Entity)
+                boundingBoxId |> addRelation BoundingBoxOn child.Entity
 
                 // 7. A visible Elbow for each child node that FollowsX the corresponding child node
                 //    and FollowsY the Bounding Box.
                 let junctionId =
                     world.Spawn(Position.Val zeroPosition, Elbow.Tag(), Connector.Tag())
 
-                junctionId |> addWith (SnapToX => child.Entity) {| x = 0.0 |}
-                junctionId |> addWith (SnapToY => boxBoundId) {| y = 0.0 |}
+                junctionId |> addRelationWith SnapToX child.Entity {| x = 0.0 |}
+                junctionId |> addRelationWith SnapToY boxBoundId {| y = 0.0 |}
 
                 // 8. A visible Line for each child that follows the Branch Node and that child's Junction Node
                 world

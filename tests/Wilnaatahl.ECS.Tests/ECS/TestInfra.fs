@@ -1,12 +1,14 @@
 /// Provides shared test types used by both .NET and Fable test projects.
 module Wilnaatahl.Tests.ECS.TestInfra
 
-/// The exact message a query throws from UpdateEach when its value is a relation pair (the
-/// fail-fast guard). Exception messages are part of the contract, so tests assert on this. Both
-/// the .NET mock (TestECS) and the TypeScript wrapper (kootaWrapper.ts) must produce this exact
-/// text; asserting equality here cross-checks that those two independent definitions agree.
-let relationValueUpdateEachError =
-    "Cannot UpdateEach a query whose value is a relation pair. Read the relation's value with ForEach instead; UpdateEach cannot read a relation pair's per-target value."
+/// The prefix of the exception message thrown when a value is set for a relation that is not
+/// present on the subject entity. Both backends (the .NET mock and the Koota wrapper) throw a
+/// message that STARTS WITH this text; the trailing entity id is non-deterministic, so tests assert
+/// StartsWith rather than equality. The literal is duplicated verbatim in TestECS.fs (the mock) and
+/// kootaWrapper.ts (the wrapper) because those live in the source project and cannot reference this
+/// test module; this binding is the single canonical value the tests assert against.
+let relationNotPresentError =
+    "Cannot set a value for a relation that is not present on the subject entity"
 
 /// Runs the given action and returns the message of the exception it throws, or None if it does
 /// not throw. Used to assert on fail-fast exception messages portably across .NET and Fable.

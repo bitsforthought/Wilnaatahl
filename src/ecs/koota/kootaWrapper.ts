@@ -30,7 +30,8 @@ import {
   IChangedTracker,
   IEntityOperations,
   IQueryResult$2 as IQueryResult,
-  IRelation$1 as IRelation,
+  IRelation,
+  IRelation$2 as IRelationValue,
   IRemovedTracker,
   ITagTrait,
   ITrait,
@@ -68,36 +69,12 @@ type WrappedTagTrait = WrappedTrait<TagTrait>;
 type WrappedValueTrait<T> = WrappedTrait<KootaValueTrait<T>>;
 type WrappedValueFactoryTrait<T> = WrappedTrait<KootaValueFactoryTrait<T>>;
 
-// A wrapped relation pair additionally carries the Koota relation function and its target so that
-// Spawn can rebuild the pair in "params" form (rel(target, value)) when an initial value is given.
-// In 0.6.x the pair object is opaque and a [pair, value] tuple is not a valid spawn argument, so
-// the value must be supplied as relation params instead.
-type WrappedRelationPair = WrappedTrait<Trait<any>> & {
-  relationFn: Relation<Trait<any>>;
-  relationTarget: Entity;
-  isExclusive: boolean;
+// A wrapped relation carries the underlying Koota relation function so we can build a relation pair
+// (rel(target)) on demand for entity ops and target-specific queries. A relation is a query filter
+// plus a per-(subject, target) value store, not a trait, so it never flows through the trait wrappers.
+type WrappedRelation = IRelation & {
+  rel: Relation<Trait<any>>;
 };
-
-function isWrappedRelationPair(wrapper: unknown): wrapper is WrappedRelationPair {
-  return typeof wrapper === "object" && wrapper !== null && "relationFn" in wrapper;
-}
-
-function isNonExclusiveRelationPair(wrapper: unknown): boolean {
-  return isWrappedRelationPair(wrapper) && !wrapper.isExclusive;
-}
-
-// A relation pair used as a query's value slot cannot have its per-target value surfaced through
-// the query's iteration state, so UpdateEach (which iterates that state) fails fast. ForEach is
-// unaffected: it reads each entity's value individually, which is always correct.
-const relationValueUpdateEachError =
-  "Cannot UpdateEach a query whose value is a relation pair. Read the relation's value with ForEach instead; UpdateEach cannot read a relation pair's per-target value.";
-
-type WrappedRelation<TKootaTrait extends Trait<any>, TTrait extends ITrait> = IRelation<TTrait> & {
-  IsTag: boolean;
-  rel: Relation<TKootaTrait>;
-};
-
-type WrappedTagRelation = WrappedRelation<TagTrait, ITagTrait>;
 
 // The $wrapper symbol allows us to cache wrappers directly on Koota objects without conflicting
 // with present or future Koota properties. While it's sketchy to mutate objects coming from Koota,
@@ -171,16 +148,11 @@ export function toKootaTagTrait(trait: ITagTrait): TagTrait {
   return validateWrappedTrait<TagTrait, WrappedTagTrait>(trait, "toKootaTagTrait").trait;
 }
 
-export function toKootaRelation<TTrait extends ITrait, T = void>(
-  r: IRelation<TTrait>
-): Relation<Trait<any>> {
+export function toKootaRelation(r: IRelation): Relation<Trait<any>> {
   if (!("rel" in r)) {
     throw new Error("Invalid IRelation implementation passed to toKootaRelation().");
   }
-  const wrapper = r.IsTag
-    ? (r as WrappedTagRelation)
-    : (r as WrappedRelation<KootaValueTrait<T>, TTrait>);
-  return wrapper.rel;
+  return (r as WrappedRelation).rel;
 }
 
 export function createEntityOperations(): IEntityOperations {
@@ -224,15 +196,68 @@ export function createEntityOperations(): IEntityOperations {
     );
   }
 
-  function TargetFor<TTrait extends ITrait>(
-    relation: IRelation<TTrait>,
+  function AddRelation<T, TMutable>(
+    relation: IRelationValue<T, TMutable>,
+    target: EntityId,
+    entity: EntityId & Entity
+  ): void {
+    entity.add(toKootaRelation(relation)(target as Entity));
+  }
+
+  function RemoveRelation<T, TMutable>(
+    relation: IRelationValue<T, TMutable>,
+    target: EntityId,
+    entity: EntityId & Entity
+  ): void {
+    entity.remove(toKootaRelation(relation)(target as Entity));
+  }
+
+  function HasRelation<T, TMutable>(
+    relation: IRelationValue<T, TMutable>,
+    target: EntityId,
+    entity: EntityId & Entity
+  ): boolean {
+    return entity.has(toKootaRelation(relation)(target as Entity));
+  }
+
+  function GetRelationValue<T, TMutable>(
+    relation: IRelationValue<T, TMutable>,
+    target: EntityId,
+    entity: EntityId & Entity
+  ): Option<T> {
+    return entity.get(toKootaRelation(relation)(target as Entity)) as Option<T>;
+  }
+
+  function SetRelationValue<T, TMutable>(
+    relation: IRelationValue<T, TMutable>,
+    target: EntityId,
+    value: T,
+    entity: EntityId & Entity
+  ): void {
+    const pair = toKootaRelation(relation)(target as Entity);
+    // Guard against Koota's phantom write: entity.set() on a pair the subject never had would
+    // write into the relation store regardless (setRelationDataAtIndex does store[eid] = value),
+    // silently corrupting state. The documented contract is to throw. The message prefix (up to the
+    // entity id) is the cross-backend contract, mirrored verbatim in the .NET mock
+    // (src/Wilnaatahl.Core/ECS/Mocks/TestECS.fs); the trailing entity id is non-deterministic across
+    // backends and not part of it.
+    if (!entity.has(pair)) {
+      throw new Error(
+        `Cannot set a value for a relation that is not present on the subject entity ${entity.id()}`
+      );
+    }
+    entity.set(pair, value as TraitValue<Schema>);
+  }
+
+  function TargetFor<T, TMutable>(
+    relation: IRelationValue<T, TMutable>,
     entity: EntityId & Entity
   ): Option<EntityId> {
     return entity.targetFor(toKootaRelation(relation));
   }
 
-  function TargetsFor<TTrait extends ITrait>(
-    relation: IRelation<TTrait>,
+  function TargetsFor<T, TMutable>(
+    relation: IRelationValue<T, TMutable>,
     entity: EntityId & Entity
   ): EntityId[] {
     return entity.targetsFor(toKootaRelation(relation));
@@ -247,6 +272,11 @@ export function createEntityOperations(): IEntityOperations {
     Remove,
     Set,
     SetWith,
+    AddRelation,
+    RemoveRelation,
+    HasRelation,
+    GetRelationValue,
+    SetRelationValue,
     TargetFor,
     TargetsFor,
   };
@@ -297,50 +327,32 @@ export function createTraitFactory(): ITraitFactory {
     return fromKootaTrait(trait, false);
   }
 
-  function fromKootaRelation<TKootaTrait extends Trait<any>, TTrait extends ITrait>(
-    rel: Relation<TKootaTrait>,
-    isTag: boolean,
-    isExclusive: boolean
-  ): IRelation<TTrait> {
-    // A relation pair (rel(target)) is freshly allocated by Koota on every call, so — unlike
-    // the stable trait objects fromKootaTrait caches a wrapper on — we must NOT cache here:
-    // the cache would never hit. We also bypass fromKootaTrait's Trait<any> constraint because
-    // a pair is a RelationPair, not a Trait; Koota accepts a pair anywhere a Trait is valid for
-    // add/remove/has/get/set and queries, so we expose it through the wrapper's trait slot.
-    function WithTarget(entity: EntityId & Entity): TTrait {
-      const wrapped: WrappedRelationPair = {
-        IsTag: isTag,
-        trait: rel(entity) as unknown as Trait<any>,
-        relationFn: rel as Relation<Trait<any>>,
-        relationTarget: entity,
-        isExclusive,
-      };
-      return wrapped as unknown as TTrait;
-    }
-
-    function Wildcard(): TTrait {
-      const wrapped: WrappedTrait<Trait<any>> = {
-        IsTag: true,
-        trait: rel("*") as unknown as Trait<any>,
-      };
-      return wrapped as unknown as TTrait;
-    }
-
-    return getOrCreateWrapper(rel, (r) => ({ IsTag: isTag, rel: r, WithTarget, Wildcard }));
+  function fromKootaRelation(rel: Relation<Trait<any>>, isExclusive: boolean): WrappedRelation {
+    // The relation function is a stable object created once per Relation/RelationWith call, so we
+    // cache the wrapper on it. A relation is a query filter plus a per-(subject, target) value
+    // store, not a trait, so it never flows through the trait wrappers or produces a pair here;
+    // pairs are built on demand (rel(target)) by entity ops and target-specific queries.
+    return getOrCreateWrapper(rel, (r) => ({ IsExclusive: isExclusive, rel: r }));
   }
 
+  // IRelationValue<T, TMutable> adds nothing structurally to IRelation (its T/TMutable are phantom
+  // type parameters used only for F#-side inference), and WrappedRelation already extends IRelation,
+  // so the assertion only supplies the phantom generics — it erases no runtime member.
   function fromKootaTagRelation(
     rel: Relation<Trait<any>>,
     isExclusive: boolean
-  ): IRelation<ITagTrait> {
-    return fromKootaRelation(rel, true, isExclusive);
+  ): IRelationValue<void, void> {
+    return fromKootaRelation(rel, isExclusive) as IRelationValue<void, void>;
   }
 
   function fromKootaValueRelation<T, TMutable>(
     rel: Relation<KootaValueTrait<T>>,
     isExclusive: boolean
-  ): IRelation<IMutableValueTrait<T, TMutable>> {
-    return fromKootaRelation(rel, false, isExclusive);
+  ): IRelationValue<T, TMutable> {
+    return fromKootaRelation(rel as Relation<Trait<any>>, isExclusive) as IRelationValue<
+      T,
+      TMutable
+    >;
   }
 
   function CreateAdded(): IAddedTracker {
@@ -358,7 +370,7 @@ export function createTraitFactory(): ITraitFactory {
     return fromKootaRemovedTracker(Removed);
   }
 
-  function Relation(config: RelationConfig): IRelation<ITagTrait> {
+  function Relation(config: RelationConfig): IRelationValue<void, void> {
     // A storeless relation's underlying trait is Trait<Record<string, never>>, not TagTrait.
     const rel = config.IsExclusive ? relation({ exclusive: true }) : relation();
     return fromKootaTagRelation(rel, config.IsExclusive);
@@ -368,7 +380,7 @@ export function createTraitFactory(): ITraitFactory {
   function RelationWith<T, TMutable>(
     config: RelationConfig,
     store: T
-  ): IRelation<IMutableValueTrait<T, TMutable>> {
+  ): IRelationValue<T, TMutable> {
     const typedStore = store as KootaSchema<T>;
     const rel = config.IsExclusive
       ? relation({ exclusive: true, store: typedStore })
@@ -437,6 +449,10 @@ export function fromKootaWorld(world: World): IWorld {
             const removedOperands = Array.from(op.Item1, toKootaTrait);
             const Removed = toKootaTracker(op.Item2);
             return Removed(...removedOperands);
+          case "related":
+            return toKootaRelation(op.Item1)(op.Item2 as Entity);
+          case "relatedToAny":
+            return toKootaRelation(op.Item)("*");
         }
       });
     }
@@ -490,8 +506,7 @@ export function fromKootaWorld(world: World): IWorld {
 
     function wrapQueryResult1<S, T, TMutable>(
       result: QueryResult<KootaQueryParameters<S>>,
-      valueTrait: KootaValueTrait<T>,
-      updateEachError: string | undefined
+      valueTrait: KootaValueTrait<T>
     ): IQueryResult<T, TMutable> {
       function ForEach(callback: (state: [T, EntityId]) => void): void {
         // entity.get is correct for both plain value traits and relation pairs, including the
@@ -506,9 +521,6 @@ export function fromKootaWorld(world: World): IWorld {
         changeOption: ChangeDetectionOption,
         callback: (state: [TMutable, EntityId]) => void
       ): void {
-        if (updateEachError) {
-          throw new Error(updateEachError);
-        }
         function thunk(state: InstancesFromParameters<KootaQueryParameters<S>>, entity: Entity) {
           callback([state[0], entity]);
         }
@@ -526,8 +538,7 @@ export function fromKootaWorld(world: World): IWorld {
 
     function wrapQueryResult2<S, T, TMutable, U, UMutable>(
       result: QueryResult<KootaQueryParameters<S>>,
-      valueTraits: [KootaValueTrait<T>, KootaValueTrait<U>],
-      updateEachError: string | undefined
+      valueTraits: [KootaValueTrait<T>, KootaValueTrait<U>]
     ): IQueryResult<[T, U], [TMutable, UMutable]> {
       function ForEach(callback: (state: [[T, U], EntityId]) => void): void {
         for (const entity of result) {
@@ -541,9 +552,6 @@ export function fromKootaWorld(world: World): IWorld {
         changeOption: ChangeDetectionOption,
         callback: (state: [[TMutable, UMutable], EntityId]) => void
       ): void {
-        if (updateEachError) {
-          throw new Error(updateEachError);
-        }
         function thunk(state: InstancesFromParameters<KootaQueryParameters<S>>, entity: Entity) {
           callback([state.slice(0, 2) as [TMutable, UMutable], entity]);
         }
@@ -561,8 +569,7 @@ export function fromKootaWorld(world: World): IWorld {
 
     function wrapQueryResult3<S, T, TMutable, U, UMutable, V, VMutable>(
       result: QueryResult<KootaQueryParameters<S>>,
-      valueTraits: [KootaValueTrait<T>, KootaValueTrait<U>, KootaValueTrait<V>],
-      updateEachError: string | undefined
+      valueTraits: [KootaValueTrait<T>, KootaValueTrait<U>, KootaValueTrait<V>]
     ): IQueryResult<[T, U, V], [TMutable, UMutable, VMutable]> {
       function ForEach(callback: (state: [[T, U, V], EntityId]) => void): void {
         for (const entity of result) {
@@ -577,9 +584,6 @@ export function fromKootaWorld(world: World): IWorld {
         changeOption: ChangeDetectionOption,
         callback: (state: [[TMutable, UMutable, VMutable], EntityId]) => void
       ): void {
-        if (updateEachError) {
-          throw new Error(updateEachError);
-        }
         function thunk(state: InstancesFromParameters<KootaQueryParameters<S>>, entity: Entity) {
           callback([state.slice(0, 3) as [TMutable, UMutable, VMutable], entity]);
         }
@@ -597,8 +601,7 @@ export function fromKootaWorld(world: World): IWorld {
 
     function wrapQueryResult4<S, T, TMutable, U, UMutable, V, VMutable, W, WMutable>(
       result: QueryResult<KootaQueryParameters<S>>,
-      valueTraits: [KootaValueTrait<T>, KootaValueTrait<U>, KootaValueTrait<V>, KootaValueTrait<W>],
-      updateEachError: string | undefined
+      valueTraits: [KootaValueTrait<T>, KootaValueTrait<U>, KootaValueTrait<V>, KootaValueTrait<W>]
     ): IQueryResult<[T, U, V, W], [TMutable, UMutable, VMutable, WMutable]> {
       function ForEach(callback: (state: [[T, U, V, W], EntityId]) => void): void {
         for (const entity of result) {
@@ -614,9 +617,6 @@ export function fromKootaWorld(world: World): IWorld {
         changeOption: ChangeDetectionOption,
         callback: (state: [[TMutable, UMutable, VMutable, WMutable], EntityId]) => void
       ): void {
-        if (updateEachError) {
-          throw new Error(updateEachError);
-        }
         function thunk(state: InstancesFromParameters<KootaQueryParameters<S>>, entity: Entity) {
           callback([state.slice(0, 4) as [TMutable, UMutable, VMutable, WMutable], entity]);
         }
@@ -665,14 +665,7 @@ export function fromKootaWorld(world: World): IWorld {
         const queryParameters = unwrapQueryOperators(where);
         const kootaValueTrait = toKootaValueTrait(someTrait);
         const result = this.world.query(kootaValueTrait, ...queryParameters);
-        // A relation pair in the value slot can't surface its per-target value through iteration when
-        // it's the sole query trait, or whenever it's non-exclusive. UpdateEach fails fast in both.
-        const updateEachError =
-          (queryParameters.length === 0 && isWrappedRelationPair(someTrait)) ||
-          isNonExclusiveRelationPair(someTrait)
-            ? relationValueUpdateEachError
-            : undefined;
-        return wrapQueryResult1(result, kootaValueTrait, updateEachError);
+        return wrapQueryResult1(result, kootaValueTrait);
       }
 
       QueryTraits<T, TMutable, U, UMutable>(
@@ -688,15 +681,7 @@ export function fromKootaWorld(world: World): IWorld {
           secondKootaValueTrait,
           ...queryParameters
         );
-        const updateEachError =
-          isNonExclusiveRelationPair(firstTrait) || isNonExclusiveRelationPair(secondTrait)
-            ? relationValueUpdateEachError
-            : undefined;
-        return wrapQueryResult2(
-          result,
-          [firstKootaValueTrait, secondKootaValueTrait],
-          updateEachError
-        );
+        return wrapQueryResult2(result, [firstKootaValueTrait, secondKootaValueTrait]);
       }
 
       QueryTraits3<T, TMutable, U, UMutable, V, VMutable>(
@@ -715,17 +700,11 @@ export function fromKootaWorld(world: World): IWorld {
           thirdKootaValueTrait,
           ...queryParameters
         );
-        const updateEachError =
-          isNonExclusiveRelationPair(firstTrait) ||
-          isNonExclusiveRelationPair(secondTrait) ||
-          isNonExclusiveRelationPair(thirdTrait)
-            ? relationValueUpdateEachError
-            : undefined;
-        return wrapQueryResult3(
-          result,
-          [firstKootaValueTrait, secondKootaValueTrait, thirdKootaValueTrait],
-          updateEachError
-        );
+        return wrapQueryResult3(result, [
+          firstKootaValueTrait,
+          secondKootaValueTrait,
+          thirdKootaValueTrait,
+        ]);
       }
 
       QueryTraits4<T, TMutable, U, UMutable, V, VMutable, W, WMutable>(
@@ -747,23 +726,12 @@ export function fromKootaWorld(world: World): IWorld {
           fourthKootaValueTrait,
           ...queryParameters
         );
-        const updateEachError =
-          isNonExclusiveRelationPair(firstTrait) ||
-          isNonExclusiveRelationPair(secondTrait) ||
-          isNonExclusiveRelationPair(thirdTrait) ||
-          isNonExclusiveRelationPair(fourthTrait)
-            ? relationValueUpdateEachError
-            : undefined;
-        return wrapQueryResult4(
-          result,
-          [
-            firstKootaValueTrait,
-            secondKootaValueTrait,
-            thirdKootaValueTrait,
-            fourthKootaValueTrait,
-          ],
-          updateEachError
-        );
+        return wrapQueryResult4(result, [
+          firstKootaValueTrait,
+          secondKootaValueTrait,
+          thirdKootaValueTrait,
+          fourthKootaValueTrait,
+        ]);
       }
 
       Remove(someTrait: ITrait): void {
@@ -779,14 +747,6 @@ export function fromKootaWorld(world: World): IWorld {
         function unwrapValueSpec([traitWrapper, value]: [ITrait, unknown]): ConfigurableTrait<
           Trait<any>
         > {
-          // A value-relation pair must be spawned in params form rel(target, value); a
-          // [pair, value] tuple is rejected by Koota 0.6.x. Plain value traits still use the tuple.
-          if (isWrappedRelationPair(traitWrapper)) {
-            return traitWrapper.relationFn(
-              traitWrapper.relationTarget,
-              value as Record<string, unknown>
-            ) as ConfigurableTrait<Trait<any>>;
-          }
           return [toKootaTrait(traitWrapper), value] as ConfigurableTrait<Trait<any>>;
         }
 

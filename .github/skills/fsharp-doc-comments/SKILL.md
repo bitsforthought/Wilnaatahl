@@ -14,12 +14,36 @@ the value is in isolation**, not how any particular caller uses it. The bullets
 below are the ones past agent sessions most often slipped on; each has a worked
 good/bad pair.
 
+**Why this matters (the through-line for every rule below):** decoupling. A
+comment that reaches _outward_ — to a caller, a downstream consumer, an
+illustrative example naming another module's type, or a test — turns
+documentation into a hidden dependency that silently rots the moment the far end
+is renamed, moved, or deleted, and nothing fails the build to tell you. A comment
+that describes only the thing it sits on stays true exactly as long as that thing
+does. When you catch yourself naming something defined elsewhere, that is the
+smell.
+
 - **Describe the contract, not the consumer.** Say what the value/function _is_
   on its own terms. Don't reference downstream callers, name the function that
   will operate on the result later, or justify a field's shape by what some other
   module needs. The callee must stay readable without knowing who calls it.
   - ✅ `/// Member1 and Member2 are JSON person ids in source order; no ordering invariant is imposed.`
   - ❌ `/// Member1 and Member2 are JSON person ids; canonicalization to (min, max) happens later via Couple.create.`
+  - **An "illustrative example" is not an exception.** A trailing `(e.g. Dragging)`
+    that names a concrete downstream trait, relation, system, or caller is still a
+    consumer reference — it re-couples the callee to one of its callers and rots
+    when that example is renamed or deleted. State the property abstractly
+    ("intended for exclusive relations") without naming who happens to use it.
+- **Keep test knowledge out of non-test comments.** A comment in production or
+  mock code must not encode which tests exist or what they assert ("Tests assert
+  `StartsWith`, so…", "verified in TrackingTests M14/M15"). That couples the unit
+  to the shape of its test suite and rots the moment a test is renamed, moved, or
+  restructured — and "what we assert" is precisely what the test file is _for_.
+  State the behaviour or contract the code guarantees; leave the assertions to the
+  tests. A provenance note that a behaviour is pinned by the portable conformance
+  tests is fine; naming individual cases is not.
+  - ✅ `// The message prefix (up to the entity id) is the cross-backend contract, mirrored in kootaWrapper.ts.`
+  - ❌ `// Tests assert StartsWith, so the trailing id is not part of the contract. See TrackingTests M14/M15.`
 - **Don't justify field absences by pointing at a consumer.** State what the
   type captures and what source-format fields it doesn't capture. The reason for
   the omission can be implied by absence; it doesn't need a "because the transform

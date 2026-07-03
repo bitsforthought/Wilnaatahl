@@ -49,16 +49,16 @@ module private Snapshot =
     let getSnapshot world entity = { World = world; Entity = entity; HasItems = false }
 
     let capture entity position snapshot =
-        entity |> addWith (SnapshottedBy => snapshot.Entity) position
+        entity |> addRelationWith SnapshottedBy snapshot.Entity position
         snapshot.HasItems <- true
 
     let destroy snapshot = snapshot.Entity |> destroy
 
     let getEntities snapshot =
-        snapshot.World.Query(With(SnapshottedBy => snapshot.Entity))
+        snapshot.World.Query(Related(SnapshottedBy, snapshot.Entity))
 
     let getSavedPositionFor entity snapshot =
-        entity |> get (SnapshottedBy => snapshot.Entity)
+        entity |> getRelationValue SnapshottedBy snapshot.Entity
 
     let pushTo (stack: Stack<EntityId>) snapshot =
         if snapshot.HasItems then

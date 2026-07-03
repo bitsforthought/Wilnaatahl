@@ -33,7 +33,7 @@ type Tests() =
     member _.``move updates SnapToX entity position``() =
         let entityA = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |})
         let entityB = world.Spawn(Position.Val {| x = 0.0; y = 0.0; z = 0.0 |})
-        entityB |> addWith (SnapToX => entityA) {| x = 2.0 |}
+        entityB |> addRelationWith SnapToX entityA {| x = 2.0 |}
 
         entityA |> touchPosition
         move tracker world |> ignore
@@ -45,9 +45,9 @@ type Tests() =
     member _.``move updates snapped points on all axes``() =
         let entityA = world.Spawn(Position.Val {| x = 10.0; y = 20.0; z = 30.0 |})
         let entityB = world.Spawn(Position.Val {| x = 0.0; y = 0.0; z = 0.0 |})
-        entityB |> addWith (SnapToX => entityA) {| x = 1.0 |}
-        entityB |> addWith (SnapToY => entityA) {| y = 2.0 |}
-        entityB |> addWith (SnapToZ => entityA) {| z = 3.0 |}
+        entityB |> addRelationWith SnapToX entityA {| x = 1.0 |}
+        entityB |> addRelationWith SnapToY entityA {| y = 2.0 |}
+        entityB |> addRelationWith SnapToZ entityA {| z = 3.0 |}
 
         entityA |> touchPosition
         move tracker world |> ignore
@@ -59,7 +59,7 @@ type Tests() =
     member _.``move updates bisecting entity to midpoint of line``() =
         let lineId = world |> Line3.spawn zeroPosition zeroPosition
         let bisectEntity = world.Spawn(Position.Val zeroPosition, Connector.Tag())
-        bisectEntity |> add (Bisects => lineId)
+        bisectEntity |> addRelation Bisects lineId
 
         // Set endpoint positions after spawn to trigger Changed
         let ep1, ep2 = lineId |> Line3.getEndpoints world
@@ -77,8 +77,8 @@ type Tests() =
         let entityA = world.Spawn(Position.Val {| x = 100.0; y = 0.0; z = 0.0 |})
         let entityB = world.Spawn(Position.Val {| x = 0.0; y = 0.0; z = 0.0 |})
         let entityC = world.Spawn(Position.Val {| x = 0.0; y = 0.0; z = 0.0 |})
-        entityB |> addWith (SnapToX => entityA) {| x = 5.0 |}
-        entityC |> addWith (SnapToX => entityB) {| x = 3.0 |}
+        entityB |> addRelationWith SnapToX entityA {| x = 5.0 |}
+        entityC |> addRelationWith SnapToX entityB {| x = 3.0 |}
 
         entityA |> touchPosition
         move tracker world |> ignore
@@ -94,8 +94,8 @@ type Tests() =
 
         let child1 = world.Spawn(Position.Val {| x = 1.0; y = 1.0; z = 1.0 |})
         let child2 = world.Spawn(Position.Val {| x = 5.0; y = 5.0; z = 5.0 |})
-        boxId |> add (BoundingBoxOn => child1)
-        boxId |> add (BoundingBoxOn => child2)
+        boxId |> addRelation BoundingBoxOn child1
+        boxId |> addRelation BoundingBoxOn child2
 
         child1 |> touchPosition
         child2 |> touchPosition
@@ -123,7 +123,7 @@ type Tests() =
 
         // Parallel line
         let parallelLineId = world |> Line3.spawnAtOrigin
-        parallelLineId |> addWith (Parallels => sourceLineId) {| offset = offset |}
+        parallelLineId |> addRelationWith Parallels sourceLineId {| offset = offset |}
 
         srcEp1 |> touchPosition
         srcEp2 |> touchPosition
@@ -143,7 +143,7 @@ type Tests() =
         srcEp2 |> setValue Position {| x = 0.0; y = 10.0; z = 0.0 |}
 
         let parallelLineId = world |> Line3.spawnAtOrigin
-        parallelLineId |> addWith (Parallels => sourceLineId) {| offset = 1.0 |}
+        parallelLineId |> addRelationWith Parallels sourceLineId {| offset = 1.0 |}
 
         srcEp1 |> touchPosition
         srcEp2 |> touchPosition
@@ -165,7 +165,7 @@ type Tests() =
         srcEp2 |> setValue Position {| x = 0.0; y = 0.0; z = 10.0 |}
 
         let parallelLineId = world |> Line3.spawnAtOrigin
-        parallelLineId |> addWith (Parallels => sourceLineId) {| offset = 1.0 |}
+        parallelLineId |> addRelationWith Parallels sourceLineId {| offset = 1.0 |}
 
         srcEp1 |> touchPosition
         srcEp2 |> touchPosition
@@ -188,7 +188,7 @@ type Tests() =
         srcEp2 |> setValue Position {| x = 0.0; y = 1.0; z = 1e-15 |}
 
         let parallelLineId = world |> Line3.spawnAtOrigin
-        parallelLineId |> addWith (Parallels => sourceLineId) {| offset = 1.0 |}
+        parallelLineId |> addRelationWith Parallels sourceLineId {| offset = 1.0 |}
 
         srcEp1 |> touchPosition
         srcEp2 |> touchPosition
@@ -271,7 +271,7 @@ let private parallelLinePreservesDirection firstSourcePoint secondSourcePoint of
         sourceLine |> Line3.getEndpoints world
 
     let parallelLine = world |> Line3.spawnAtOrigin
-    parallelLine |> addWith (Parallels => sourceLine) {| offset = offset |}
+    parallelLine |> addRelationWith Parallels sourceLine {| offset = offset |}
 
     // Re-set the endpoint positions so Movement sees a Changed notification;
     // spawning adds the Position trait but doesn't flag it as changed.

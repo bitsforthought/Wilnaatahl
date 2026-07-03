@@ -62,6 +62,23 @@ Canadian.
 - **Coverage report:** `npm run report --coveragefile=<path-to-xml>`
 - **Format code:** `npm run format` (Prettier for TS, Fantomas for F#)
 
+## Keeping token cost down
+
+Every tool call re-sends the whole context window, so keeping the working context
+lean directly lowers cost. When working in this repo:
+
+- **Delegate heavy investigation to subagents.** Route multi-file research or broad
+  exploration to an `explore`/`research` subagent so its tokens come back as a
+  summary instead of accreting raw file contents into the main context that every
+  later turn re-sends.
+- **Prefer the built-in `view`/`grep`/`glob` over shelling out** to
+  `Get-Content`/`Select-String`/`Get-ChildItem`; they return capped, structured
+  output instead of dumping raw text into context.
+- **Read only what you need.** Use `view` with a line range on large files instead
+  of reading them whole, and don't re-read a file already in context.
+- **Search narrowly.** Prefer a targeted `glob`/`grep` over a broad repo-wide scan,
+  and batch independent reads/searches into a single step.
+
 ## Key Files & Directories
 
 - `src/Wilnaatahl.Core/Model.fs` – Domain model (people, relationships, family graph)

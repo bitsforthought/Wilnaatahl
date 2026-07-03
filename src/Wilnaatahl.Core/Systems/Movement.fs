@@ -12,19 +12,25 @@ open Wilnaatahl.Traits.ConnectorTraits
 open Wilnaatahl.Traits.SpaceTraits
 
 let private moveSnappedPoints (newPos: {| x: float; y: float; z: float |}) changedEntityId (world: IWorld) =
-    world.QueryTraits(Position, SnapToX => changedEntityId).UpdateEachWith AlwaysTrack
-    <| fun ((pos, distance), _) -> pos.x <- newPos.x + distance.x
+    world.QueryTrait(Position, Related(SnapToX, changedEntityId)).UpdateEachWith AlwaysTrack
+    <| fun (pos, entity) ->
+        let distance = entity |> getRelationValue SnapToX changedEntityId |> Option.get
+        pos.x <- newPos.x + distance.x
 
-    world.QueryTraits(Position, SnapToY => changedEntityId).UpdateEachWith AlwaysTrack
-    <| fun ((pos, distance), _) -> pos.y <- newPos.y + distance.y
+    world.QueryTrait(Position, Related(SnapToY, changedEntityId)).UpdateEachWith AlwaysTrack
+    <| fun (pos, entity) ->
+        let distance = entity |> getRelationValue SnapToY changedEntityId |> Option.get
+        pos.y <- newPos.y + distance.y
 
-    world.QueryTraits(Position, SnapToZ => changedEntityId).UpdateEachWith AlwaysTrack
-    <| fun ((pos, distance), _) -> pos.z <- newPos.z + distance.z
+    world.QueryTrait(Position, Related(SnapToZ, changedEntityId)).UpdateEachWith AlwaysTrack
+    <| fun (pos, entity) ->
+        let distance = entity |> getRelationValue SnapToZ changedEntityId |> Option.get
+        pos.z <- newPos.z + distance.z
 
     world
 
 let private moveBoundingBoxes changedEntityId (world: IWorld) =
-    world.QueryTrait(Size, With(BoundingBoxOn => changedEntityId)).ForEach
+    world.QueryTrait(Size, Related(BoundingBoxOn, changedEntityId)).ForEach
     <| fun (margins, boxId) ->
         let marginsV = Vector3.FromPosition margins
 
@@ -93,7 +99,7 @@ let private moveLineDependants changedEntityId (world: IWorld) =
         let v1, v2 = lineId |> Line3.getPositions world
         let midpoint = lerp v1 v2 0.5 // For Bisect
 
-        world.QueryTrait(Position, With(Bisects => lineId)).UpdateEachWith AlwaysTrack
+        world.QueryTrait(Position, Related(Bisects, lineId)).UpdateEachWith AlwaysTrack
         <| fun (pos, _) ->
             pos.x <- midpoint.x
             pos.y <- midpoint.y
@@ -102,8 +108,9 @@ let private moveLineDependants changedEntityId (world: IWorld) =
         // Lazily compute this once for Parallels because it's expensive.
         let n = lazy verticallyPerpendicularUnitVector v1 v2
 
-        world.QueryTrait(Parallels => lineId).ForEach
-        <| fun (parallels, parallelLineId) ->
+        world.Query(Related(Parallels, lineId)).ForEach
+        <| fun (_, parallelLineId) ->
+            let parallels = parallelLineId |> getRelationValue Parallels lineId |> Option.get
             let distance = parallels.offset
             let offset = n.Value * abs distance
 

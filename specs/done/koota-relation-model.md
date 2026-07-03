@@ -1,9 +1,9 @@
 # Koota relation model
 
-> Status: **proposal**, not yet implemented. Two audiences: the repo owner
-> (review/tweak the design) and a future agent session (implement it). The
-> interim guards described in [Interim state](#interim-state-what-this-replaces)
-> are what this proposal is meant to undo.
+> Status: **implemented** — relations are now query filters plus a
+> per-(subject, target) value store, and the interim guards described in
+> [Interim state](#interim-state-what-this-replaces) have been removed. Retained
+> in `done/` as the design record for that change.
 
 ## Motivation
 

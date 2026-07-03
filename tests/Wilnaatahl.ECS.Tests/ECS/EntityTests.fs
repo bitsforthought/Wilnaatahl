@@ -97,14 +97,14 @@ type EntityTests() =
         let Owes = valueRelation {| amount = 0 |}
         let entity1 = world.Spawn [||]
         let entity2 = world.Spawn [||]
-        entity1 |> add (Owes => entity2)
+        entity1 |> addRelation Owes entity2
         // After add, the relation has the schema default value
         entity1 |> targetWithValueFor Owes =! Some(entity2, {| amount = 0 |})
 
-        entity1 |> setValue (Owes => entity2) {| amount = 123 |}
+        entity1 |> setRelationValue Owes entity2 {| amount = 123 |}
         entity1 |> targetWithValueFor Owes =! Some(entity2, {| amount = 123 |})
 
-        entity1 |> remove (Owes => entity2)
+        entity1 |> removeRelation Owes entity2
         entity1 |> targetWithValueFor Owes =! None
 
     [<Fact>]

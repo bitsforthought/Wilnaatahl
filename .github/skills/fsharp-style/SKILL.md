@@ -60,6 +60,13 @@ away from C#-in-F# habits. Each is a hard convention for this codebase.
   would re-sort). They are not a default "make this concrete" reflex —
   round-tripping `seq → array → seq` allocates for no gain. Materialize once at
   the point where multiple enumerations actually happen.
+  - ❌ `let keys = src |> Seq.filter p |> List.ofSeq in for k in keys do f k` —
+    the list is built only to be walked once; pipe straight to `src |> Seq.filter p |> Seq.iter f`.
+  - The usual excuse — "I must materialize first to avoid mutating the collection
+    while I iterate it" — often doesn't even apply: `ConcurrentDictionary.Keys`
+    already returns a **snapshot**, so filtering `store.Keys` and calling
+    `store.TryRemove` in the same `Seq.iter` is safe with no intermediate list.
+    Check whether the source is already a snapshot before reaching for `List.ofSeq`.
 - **Split a collection in one pass, not two.** When you need both the elements
   that match a predicate and those that don't, use `List.partition` (or a single
   `fold`/`groupBy`) once — don't run two `List.filter`/`List.choose` passes over
@@ -96,6 +103,24 @@ away from C#-in-F# habits. Each is a hard convention for this codebase.
   annotations) rather than keeping the dead code as a workaround.
 - **Avoid unnecessary type annotations.** F# infers types well in most cases.
   Only add annotations when needed for disambiguation or to fix inference failures.
+- **Don't erase types with `obj` for convenience — it defeats the type system.**
+  `obj` (and `box` / `unbox` / `:?>`) discards static typing: the compiler can no
+  longer stop a wrong value from reaching a cast, so what would have been a build
+  error becomes a runtime failure (an `InvalidCastException` on the CLR, a Fable
+  runtime throw in the browser — exactly where we have no compiler to catch it).
+  Reach for `obj` only when there is genuine heterogeneity with **no** common
+  supertype (e.g. a store of unrelated boxed values), and even then confine the
+  erasure to the narrowest scope and recover the concrete type at a single, obvious
+  boundary. It is **not** a tool for dodging upcast friction: if a function must
+  accept several subtypes of one base, take **that base** — or a **flexible type**
+  `#Base`, which accepts any subtype with no caller `:>` ceremony — instead of
+  widening the parameter (or a collection's key/value) to `obj`. "It works for
+  every caller" is not a justification; turning off the type checker always
+  "works".
+  - ✅ `let stores = ConcurrentDictionary<IRelation, _>()` and `let get (r: #IRelation) = …` — accepts every relation, still fully type-checked.
+  - ❌ `let stores = ConcurrentDictionary<obj, _>()` and `let get (r: obj) = …` — "accepts everything" by switching the type system off.
+  - A downcast (`:?>` / `unbox`) is the tell that a value was erased; each one
+    should trace back to a deliberate, justified erasure, not a convenience `obj`.
 - **Use proper words for record field names.** Single-letter field names like
   `R/G/B` or `L/C/H` are noisy at call sites and ambiguous in doc strings. Spell
   them out (`Red/Green/Blue`, `Lightness/Chroma/Hue`).

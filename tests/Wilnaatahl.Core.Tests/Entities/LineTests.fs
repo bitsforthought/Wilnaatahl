@@ -101,9 +101,9 @@ let ``snapToWithOffset adds SnapTo relations`` () =
     subject |> targetFor SnapToX =! Some target
     subject |> targetFor SnapToY =! Some target
     subject |> targetFor SnapToZ =! Some target
-    (subject |> get (SnapToX => target)).Value =! {| x = 1.0 |}
-    (subject |> get (SnapToY => target)).Value =! {| y = 2.0 |}
-    (subject |> get (SnapToZ => target)).Value =! {| z = 3.0 |}
+    (subject |> getRelationValue SnapToX target).Value =! {| x = 1.0 |}
+    (subject |> getRelationValue SnapToY target).Value =! {| y = 2.0 |}
+    (subject |> getRelationValue SnapToZ target).Value =! {| z = 3.0 |}
 
 [<Fact>]
 let ``snapTo snaps both endpoints to targets with zero offset`` () =

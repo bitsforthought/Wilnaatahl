@@ -8,18 +8,24 @@ open System.Reflection
 open System.Threading
 open Wilnaatahl.ECS
 
+/// The mock's untyped view of a relation. Relations key a per-(subject, target) value store; the
+/// freeze/unfreeze conversions and the default mutable value let the store hold boxed values without
+/// knowing their static type.
 type ITestRelation =
     abstract member Config: RelationConfig
-    abstract member TargetToTraitMap: ConcurrentDictionary<int, ITrait>
+    /// Converts a boxed mutable value to its boxed read form.
+    abstract member FreezeUntyped: value: obj -> obj
+    /// Converts a boxed read value to its boxed mutable form.
+    abstract member UnfreezeUntyped: value: obj -> obj
+    /// The boxed mutable value stored when the relation is added (the schema default), if any.
+    abstract member DefaultMutable: obj option
 
-type private TestTrait(relation, isTag) =
-    member _.Relation = relation
-
+type private TestTrait(isTag) =
     interface ITrait with
         member _.IsTag = isTag
 
-type private TestTagTrait(relation) =
-    inherit TestTrait(relation, true)
+type private TestTagTrait() =
+    inherit TestTrait(true)
     interface ITagTrait
 
 type private ITestUntypedValueTrait =
@@ -32,9 +38,9 @@ type private ITestValueTrait<'T> =
     abstract FreezeValue: mutableValue: obj -> 'T
     abstract UnfreezeValue: value: 'T -> obj
 
-type private TestValueTrait<'T, 'TMutable>
-    (relation, freeze: 'TMutable -> 'T, unfreeze: 'T -> 'TMutable, defaultValue: 'T option) =
-    inherit TestTrait(relation, false)
+type private TestValueTrait<'T, 'TMutable>(freeze: 'TMutable -> 'T, unfreeze: 'T -> 'TMutable, defaultValue: 'T option)
+    =
+    inherit TestTrait(false)
     interface IMutableValueTrait<'T, 'TMutable>
 
     interface ITestValueTrait<'T> with
@@ -43,48 +49,22 @@ type private TestValueTrait<'T, 'TMutable>
         member _.UnfreezeValue value = unfreeze value
         member _.DefaultMutableValue = defaultValue |> Option.map (fun v -> unfreeze v :> obj)
 
-type private TestWildcardTrait(relation: ITestRelation) =
-
-    member _.Relation = relation
-
-    interface ITagTrait with
-        member _.IsTag = true
-
-type private TestRelation<'TTrait when 'TTrait :> ITrait>(config, createTrait: ITestRelation -> 'TTrait) as this =
-    let wildcard = TestWildcardTrait this
-    let targetToTraitMap = ConcurrentDictionary<int, ITrait>()
+type private TestRelation<'T, 'TMutable>
+    (config: RelationConfig, freeze: 'TMutable -> 'T, unfreeze: 'T -> 'TMutable, defaultValue: 'T option) =
 
     interface ITestRelation with
         member _.Config = config
-        member _.TargetToTraitMap = targetToTraitMap
+        member _.FreezeUntyped value = freeze (value :?> 'TMutable) :> obj
+        member _.UnfreezeUntyped value = unfreeze (value :?> 'T) :> obj
+        member _.DefaultMutable = defaultValue |> Option.map (fun v -> unfreeze v :> obj)
 
-    interface IRelation<'TTrait> with
-        member _.IsTag = typeof<'TTrait> = typeof<ITagTrait>
+    interface IRelation with
+        member _.IsExclusive = config.IsExclusive
 
-        member this.WithTarget(entity: EntityId) =
-            let (EntityId entityId) = entity
-
-            match targetToTraitMap.TryGetValue entityId with
-            | true, someTrait -> someTrait :?> 'TTrait
-            | false, _ ->
-                let someTrait = createTrait this
-                targetToTraitMap.TryAdd(entityId, someTrait) |> ignore // First concurrent add wins.
-                someTrait
-
-        member _.Wildcard() = wildcard
-
-type private TestTagRelation(config) =
-    inherit TestRelation<ITagTrait>(config, fun relation -> TestTagTrait(Some relation))
-
-type private TestValueRelation<'T, 'TMutable>(config, freeze, unfreeze, defaultValue: 'T) =
-    inherit
-        TestRelation<IMutableValueTrait<'T, 'TMutable>>(
-            config,
-            fun relation -> TestValueTrait<'T, 'TMutable>(Some relation, freeze, unfreeze, Some defaultValue)
-        )
+    interface IRelation<'T, 'TMutable>
 
 type private QueryResult<'T, 'TMutable>
-    private (entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient, updateEachError) =
+    private (entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient) =
 
     static member Create
         (
@@ -93,34 +73,18 @@ type private QueryResult<'T, 'TMutable>
             getMutable: EntityId -> 'TMutable,
             notifyChanges: ChangeDetectionOption -> EntityId -> 'T -> 'T -> unit,
             hasChangedModifier: bool,
-            getReadResilient: 'T -> EntityId -> 'T,
-            updateEachError: string option
+            getReadResilient: 'T -> EntityId -> 'T
         ) =
-        QueryResult<'T, 'TMutable>(
-            entities,
-            getRead,
-            getMutable,
-            notifyChanges,
-            hasChangedModifier,
-            getReadResilient,
-            updateEachError
-        )
+        QueryResult<'T, 'TMutable>(entities, getRead, getMutable, notifyChanges, hasChangedModifier, getReadResilient)
 
     interface IQueryResult<'T, 'TMutable> with
         member _.ForEach callback =
-            // ForEach reads each value with get (getRead), which is correct even for the relation-only
-            // and non-exclusive cases that UpdateEach can't surface — so it never fails fast.
+            // ForEach reads each value with get (getRead), which is correct even for entities that
+            // lost the trait between query and read time (getRead falls back to the schema default).
             for entity in entities do
                 callback (getRead entity, entity)
 
         member _.UpdateEachWith changeDetectionOption callback =
-            // A relation pair used as a query value slot can't always surface its per-target value
-            // through iteration (relation-only fast path or a non-exclusive array). UpdateEach mutates
-            // that state, so it fails fast in those cases for parity with real Koota.
-            match updateEachError with
-            | Some message -> failwith message
-            | None -> ()
-
             let detectChanges =
                 match changeDetectionOption with
                 | AlwaysTrack -> true
@@ -278,24 +242,24 @@ type private TestTraitFactory() =
         member _.CreateRemoved() =
             TestTracker(RemovedTracker) |> TrackerRegistry.register :> IRemovedTracker
 
-        member _.Relation config = TestTagRelation config
+        member _.Relation config =
+            TestRelation<unit, unit>(config, id, id, Some())
 
         member _.RelationWith(config, store, mutableStore) =
             let freezeUntyped, unfreezeUntyped = findConversionMethods store mutableStore
             let freeze (m: 'TMutable) = freezeUntyped m :?> 'T
             let unfreeze (v: 'T) = unfreezeUntyped v :?> 'TMutable
-            TestValueRelation<'T, 'TMutable>(config, freeze, unfreeze, store)
+            TestRelation<'T, 'TMutable>(config, freeze, unfreeze, Some store)
 
-        member _.TagTrait() = TestTagTrait None
+        member _.TagTrait() = TestTagTrait()
 
         member _.TraitWith value mutableValue =
             let freezeUntyped, unfreezeUntyped = findConversionMethods value mutableValue
             let freeze (m: 'TMutable) = freezeUntyped m :?> 'T
             let unfreeze (v: 'T) = unfreezeUntyped v :?> 'TMutable
-            TestValueTrait<'T, 'TMutable>(None, freeze, unfreeze, Some value)
+            TestValueTrait<'T, 'TMutable>(freeze, unfreeze, Some value)
 
-        member _.TraitWithRef _ =
-            TestValueTrait<'T, 'T>(None, id, id, None)
+        member _.TraitWithRef _ = TestValueTrait<'T, 'T>(id, id, None)
 
 [<AutoOpen>]
 module private World =
@@ -303,6 +267,14 @@ module private World =
         WorldId: int
         EntityId: EntityId
         TraitStores: ConcurrentDictionary<ITrait, ConcurrentDictionary<int, obj option>>
+        /// Per-relation value store, keyed by the relation instance (by reference). The inner map is
+        /// keyed by struct(subjectId, targetId) and holds the boxed mutable value (or None for none
+        /// stored yet).
+        RelationStores: ConcurrentDictionary<IRelation, ConcurrentDictionary<struct (int * int), obj option>>
+        /// The set of live (spawned, not-yet-destroyed) local entity ids. Koota tracks entity liveness
+        /// independent of traits, so this — not the trait stores — defines the world's membership: a
+        /// bare Spawn [||] or a relation-only entity is a member and appears in an unfiltered Query().
+        ActiveEntities: ConcurrentDictionary<int, unit>
         mutable NextEntityId: int
     }
 
@@ -321,7 +293,9 @@ module private World =
             newStore
 
     let private allEntities world =
-        world.TraitStores.Values |> Seq.map _.Keys |> Seq.concat |> Set.ofSeq
+        // Membership is the set of live entities, not the union of trait-store keys: bare and
+        // relation-only entities have no trait rows but are still returned by an unfiltered query.
+        world.ActiveEntities.Keys |> Set.ofSeq
 
     /// Snapshot of the traits the given entity currently has. Captured when a tracked event fires
     /// so that event-driven tracking queries can evaluate their With/Or/Not filters as of that
@@ -337,7 +311,13 @@ module private World =
 
     let private allocEntity world =
         let entityId = Interlocked.Increment(&world.NextEntityId)
-        packEntityId world.WorldId entityId
+        let entity = packEntityId world.WorldId entityId
+        // Register the entity as live the moment it is allocated, so even a bare Spawn [||] (no
+        // traits, no relations) is a member of the world until it is destroyed. The key is the full
+        // packed id, matching how trait/relation stores and query sets key their entities.
+        let (EntityId packedId) = entity
+        world.ActiveEntities.TryAdd(packedId, ()) |> ignore
+        entity
 
     let createWorld id = {
         WorldId = id
@@ -347,6 +327,8 @@ module private World =
             packEntityId id worldEntityLocalId
 
         TraitStores = ConcurrentDictionary<ITrait, ConcurrentDictionary<int, obj option>>()
+        RelationStores = ConcurrentDictionary<IRelation, ConcurrentDictionary<struct (int * int), obj option>>()
+        ActiveEntities = ConcurrentDictionary<int, unit>()
         NextEntityId = 0 // First entity will get ID 1 since it's assigned after Interlocked.Increment.
     }
 
@@ -354,14 +336,24 @@ module private World =
         let store = world |> getStore someTrait
         store.ContainsKey entityId
 
-    let private targetsForImpl (relation: ITestRelation) entity world =
-        let targetOfSubject (kvp: KeyValuePair<int, ITrait>) =
-            if world |> hasTrait kvp.Value entity then
-                Some(EntityId kvp.Key)
-            else
-                None
+    /// Returns the per-(subject, target) value store for the given relation instance, creating it if needed.
+    let private getRelationStore (relation: #IRelation) world =
+        world.RelationStores.GetOrAdd(
+            (relation :> IRelation),
+            fun _ -> ConcurrentDictionary<struct (int * int), obj option>()
+        )
 
-        relation.TargetToTraitMap |> Seq.choose targetOfSubject |> Array.ofSeq
+    /// Returns the subject ids related via the given relation. When a target id is given, only subjects
+    /// related to that specific target are returned; otherwise all subjects (the wildcard case).
+    let relatedSubjects (relation: #IRelation) (maybeTargetId: int option) world =
+        let store = world |> getRelationStore relation
+
+        store.Keys
+        |> Seq.choose (fun (struct (subjectId, targetId)) ->
+            match maybeTargetId with
+            | Some target when target <> targetId -> None
+            | _ -> Some subjectId)
+        |> Set.ofSeq
 
     let removeTrait someTrait (EntityId entityId) world =
         let store = world |> getStore someTrait
@@ -373,19 +365,6 @@ module private World =
             TrackerRegistry.cancelAdded someTrait (EntityId entityId)
 
     let addTrait (someTrait: ITrait) entity world =
-        // Deal with exclusive relations. If we're adding a new target for such a relation,
-        // we need to clear out the old one first.
-        match (someTrait :?> TestTrait).Relation with
-        | Some relation when relation.Config.IsExclusive ->
-            let currentTargets = world |> targetsForImpl relation entity
-
-            // There should be only one target, but let's be conservative.
-            for EntityId targetEntityId in currentTargets do
-                let targetTrait = relation.TargetToTraitMap[targetEntityId]
-                world |> removeTrait targetTrait entity
-        | Some _ -> ()
-        | None -> ()
-
         let (EntityId entityId) = entity
         let store = world |> getStore someTrait
 
@@ -401,9 +380,73 @@ module private World =
             TrackerRegistry.notifyAdded someTrait entity (lazy (world |> entityTraitSnapshot entity))
             TrackerRegistry.cancelRemoved someTrait entity
 
+    let addRelation (relation: IRelation<'T, 'TMutable>) target (EntityId subjectId) world =
+        let testRelation = relation :?> ITestRelation
+        let store = world |> getRelationStore relation
+        let (EntityId targetId) = target
+
+        // For an exclusive relation a subject can have only one target, so drop any existing target
+        // that DIFFERS from the new one. Re-adding the SAME target must be a no-op that preserves the
+        // existing value (matching Koota), so it is left untouched here and by the TryAdd below.
+        if testRelation.Config.IsExclusive then
+            store.Keys
+            |> Seq.filter (fun (struct (existingSubject, existingTarget)) ->
+                existingSubject = subjectId && existingTarget <> targetId)
+            |> Seq.iter (fun key -> store.TryRemove key |> ignore)
+
+        // Relations initialize with their schema default mutable value (matching Koota's behavior).
+        // TryAdd is a no-op when the (subject, target) pair already exists, preserving its value.
+        store.TryAdd(struct (subjectId, targetId), testRelation.DefaultMutable)
+        |> ignore
+
+    let removeRelation (relation: IRelation<'T, 'TMutable>) target (EntityId subjectId) world =
+        let store = world |> getRelationStore relation
+        let (EntityId targetId) = target
+        store.TryRemove(struct (subjectId, targetId)) |> ignore
+
+    let hasRelation (relation: IRelation<'T, 'TMutable>) target (EntityId subjectId) world =
+        let store = world |> getRelationStore relation
+        let (EntityId targetId) = target
+        store.ContainsKey(struct (subjectId, targetId))
+
+    let getRelationValue (relation: IRelation<'T, 'TMutable>) target (EntityId subjectId) world : 'T option =
+        let testRelation = relation :?> ITestRelation
+        let store = world |> getRelationStore relation
+        let (EntityId targetId) = target
+
+        match store.TryGetValue(struct (subjectId, targetId)) with
+        | true, Some boxedMutable -> Some(testRelation.FreezeUntyped boxedMutable :?> 'T)
+        | _ -> None
+
+    let setRelationValue (relation: IRelation<'T, 'TMutable>) target (value: 'T) (EntityId subjectId) world =
+        let testRelation = relation :?> ITestRelation
+        let store = world |> getRelationStore relation
+        let (EntityId targetId) = target
+        let key = struct (subjectId, targetId)
+
+        match store.TryGetValue key with
+        | true, _ -> store[key] <- Some(testRelation.UnfreezeUntyped(value :> obj))
+        | false, _ ->
+            // Setting a value for an absent relation throws. The message prefix (up to the entity
+            // id) is the cross-backend contract, mirrored verbatim in src/ecs/koota/kootaWrapper.ts;
+            // the trailing entity id is non-deterministic across backends and not part of it.
+            failwith $"Cannot set a value for a relation that is not present on the subject entity {subjectId}"
+
     let destroy entity world =
         for someTrait in world.TraitStores.Keys do
             world |> removeTrait someTrait entity
+
+        // Koota auto-cleans relations when either the subject or the target is destroyed.
+        let (EntityId entityId) = entity
+
+        for relationStore in world.RelationStores.Values do
+            relationStore.Keys
+            |> Seq.filter (fun (struct (subjectId, targetId)) -> subjectId = entityId || targetId = entityId)
+            |> Seq.iter (fun key -> relationStore.TryRemove key |> ignore)
+
+        // The entity is no longer live: drop it from the world's membership so it stops appearing in
+        // unfiltered and Not-only queries.
+        world.ActiveEntities.TryRemove entityId |> ignore
 
     let getTraitValue (valueTrait: IValueTrait<'T>) (EntityId entityId) world =
         let store = world |> getStore valueTrait
@@ -445,22 +488,36 @@ module private World =
                 TrackerRegistry.notifyChanged valueTrait (EntityId entityId) snapshot
         | _ -> invalidArg (nameof valueTrait) $"Trait value not set on entity {entityId}"
 
-    let targetsFor (relation: IRelation<'TTrait>) entity world =
-        let relationImpl = relation :?> TestRelation<'TTrait> :> ITestRelation
-        world |> targetsForImpl relationImpl entity
+    let targetsFor (relation: IRelation<'T, 'TMutable>) (EntityId subjectId) world =
+        let store = world |> getRelationStore relation
+
+        store.Keys
+        |> Seq.choose (fun (struct (existingSubject, targetId)) ->
+            if existingSubject = subjectId then
+                Some(EntityId targetId)
+            else
+                None)
+        |> Array.ofSeq
 
     let targetFor relation entity world =
         let targets = world |> targetsFor relation entity
 
-        if targets |> Seq.isEmpty then
-            None
-        else
-            Some(targets |> Seq.head)
+        if targets |> Array.isEmpty then None else Some targets[0]
 
     type private MatchedEntities = {
         WithTraits: ITrait list
         OrTraits: ITrait list
         NotTraits: ITrait list
+        /// Each entry is the set of subject ids matched by a single Related/RelatedToAny operator,
+        /// evaluated against the CURRENT world state at drain time (never snapshotted at a tracked
+        /// event's moment). This is deliberate: relations are not traits, so they never appear in the
+        /// event-time trait snapshots, and — unlike With/Or/Not — a relation filter is only ever
+        /// re-checked against the present. Combining a change tracker with a relation filter whose
+        /// relation is mutated between the tracked event and the drain is intentionally NOT supported,
+        /// even though Koota permits the combination: Koota's exact event-time relation semantics are
+        /// unverified, so we do not add speculative relation snapshotting. Multiple entries are ANDed
+        /// together.
+        RelatedSets: Set<int> list
         /// Each entry maps the entities matched by a single tracking modifier (ANDed across its
         /// tracked traits) to the snapshot of their traits at the time the tracked event fired.
         /// Multiple tracking modifiers are ANDed together.
@@ -475,30 +532,23 @@ module private World =
                 WithTraits = []
                 OrTraits = []
                 NotTraits = []
+                RelatedSets = []
                 Tracking = []
                 IsInitialPopulation = false
             }
 
     let query where world =
-        let rec getEntitySet (someTrait: ITrait) =
-            match someTrait with
-            | :? TestWildcardTrait as t -> t.Relation.TargetToTraitMap.Values |> getEntitySetUnion
-            | _ ->
-                let store = world |> getStore someTrait
-                store.Keys |> Set.ofSeq
+        let getEntitySet (someTrait: ITrait) =
+            let store = world |> getStore someTrait
+            store.Keys |> Set.ofSeq
 
-        and getEntitySetUnion (traits: seq<ITrait>) =
+        let getEntitySetUnion (traits: seq<ITrait>) =
             traits |> Seq.map getEntitySet |> Set.unionMany
 
         // True if a snapshot (the traits an entity held when a tracked event fired) satisfies the
-        // given filter trait, expanding relation wildcards the same way getEntitySet does so that
-        // With/Or(relation.Wildcard()) work on the event-driven tracking path too.
-        let snapshotHasTrait (snapshot: ITrait list) (filterTrait: ITrait) =
-            match filterTrait with
-            | :? TestWildcardTrait as wildcard ->
-                wildcard.Relation.TargetToTraitMap.Values
-                |> Seq.exists (fun targetTrait -> snapshot |> List.contains targetTrait)
-            | _ -> snapshot |> List.contains filterTrait
+        // given filter trait. Relations aren't traits and never appear in snapshots, so relation
+        // filters are handled separately via RelatedSets (evaluated at drain time).
+        let snapshotHasTrait (snapshot: ITrait list) (filterTrait: ITrait) = snapshot |> List.contains filterTrait
 
         // ANDs a set of per-trait/per-modifier drain results by keeping only entities present in
         // every map, and merges (unions) their at-event-time snapshots.
@@ -541,6 +591,14 @@ module private World =
             | Added(traits, tracker) -> withTracking acc traits tracker
             | Removed(traits, tracker) -> withTracking acc traits tracker
             | Changed(traits, tracker) -> withTracking acc traits tracker
+            | Related(relation, EntityId targetId) -> {
+                acc with
+                    RelatedSets = (world |> relatedSubjects relation (Some targetId)) :: acc.RelatedSets
+              }
+            | RelatedToAny relation -> {
+                acc with
+                    RelatedSets = (world |> relatedSubjects relation None) :: acc.RelatedSets
+              }
 
         let matches = where |> Array.fold collect MatchedEntities.Empty
 
@@ -548,28 +606,35 @@ module private World =
         let orSet = matches.OrTraits |> getEntitySetUnion
         let notSet = matches.NotTraits |> getEntitySetUnion
 
+        // Relation filters (Related/RelatedToAny) are drain-time positive sets, ANDed with With.
+        let positiveSets = withSets @ matches.RelatedSets
+
         // When tracking modifiers are present, they define the candidate set
         // (since tracked entities may no longer have traits — e.g. Removed/Changed+removed).
-        // When no tracking is present, use the standard With/Or matching.
+        // When no tracking is present, use the standard With/Or/Related matching.
         let positiveMatches =
             match matches.Tracking with
             | [] ->
-                match withSets, matches.OrTraits.IsEmpty with
+                match positiveSets, matches.OrTraits.IsEmpty with
                 | [], true -> world |> allEntities // No positive criteria, so match all.
-                | [], false -> orSet // No With criteria, so only Or matches count.
-                | _, true -> Set.intersectMany withSets // No Or criteria, so only With matches count.
-                | _, false -> Set.intersect orSet (Set.intersectMany withSets) // Apply both With and Or.
+                | [], false -> orSet // No With/Related criteria, so only Or matches count.
+                | _, true -> Set.intersectMany positiveSets // No Or criteria, so only With/Related matches count.
+                | _, false -> Set.intersect orSet (Set.intersectMany positiveSets) // Apply both.
             | trackingMaps ->
                 let tracked = intersectSnapshots trackingMaps
                 let trackedEntities = tracked |> Map.keys |> Set.ofSeq
 
                 // Koota's initial population path for tracking queries only checks tracking
-                // bitmasks, skipping With/Or filters. This is a known bug:
+                // bitmasks for the *trait* filters, skipping With/Or. This is a known bug:
                 // https://github.com/pmndrs/koota/issues/241
                 // We intentionally replicate this behavior so mock-based unit tests run
                 // consistently with the app running against real Koota.
+                // Relation filters (Related/RelatedToAny) are NOT part of that skip: real Koota
+                // still applies them during initial population (confirmed against real Koota via
+                // the portable conformance tests), so we intersect the tracked entities with RelatedSets.
                 if matches.IsInitialPopulation then
                     trackedEntities
+                    |> Set.filter (fun eid -> matches.RelatedSets |> List.forall (Set.contains eid))
                 else
                     // Event-driven path: Koota includes an entity only if the query's With/Or/Not
                     // filters held at the moment the tracked event fired (checked against the
@@ -592,8 +657,16 @@ module private World =
 
                         let drainWithOk = withSets |> List.forall (Set.contains eid)
                         let drainOrOk = matches.OrTraits.IsEmpty || Set.contains eid orSet
+                        // Relation filters have no event-time snapshot (see RelatedSets): they are
+                        // only ever evaluated against the current world state at drain time.
+                        let drainRelatedOk = matches.RelatedSets |> List.forall (Set.contains eid)
 
-                        eventWithOk && eventOrOk && eventNotOk && drainWithOk && drainOrOk)
+                        eventWithOk
+                        && eventOrOk
+                        && eventNotOk
+                        && drainWithOk
+                        && drainOrOk
+                        && drainRelatedOk)
 
         // Exclude the world entity from query results.
         let (EntityId worldEntityId) = world.EntityId
@@ -719,41 +792,26 @@ type private Universe private () =
         member _.SetWith valueTrait update entity =
             findWorld entity |> setTraitValueWith valueTrait update entity
 
+        member _.AddRelation relation target entity =
+            findWorld entity |> addRelation relation target entity
+
+        member _.RemoveRelation relation target entity =
+            findWorld entity |> removeRelation relation target entity
+
+        member _.HasRelation relation target entity =
+            findWorld entity |> hasRelation relation target entity
+
+        member _.GetRelationValue relation target entity =
+            findWorld entity |> getRelationValue relation target entity
+
+        member _.SetRelationValue relation target value entity =
+            findWorld entity |> setRelationValue relation target value entity
+
         member _.TargetFor relation entity =
             findWorld entity |> targetFor relation entity
 
         member _.TargetsFor relation entity =
             findWorld entity |> targetsFor relation entity
-
-[<AutoOpen>]
-module private QueryGuards =
-    // A relation pair used as a query's value slot cannot have its per-target value surfaced through
-    // the query's iteration state, so UpdateEach fails fast for parity with real Koota. ForEach is
-    // unaffected (it reads each entity's value individually). The text matches the wrapper's message
-    // and the test's expected contract (TestInfra.relationValueUpdateEachError).
-    let relationValueUpdateEachError =
-        "Cannot UpdateEach a query whose value is a relation pair. Read the relation's value with ForEach instead; UpdateEach cannot read a relation pair's per-target value."
-
-    // The relation backing a value trait, if it is a relation pair. Query traits are always TestTrait
-    // (the query methods hard-cast them), so this mirrors that with a direct cast.
-    let private relationOf (someTrait: obj) = (someTrait :?> TestTrait).Relation
-
-    // The UpdateEach failure (if any) for a query over the given value traits. A relation pair in a
-    // value slot is broken when it is the sole query trait, or whenever the relation is non-exclusive.
-    let updateEachErrorFor whereIsEmpty (valueTraits: obj list) =
-        let isSoleRelationPair =
-            match valueTraits with
-            | [ single ] -> whereIsEmpty && relationOf single |> Option.isSome
-            | _ -> false
-
-        let hasNonExclusivePair =
-            valueTraits
-            |> List.exists (relationOf >> Option.exists (fun r -> not r.Config.IsExclusive))
-
-        if isSoleRelationPair || hasNonExclusivePair then
-            Some relationValueUpdateEachError
-        else
-            None
 
 type TestWorld() =
     let world = Universe.Instance.CreateWorld()
@@ -774,21 +832,9 @@ type TestWorld() =
         member _.Query where =
             let entities = world |> query where
 
-            QueryResult.Create(
-                entities,
-                (fun _ -> ()),
-                (fun _ -> ()),
-                (fun _ _ _ _ -> ()),
-                false,
-                (fun _ _ -> ()),
-                None
-            )
+            QueryResult.Create(entities, (fun _ -> ()), (fun _ -> ()), (fun _ _ _ _ -> ()), false, (fun _ _ -> ()))
 
         member _.QueryTrait(someTrait, where) =
-            // A relation pair used as a query value can't always surface its per-target value through
-            // iteration, so UpdateEach fails fast for parity with real Koota; ForEach reads via get.
-            let updateEachError = updateEachErrorFor (Array.isEmpty where) [ someTrait ]
-
             let entities = world |> query [| With someTrait; yield! where |]
             let testTrait = someTrait :?> ITestValueTrait<'T>
 
@@ -817,21 +863,9 @@ type TestWorld() =
             let getReadResilient before entity =
                 world |> getTraitValue someTrait entity |> Option.defaultValue before
 
-            QueryResult.Create(
-                entities,
-                getRead,
-                getMutable,
-                notifyChanges,
-                hasChanged,
-                getReadResilient,
-                updateEachError
-            )
+            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged, getReadResilient)
 
         member _.QueryTraits(firstTrait, secondTrait, where) =
-            // A multi-trait query is never relation-only, but a non-exclusive value relation in any
-            // slot still breaks UpdateEach; updateEachErrorFor detects that.
-            let updateEachError = updateEachErrorFor false [ firstTrait; secondTrait ]
-
             let entities = world |> query [| With firstTrait; With secondTrait; yield! where |]
             let firstTestTrait = firstTrait :?> ITestValueTrait<'T>
             let secondTestTrait = secondTrait :?> ITestValueTrait<'U>
@@ -880,20 +914,9 @@ type TestWorld() =
 
                 afterFirst, afterSecond
 
-            QueryResult.Create(
-                entities,
-                getRead,
-                getMutable,
-                notifyChanges,
-                hasChanged,
-                getReadResilient,
-                updateEachError
-            )
+            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged, getReadResilient)
 
         member _.QueryTraits3(firstTrait, secondTrait, thirdTrait, where) =
-            let updateEachError =
-                updateEachErrorFor false [ firstTrait; secondTrait; thirdTrait ]
-
             let entities =
                 world
                 |> query [| With firstTrait; With secondTrait; With thirdTrait; yield! where |]
@@ -948,20 +971,9 @@ type TestWorld() =
                 let a3 = world |> getTraitValue thirdTrait entity |> Option.defaultValue b3
                 a1, a2, a3
 
-            QueryResult.Create(
-                entities,
-                getRead,
-                getMutable,
-                notifyChanges,
-                hasChanged,
-                getReadResilient,
-                updateEachError
-            )
+            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged, getReadResilient)
 
         member _.QueryTraits4(firstTrait, secondTrait, thirdTrait, fourthTrait, where) =
-            let updateEachError =
-                updateEachErrorFor false [ firstTrait; secondTrait; thirdTrait; fourthTrait ]
-
             let entities =
                 world
                 |> query [|
@@ -1029,15 +1041,7 @@ type TestWorld() =
                 let a4 = world |> getTraitValue fourthTrait entity |> Option.defaultValue b4
                 a1, a2, a3, a4
 
-            QueryResult.Create(
-                entities,
-                getRead,
-                getMutable,
-                notifyChanges,
-                hasChanged,
-                getReadResilient,
-                updateEachError
-            )
+            QueryResult.Create(entities, getRead, getMutable, notifyChanges, hasChanged, getReadResilient)
 
         member _.QueryFirst where = world |> queryFirst where
 

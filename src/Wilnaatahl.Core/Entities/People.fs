@@ -34,5 +34,7 @@ let spawnTreeNode person wilp (world: IWorld) =
         | Sphere -> {| x = s; y = s; z = s |}
         | Cube -> {| x = c; y = c; z = c |}
 
-    world.Spawn(PersonRef.Val person, Position.Val zeroPosition, (RenderedIn => wilp).Tag(), Size.Val nodeSize)
-    |> ignore
+    let nodeId =
+        world.Spawn(PersonRef.Val person, Position.Val zeroPosition, Size.Val nodeSize)
+
+    nodeId |> addRelation RenderedIn wilp
