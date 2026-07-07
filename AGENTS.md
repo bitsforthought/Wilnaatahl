@@ -90,8 +90,13 @@ lean directly lowers cost. When working in this repo:
 - `src/generated/` – Auto-generated TS from F# (do not edit)
 - `src/ecs/` – TypeScript ECS layer: Koota wrapper, traits, rendering, hooks
 - `src/react-components/` – React UI components
-- `tests/Wilnaatahl.Core.Tests/` – F# unit tests (Model, ViewModel; .NET-only)
-- `tests/Wilnaatahl.ECS.Tests/` – Portable ECS tests (run on .NET mock and Koota via Fable)
+- `tests/Wilnaatahl.Core.Tests/` – .NET-only F# tests for domain, view model, and
+  app/ECS-**system** logic (exercised against the .NET mock). Most tests live here.
+- `tests/Wilnaatahl.ECS.Tests/` – Portable tests that run on **both** the .NET mock
+  and real Koota (via Fable). Their sole purpose is to prove the mock and the Koota
+  wrapper are behaviourally equivalent; keep this surface **minimal**. That
+  equivalence is what lets all other F# logic be tested with confidence in
+  `Core.Tests` — do **not** add app or system tests here.
 - `scripts/` – Build/CI/codegen scripts (`.fsx` via `dotnet fsi`)
 - `specs/` – Design specs
 

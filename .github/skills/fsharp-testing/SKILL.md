@@ -120,10 +120,14 @@ and no per-cell `box`. See `TransformTests.fs` (e.g. `TheoryData<string, Pdeek>`
 
 ## Portability of ECS tests
 
-- **Tests should be portable by default.** ECS tests should run against both the
-  .NET mock and real Koota unless technically impossible (e.g., Fable doesn't
-  support quotations). Non-ECS tests in `Wilnaatahl.Core.Tests` (Model, ViewModel)
-  are .NET-only.
+- **The portable surface is minimal and purpose-specific.**
+  `Wilnaatahl.ECS.Tests` exists **solely** to prove the .NET mock (`TestECS.fs`)
+  and the Koota wrapper (`kootaWrapper.ts`) are behaviourally equivalent, so tests
+  there must run against both backends. That equivalence is precisely what lets
+  everything else — domain, view model, and F# app/ECS-**system** logic — be
+  tested with confidence in .NET-only `Wilnaatahl.Core.Tests`. Keep the portable
+  surface to the minimum needed to establish wrapper/mock equivalence; do **not**
+  port app or system tests into it just because they touch the ECS.
 - **Koota is the gold standard.** The mock must match Koota's behavior exactly,
   even when that behavior appears buggy or inconsistent. Document known Koota bugs
   with issue links, but replicate them faithfully.

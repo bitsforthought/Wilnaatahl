@@ -2,85 +2,74 @@
 
 ## Problem
 
-The import feature (spec: `specs/import-export-feature.md`) needs a parser that transforms
-a JSON file of genealogical data into the `(Person * CoupleId option) seq` and
-`Couple seq` formats consumed by `createFamilyGraph`. The JSON format uses numeric
-IDs for people, couples, and huwilp; per-person Wilp membership is recorded
-explicitly via a `wilp` reference into a top-level `huwilp` array. This plan
-covers the parser design, gap analysis, and implementation path.
+The import feature (spec: `specs/import-export-feature.md`) needs a parser that
+transforms a JSON file of genealogical data into the inputs `createFamilyGraph`
+consumes: `(Person * CoupleId option) seq`, `Couple seq`, and the Name holdings
+`(PersonId * NameHeld) seq`. The format uses numeric ids for people, couples,
+huwilp, and names; per-person current and birth Wilp are `wilp` / `birthWilp`
+references into a top-level `huwilp` array, and Name holdings are `namesHeld` rows
+linking `names` to `people`. The format itself is specified in
+[`specs/json-file-format.md`](./json-file-format.md); the Names/adoption additions
+and the model types they feed are designed in
+[`specs/names-and-detail-overlay.md`](./names-and-detail-overlay.md). This plan
+covers the parser design, gap analysis, and implementation path — both the import
+direction and the `toJson` export inverse.
 
-## JSON schema (observed)
+## JSON schema
 
-For any field below typed `T | null`, the key may also be absent from a record;
-the parser treats an absent key as equivalent to `null`.
-
-```json
-{
-  "people": [
-    {
-      "id": 0, // required, unique integer
-      "name": "string", // required, display label
-      "parents": "int | null", // CoupleId ref; null if root
-      "wilp": "int | null", // ref into top-level "huwilp" by id; null if no Wilp membership
-      "birthWilp": "int | null", // ignored by the parser (see Gap analysis)
-      "birthOrder": "int | null", // optional sort key
-      "dateOfBirth": "string | null", // display-only at source; ignored
-      "normalizedDateOfBirth": "string | null", // ISO-8601; warn if not parseable
-      "dateOfDeath": "string | null", // display-only at source; ignored
-      "normalizedDateOfDeath": "string | null", // ISO-8601; warn if not parseable
-      "gender": "M | F", // required
-      "deceased": "bool" // no model equivalent
-    }
-  ],
-  "couples": [
-    {
-      "coupleId": 0, // required, unique integer
-      "member1": "int", // PersonId of first member
-      "member2": "int", // PersonId of second member
-      "dateOfUnion": "string | null" // ISO-8601 when known
-    }
-  ],
-  "huwilp": [
-    {
-      "id": 0, // required, unique integer
-      "name": "string | null", // Wilp name (may be unknown — see Wilp validation)
-      "pdeek": "string | null" // Pdeek (Clan) name (may be unknown)
-    }
-  ]
-}
-```
+The on-disk JSON schema — every top-level array and field, with types,
+null/absent semantics, and cross-references — is specified in
+[`specs/json-file-format.md`](./json-file-format.md). This plan consumes that
+format and focuses on the parser/transform that reads it into the domain model:
+the gap analysis, validation rules, warnings, and code structure below describe
+parser behavior, not the format itself.
 
 ## Gap analysis: JSON vs. current model
 
 ### Fields with no model equivalent (silently ignored)
 
-| JSON field    | Reason                                                       |
-| ------------- | ------------------------------------------------------------ |
-| `deceased`    | Model has `DateOfDeath` but no boolean flag.                 |
-| `dateOfBirth` | Display-only raw string at the source; model uses            |
-|               | `normalizedDateOfBirth` for the parsed `DateOnly`.           |
-| `dateOfDeath` | Display-only raw string at the source; model uses            |
-|               | `normalizedDateOfDeath` for the parsed `DateOnly`.           |
-| `birthWilp`   | The Wilp a person was born into (which may differ from their |
-|               | current Wilp after adoption). The model has no concept of    |
-|               | birth-Wilp yet; ignore for now.                              |
+| JSON field | Reason                                                              |
+| ---------- | ------------------------------------------------------------------ |
+| `deceased` | The model records death via `DateOfDeath` but has no boolean flag. |
+
+`gender` is consumed for the [NodeShape mapping](#nodeshape-mapping); every other
+person field maps to the model. In particular the raw `dateOfBirth` /
+`dateOfDeath` strings are captured as display fallbacks
+(`Person.DateOfBirthText` / `DateOfDeathText`) and `birthWilp` is resolved to
+`Person.BirthWilp` — both introduced with the Names/adoption work in
+[`specs/names-and-detail-overlay.md`](./names-and-detail-overlay.md).
 
 ### Structural gaps (worked around)
 
-| Gap                               | Impact                                         | Workaround                                               |
-| --------------------------------- | ---------------------------------------------- | -------------------------------------------------------- |
-| Unresolvable CoupleId on person   | Person references a couple not in the file.    | Person becomes a root. `UnresolvedCoupleId` warning.     |
-| Unresolvable PersonId on couple   | Couple references a person not in the file.    | Couple dropped. `UnresolvedMember` warning.              |
-|                                   | Persons referencing that couple become roots.  |                                                          |
-| Unresolvable WilpId on person     | Person references a Wilp id not in `huwilp`,   | Person's `Kinship` becomes `NoneProvided`.               |
-|                                   | or one that was ignored due to missing fields. | `UnresolvedWilpId` warning.                              |
-| Duplicate person `id`             | JSON id is the unique key; duplicates would    | Keep first occurrence. `DuplicatePersonId` warning.      |
-|                                   | give two `Person` records the same `PersonId`. |                                                          |
-| Duplicate `coupleId`              | Same as above for couple lookups.              | Keep first occurrence. `DuplicateCoupleId` warning.      |
-| Duplicate huwilp `id`             | Same as above for Wilp lookups.                | Keep first occurrence. `DuplicateWilpId` warning.        |
-| Messy date strings (person)       | `DateOnly` requires a valid date.              | Use `normalizedDateOfBirth/Death` when present; warn if  |
-|                                   |                                                | not ISO 8601. The raw `dateOfBirth/Death` are not used.  |
-| Messy date string (`dateOfUnion`) | `DateOnly` requires a valid date.              | Skip unparseable values. `UnparsableCoupleDate` warning. |
+| Gap                                | Impact                                          | Workaround                                                |
+| ---------------------------------- | ----------------------------------------------- | --------------------------------------------------------- |
+| Unresolvable CoupleId on person    | Person references a couple not in the file.     | Person becomes a root. `UnresolvedCoupleId` warning.      |
+| Unresolvable PersonId on couple    | Couple references a person not in the file.     | Couple dropped. `UnresolvedMember` warning.               |
+|                                    | Persons referencing that couple become roots.   |                                                           |
+| Unresolvable WilpId on person      | Person references a Wilp id not in `huwilp`,    | Person's `Kinship` becomes `NoneProvided`.                |
+|                                    | or one that was ignored due to missing fields.  | `UnresolvedWilpId` warning.                               |
+| Unresolvable birthWilp on person   | Person's `birthWilp` id isn't in `huwilp`.      | `BirthWilp` left `None`. `UnresolvedBirthWilpId` warning. |
+| Pdeeḵ-only birthWilp on person     | `birthWilp` resolves to a name-less entry.      | `BirthWilp` left `None`. `BirthWilpNotNamed` warning.     |
+| `kinshipNote` with a resolved Wilp | Person has both a resolving `wilp` and a note.  | Note dropped. `IgnoredKinshipNote` warning.               |
+| Unresolvable nameId on holding     | `namesHeld` references a `names` id not present.| Holding dropped. `UnresolvedNameId` warning.              |
+| Unresolvable personId on holding   | `namesHeld` references a person not present.    | Holding dropped. `UnresolvedNameHolder` warning.          |
+| Unheld name                        | A `names` entry referenced by no holding.       | Dropped (held-only storage). `UnheldName` warning.        |
+| Duplicate person `id`              | JSON id is the unique key; duplicates would     | Keep first occurrence. `DuplicatePersonId` warning.       |
+|                                    | give two `Person` records the same `PersonId`.  |                                                           |
+| Duplicate `coupleId`               | Same as above for couple lookups.               | Keep first occurrence. `DuplicateCoupleId` warning.       |
+| Duplicate huwilp `id`              | Same as above for Wilp lookups.                 | Keep first occurrence. `DuplicateWilpId` warning.         |
+| Duplicate name `id`                | Same as above for name lookups.                 | Keep first occurrence. `DuplicateNameId` warning.         |
+| Distinct name ids, same `text`     | Redundant `names` entries for one Name.         | Both resolve to one `Name`. `DuplicateNameText` warning.  |
+| Messy date strings (person)        | `DateOnly` requires a valid date.               | Parse `normalizedDateOfBirth/Death` when present; warn if |
+|                                    |                                                 | not ISO 8601. The raw `dateOfBirth/Death` are kept as     |
+|                                    |                                                 | display text regardless.                                  |
+| Messy date string (`dateOfUnion`)  | `DateOnly` requires a valid date.               | Skip unparseable values. `UnparsableCoupleDate` warning.  |
+
+Because a `Name`'s identity is its text, two distinct name `id`s carrying the same
+`text` both resolve to the same `Name`, but the redundant entry is flagged with a
+`DuplicateNameText` warning. Name-holding resolution, unheld names, and birth-Wilp
+resolution are detailed under [Names and holdings](#names-and-holdings) and
+[Birth Wilp resolution](#birth-wilp-resolution).
 
 ### Wilp validation (per `huwilp` entry)
 
@@ -105,22 +94,65 @@ name and a Pdeek) and "Pdeek known but specific Wilp unknown"
 | Both present and `pdeek`        | Wilp kept as `Wilp { Name; Pdeek }`. Referencing persons     |
 | recognized                      | resolve to that `Kinship`.                                   |
 
-`pdeek` strings are matched case-insensitively after collapsing whitespace.
-Accepted spellings: `"LaxGibuu"`/`"Lax Gibuu"` → `LaxGibuu`,
-`"LaxSkiik"`/`"Lax Skiik"` → `LaxSkiik`, `"Ganeda"` → `Ganeda`,
-`"Giskaast"` → `Giskaast`. Any other value yields `UnknownPdeek`.
+`pdeek` strings are matched leniently: NFD-decompose, lower-case (invariant), then
+keep only ASCII letters `a`–`z` — so case, whitespace, apostrophes/glottal marks,
+and underline diacritics are all ignored. The recognized canonical forms are:
+
+- `LaxGibuu` — `laxgibuu`
+- `LaxSkiik` — `laxskiik`, `laxsgiik`
+- `Ganeda` — `ganeda`, `ganada`, `laxseel`
+- `Giskaast` — `giskaast`, `giskahaast`
+
+Any other value yields `UnknownPdeek`.
 
 ### Per-person Wilp resolution
 
 For each person:
 
-- `wilp` absent or `null` → `Kinship = NoneProvided` (no warning — this is
-  normal for people whose Wilp isn't known).
+- `wilp` absent or `null` → `Kinship = NoneProvided kinshipNote` (no warning —
+  this is normal for people whose Wilp isn't known). The person's `kinshipNote`,
+  if any, is carried as `NoneProvided (Some note)`, else `NoneProvided None`.
 - `wilp = id`, `id` resolves to a usable entry → `Kinship = Wilp w` or
-  `Kinship = UnknownWilp p` per the validation table above.
-- `wilp = id`, `id` not in `huwilp` (or in `huwilp` but dropped due to
-  validation failure) → `Kinship = NoneProvided` plus an `UnresolvedWilpId`
+  `Kinship = UnknownWilp p` per the validation table above. A `kinshipNote`
+  present alongside a resolving `wilp` is dropped with an `IgnoredKinshipNote`
   warning.
+- `wilp = id`, `id` not in `huwilp` (or in `huwilp` but dropped due to
+  validation failure) → `Kinship = NoneProvided kinshipNote` plus an
+  `UnresolvedWilpId` warning.
+
+`Kinship.NoneProvided` carries an optional free-form note (`string option`); see
+[`specs/names-and-detail-overlay.md`](./names-and-detail-overlay.md).
+
+### Birth Wilp resolution
+
+`birthWilp` is a second reference into `huwilp` naming the Wilp a person was
+**born into** (which differs from their current `wilp` after adoption). It
+resolves against the same validated huwilp table, but into
+`Person.BirthWilp : Wilp option` — only a *named* Wilp qualifies:
+
+- absent / `null` → `None`.
+- resolves to a named `Wilp w` → `Some w`.
+- resolves to a Pdeeḵ-only (name-less) entry → `None` + `BirthWilpNotNamed`.
+- present but unresolvable → `None` + `UnresolvedBirthWilpId`.
+
+### Names and holdings
+
+The `names` array is deduplicated by `id` (`DuplicateNameId`, keeping the first)
+into an `id → Name` table used only to resolve holdings; the ids are discarded
+afterward. Because a `Name`'s identity is its text, two distinct ids with the same
+text both resolve to the same `Name` but emit a `DuplicateNameText` warning (the
+entry is redundant). Each `namesHeld` row is then resolved against that table and
+the person set:
+
+- unresolvable `nameId` → holding dropped, `UnresolvedNameId` warning.
+- unresolvable `personId` → holding dropped, `UnresolvedNameHolder` warning.
+- otherwise → a `(PersonId, NameHeld)` pair, the `NameHeld` carrying the resolved
+  `Name` by value (plus `nameDate` / `nameOrder`).
+
+A `names` entry referenced by no surviving holding is an **unheld** name — dropped
+(the graph stores held names only) with an `UnheldName` warning. See
+[`specs/names-and-detail-overlay.md`](./names-and-detail-overlay.md) for the
+`Name` / `NameHeld` model, text-identity, and held-only storage.
 
 ### NodeShape mapping
 
@@ -138,50 +170,58 @@ For each person:
 
 Thoth.Json provides composable, type-safe decoders with explicit error messages.
 Each field decoder handles optional/null values naturally. The decoder pipeline
-parses the JSON into intermediate `RawPerson`, `RawCouple` and `RawWilp` records,
-then a separate transformation step converts to the model's
-`Person * CoupleId option` and `Couple`.
+parses the JSON into intermediate `RawPerson`, `RawCouple`, `RawWilp`, `RawName`,
+and `RawNameHeld` records, then a separate transformation step converts to the
+model's `Person * CoupleId option`, `Couple`, and `(PersonId * NameHeld)`
+holdings. The same Raw records back the `toJson` export, encoded via matching
+Thoth.Json encoders.
 
 ## Architecture
 
 ```
 JSON string
-    │
+    │  JsonReader.read      (Thoth.Json decoders over JsonContracts.Raw* types)
     ▼
-┌─────────────────────────┐
-│ Thoth.Json decoder      │  JsonParser.fs (module internal)
-│ → RawFile               │  Result<RawFile, string>
-└────────────┬────────────┘
-             │
-             ▼
-┌─────────────────────────┐
-│ Transform.transform     │  Transform.fs (let internal)
-│  • Reject empty input   │  Result<ImportResult, ImportError>
-│  • Deduplicate by id    │
-│  • Validate huwilp      │
-│  • Validate couple mbrs │
-│  • Resolve parent refs  │
-│  • Resolve wilp refs    │
-│  • Map dates/gender     │
-│  • Build Couple list    │
-│  • Collect warnings     │
-└────────────┬────────────┘
-             │
-             ▼
-  Transform.fromJson: string → Result<ImportResult, ImportError>
-  (the public entry point — composes parseJson ↦ mapError ↦ bind transform)
+RawFile  (Result<RawFile, string>)
+    │  Transform.transform
+    │   • Reject empty people (EmptyPeopleArray)
+    │   • Deduplicate people / couples / huwilp / names by id
+    │   • Validate huwilp → Kinship lookup table
+    │   • Validate couple members
+    │   • Resolve parent, wilp, and birthWilp refs; apply kinshipNote
+    │   • Resolve name holdings; drop unheld names
+    │   • Parse dates; map gender; build Couples
+    │   • Collect warnings
+    ▼
+ImportResult  (Result<ImportResult, ImportError>)
+
+Transform.fromJson : string → Result<ImportResult, ImportError>
+    (import entry point — JsonReader.read ↦ mapError ↦ bind transform)
+
+Transform.toJson : FamilyGraph → string
+    (export inverse — synthesize Raw* records, then JsonWriter.write)
 ```
 
 ## Types
+
+The `Raw*` records live in `JsonContracts.fs`; the `ImportWarning` /
+`ImportError` / `ImportResult` types live in `Transform.fs`. See
+[`specs/names-and-detail-overlay.md`](./names-and-detail-overlay.md) for the model
+types the transform produces (`Name`, `NameHeld`, the `Person` fields, and
+`Kinship.NoneProvided of string option`).
 
 ```fsharp
 /// Intermediate type — what Thoth.Json decodes into for a person.
 type RawPerson = {
     Id: int
-    Name: string
+    Name: string option              // colonial name; optional
     Parents: int option              // CoupleId reference; None if root
-    Wilp: int option                 // Wilp reference into the huwilp array
+    Wilp: int option                 // current Wilp reference into the huwilp array
+    BirthWilp: int option            // birth Wilp reference into the huwilp array
+    KinshipNote: string option       // free-form note; used only when no Wilp resolves
     BirthOrder: int option
+    RawDateOfBirth: string option    // free-form display text (dateOfBirth)
+    RawDateOfDeath: string option    // free-form display text (dateOfDeath)
     NormalizedDateOfBirth: string option  // ISO-8601
     NormalizedDateOfDeath: string option  // ISO-8601
     Gender: string
@@ -205,11 +245,25 @@ type RawWilp = {
     Pdeek: string option
 }
 
-/// Top-level decoded file contents.
+/// Intermediate type — one entry of the `names` array.
+type RawName = { Id: int; Text: string }
+
+/// Intermediate type — one entry of the `namesHeld` array.
+type RawNameHeld = {
+    NameId: int
+    PersonId: int
+    NameDate: string option
+    NameOrder: int option
+}
+
+/// Top-level decoded file contents. `Couples`, `Huwilp`, `Names`, and
+/// `NamesHeld` default to empty when the top-level key is absent.
 type RawFile = {
     People: RawPerson list
     Couples: RawCouple list
     Huwilp: RawWilp list
+    Names: RawName list
+    NamesHeld: RawNameHeld list
 }
 
 /// Things that went wrong but didn't prevent import.
@@ -217,11 +271,19 @@ type ImportWarning =
     | UnresolvedCoupleId of personName: string * coupleId: int
     | UnresolvedMember of coupleId: int * memberId: int
     | UnresolvedWilpId of personName: string * wilpId: int
+    | UnresolvedBirthWilpId of personName: string * wilpId: int
+    | BirthWilpNotNamed of personName: string * wilpId: int
+    | IgnoredKinshipNote of personName: string
     | UnparseableDate of personName: string * fieldName: string * rawValue: string
     | UnparsableCoupleDate of coupleId: int * rawValue: string
     | DuplicatePersonId of id: int
     | DuplicateCoupleId of id: int
     | DuplicateWilpId of id: int
+    | DuplicateNameId of id: int
+    | DuplicateNameText of text: string
+    | UnresolvedNameId of personId: int * nameId: int
+    | UnresolvedNameHolder of nameId: int * personId: int
+    | UnheldName of nameId: int * text: string
     | WilpMissingPdeek of id: int
     | WilpMissingNameAndPdeek of id: int
     | UnknownPdeek of wilpId: int * rawPdeek: string
@@ -234,6 +296,7 @@ type ImportError =
 type ImportResult = {
     PeopleAndCoupleIds: (Person * CoupleId option) list
     Couples: Couple list
+    NameHoldings: (PersonId * NameHeld) list
     Warnings: ImportWarning list
 }
 ```
@@ -242,33 +305,34 @@ type ImportResult = {
 
 ```
 src/Wilnaatahl.Core/
-  Import/
-    JsonParser.fs   — module internal: Raw{Person,Couple,Wilp,File} types and
-                      Thoth.Json decoders; parseJson: string → Result<RawFile, string>
-    Transform.fs    — namespace-level ImportWarning, ImportError, ImportResult;
-                      internal transform: RawFile → Result<ImportResult, ImportError>
-                      (semantic validation, id resolution, Wilp lookup, date parsing,
-                      Couple construction); public Transform.fromJson composer
+  Persistence/
+    JsonContracts.fs — internal Raw{Person,Couple,Wilp,Name,NameHeld,File} records
+    JsonReader.fs    — internal Thoth.Json decoders; read: string → Result<RawFile, string>
+    JsonWriter.fs    — internal Thoth.Json encoders; write: RawFile → string
+    Transform.fs     — ImportWarning/ImportError/ImportResult; internal transform;
+                       public Transform.fromJson (import) and Transform.toJson (export)
+    ImportService.fs — importJsonText / loadSampleGraph: build a FamilyGraph
+  ViewModel/
+    ImportMessages.fs — ImportError.toMessage; ImportWarning.toMessage / summary
 
 tests/Wilnaatahl.Core.Tests/
-  Import/
-    JsonParserTests.fs  — decoder round-trip tests, malformed JSON, missing fields
-    ImportTests.fs      — transformation logic: parent resolution, Wilp resolution,
-                          date parsing, warning generation, edge cases
+  Persistence/
+    JsonReadWriteTests.fs — decoder/encoder round-trip, malformed JSON, missing fields
+    TransformTests.fs     — transform logic: parent/Wilp/birthWilp/name resolution,
+                            deduplication, date parsing, warning generation, edge cases
+    ImportServiceTests.fs — end-to-end import into a FamilyGraph
+  ViewModel/
+    ImportMessagesTests.fs — message / summary rendering
 ```
 
-All new files added to `Wilnaatahl.Core.fsproj` `<Compile>` list and
-`Wilnaatahl.Core.Tests.fsproj` respectively.
+New files are added to the `Wilnaatahl.Core.fsproj` and
+`Wilnaatahl.Core.Tests.fsproj` `<Compile>` lists respectively.
 
 ## Notes & future considerations
 
 - **`deceased` flag**: the model has `DateOfDeath` but no boolean flag. The
-  decoder already ignores `deceased` gracefully; future model work could add a
-  flag and a corresponding decode step.
-- **`birthWilp`**: a person's birth Wilp can differ from their current Wilp
-  (e.g. after adoption). The current model only records a single `Kinship`,
-  so the decoder silently ignores `birthWilp`. Capturing it will require a
-  model extension.
+  decoder ignores `deceased` gracefully; future model work could add a flag and a
+  corresponding decode step.
 - **Multiple Wilp visualization**: the scene currently renders only one Wilp at
   a time; the `huwilp` array can contain many. Visualization changes are
   tracked separately.
