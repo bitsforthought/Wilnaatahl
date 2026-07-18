@@ -30,11 +30,21 @@ domain model and features built on the data are in
 
 ```json
 {
-  "people":    [ /* Person records — see below */ ],
-  "couples":   [ /* Couple records */ ],
-  "huwilp":    [ /* Wilp records */ ],
-  "names":     [ /* Name records */ ],
-  "namesHeld": [ /* NameHeld records */ ]
+  "people": [
+    /* Person records — see below */
+  ],
+  "couples": [
+    /* Couple records */
+  ],
+  "huwilp": [
+    /* Wilp records */
+  ],
+  "names": [
+    /* Name records */
+  ],
+  "namesHeld": [
+    /* NameHeld records */
+  ]
 }
 ```
 
@@ -58,21 +68,21 @@ domain model and features built on the data are in
 }
 ```
 
-| Field                   | Type            | Meaning                                                                                                                     |
-| ----------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `id`                    | int, required   | Unique person identity. Referenced by `couples.member1`/`member2` and `namesHeld.personId`. (Parent–child links are indirect: a person's `parents` names a couple, whose members are the parents.) |
-| `name`                  | string \| null  | The person's colonial (Western/legal) name. Optional — a person may be recorded by their Gitxsan Name(s) alone.             |
-| `parents`               | int \| null     | The `couples.coupleId` of the couple this person is a child of. `null` for a person with no recorded parents (a root).      |
-| `wilp`                  | int \| null     | The `huwilp.id` of the person's **current** Wilp membership (their Kinship). `null` when no membership is recorded.         |
-| `birthWilp`             | int \| null     | The `huwilp.id` of the Wilp the person was **born into**. Differs from `wilp` when the person was adopted into another Wilp. |
-| `kinshipNote`           | string \| null  | Free-form note describing what is known about the person's Kinship. Meaningful only when no `wilp` resolves.                |
-| `birthOrder`            | int \| null     | Optional sort key ordering siblings when birth dates are unavailable.                                                       |
-| `dateOfBirth`           | string \| null  | Free-form display text for the birth date. Display fallback for `normalizedDateOfBirth`.                                    |
-| `normalizedDateOfBirth` | string \| null  | ISO-8601 (`YYYY-MM-DD`) birth date.                                                                                         |
-| `dateOfDeath`           | string \| null  | Free-form display text for the death date. Display fallback for `normalizedDateOfDeath`.                                    |
-| `normalizedDateOfDeath` | string \| null  | ISO-8601 (`YYYY-MM-DD`) death date.                                                                                         |
-| `gender`                | `"M"` \| `"F"`  | Required.                                                                                                                   |
-| `deceased`              | bool \| null    | Whether the person is deceased.                                                                                            |
+| Field                   | Type           | Meaning                                                                                                                                                                                            |
+| ----------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                    | int, required  | Unique person identity. Referenced by `couples.member1`/`member2` and `namesHeld.personId`. (Parent–child links are indirect: a person's `parents` names a couple, whose members are the parents.) |
+| `name`                  | string \| null | The person's colonial (Western/legal) name. Optional — a person may be recorded by their Gitxsan Name(s) alone.                                                                                    |
+| `parents`               | int \| null    | The `couples.coupleId` of the couple this person is a child of. `null` for a person with no recorded parents (a root).                                                                             |
+| `wilp`                  | int \| null    | The `huwilp.id` of the person's **current** Wilp membership (their Kinship). `null` when no membership is recorded.                                                                                |
+| `birthWilp`             | int \| null    | The `huwilp.id` of the Wilp the person was **born into**. Differs from `wilp` when the person was adopted into another Wilp.                                                                       |
+| `kinshipNote`           | string \| null | Free-form note describing what is known about the person's Kinship. Meaningful only when no `wilp` resolves.                                                                                       |
+| `birthOrder`            | int \| null    | Optional sort key ordering siblings when birth dates are unavailable.                                                                                                                              |
+| `dateOfBirth`           | string \| null | Free-form display text for the birth date. Display fallback for `normalizedDateOfBirth`.                                                                                                           |
+| `normalizedDateOfBirth` | string \| null | ISO-8601 (`YYYY-MM-DD`) birth date.                                                                                                                                                                |
+| `dateOfDeath`           | string \| null | Free-form display text for the death date. Display fallback for `normalizedDateOfDeath`.                                                                                                           |
+| `normalizedDateOfDeath` | string \| null | ISO-8601 (`YYYY-MM-DD`) death date.                                                                                                                                                                |
+| `gender`                | `"M"` \| `"F"` | Required.                                                                                                                                                                                          |
+| `deceased`              | bool \| null   | Whether the person is deceased.                                                                                                                                                                    |
 
 ## `couples`
 
@@ -85,12 +95,12 @@ domain model and features built on the data are in
 }
 ```
 
-| Field         | Type           | Meaning                                                          |
-| ------------- | -------------- | --------------------------------------------------------------- |
-| `coupleId`    | int, required  | Unique couple identity. Referenced by `people.parents`.         |
-| `member1`     | int, required  | A `people.id` — the first partner.                              |
-| `member2`     | int, required  | A `people.id` — the second partner.                             |
-| `dateOfUnion` | string \| null | ISO-8601 date the union was formed, when known.                 |
+| Field         | Type           | Meaning                                                 |
+| ------------- | -------------- | ------------------------------------------------------- |
+| `coupleId`    | int, required  | Unique couple identity. Referenced by `people.parents`. |
+| `member1`     | int, required  | A `people.id` — the first partner.                      |
+| `member2`     | int, required  | A `people.id` — the second partner.                     |
+| `dateOfUnion` | string \| null | ISO-8601 date the union was formed, when known.         |
 
 A couple's recorded children are the people whose `parents` reference its
 `coupleId`; a couple may have no children.
@@ -108,11 +118,11 @@ to.
 }
 ```
 
-| Field   | Type           | Meaning                                                        |
-| ------- | -------------- | ------------------------------------------------------------- |
+| Field   | Type           | Meaning                                                          |
+| ------- | -------------- | ---------------------------------------------------------------- |
 | `id`    | int, required  | Unique Wilp identity. Referenced by `people.wilp` / `birthWilp`. |
-| `name`  | string \| null | The Wilp's name.                                              |
-| `pdeek` | string \| null | The Pdeeḵ (clan) the Wilp belongs to.                         |
+| `name`  | string \| null | The Wilp's name.                                                 |
+| `pdeek` | string \| null | The Pdeeḵ (clan) the Wilp belongs to.                            |
 
 There are four Pdeeḵ. Their canonical on-disk spellings are `LaxGibuu`,
 `LaxSkiik`, `Ganeda`, and `Giskaast`. The `pdeek` value is matched leniently:
@@ -136,10 +146,10 @@ handed down within a Wilp. A Name's identity is its `text`.
 }
 ```
 
-| Field  | Type            | Meaning                                                 |
-| ------ | --------------- | ------------------------------------------------------- |
-| `id`   | int, required   | Unique Name identity within the file. Referenced by `namesHeld.nameId`. |
-| `text` | string, required | The text of the Name.                                  |
+| Field  | Type             | Meaning                                                                 |
+| ------ | ---------------- | ----------------------------------------------------------------------- |
+| `id`   | int, required    | Unique Name identity within the file. Referenced by `namesHeld.nameId`. |
+| `text` | string, required | The text of the Name.                                                   |
 
 ## `namesHeld`
 
@@ -157,12 +167,12 @@ generations.
 }
 ```
 
-| Field       | Type           | Meaning                                                                                         |
-| ----------- | -------------- | ----------------------------------------------------------------------------------------------- |
-| `nameId`    | int, required  | A `names.id` — the Name being held.                                                             |
-| `personId`  | int, required  | A `people.id` — the holder.                                                                     |
-| `nameDate`  | string \| null | When the Name was given to this person. Used to order a person's Names (later = more recent).    |
-| `nameOrder` | int \| null    | Life-order in which the Name was given; a tiebreak when `nameDate` is equal or absent.          |
+| Field       | Type           | Meaning                                                                                       |
+| ----------- | -------------- | --------------------------------------------------------------------------------------------- |
+| `nameId`    | int, required  | A `names.id` — the Name being held.                                                           |
+| `personId`  | int, required  | A `people.id` — the holder.                                                                   |
+| `nameDate`  | string \| null | When the Name was given to this person. Used to order a person's Names (later = more recent). |
+| `nameOrder` | int \| null    | Life-order in which the Name was given; a tiebreak when `nameDate` is equal or absent.        |
 
 At least one of `nameDate` and `nameOrder` must be present — they may not both be
 null — and when `nameDate` is absent or not a valid ISO-8601 date, `nameOrder`

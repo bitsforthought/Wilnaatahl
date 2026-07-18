@@ -28,7 +28,7 @@ parser behavior, not the format itself.
 
 ### Fields with no model equivalent (silently ignored)
 
-| JSON field | Reason                                                              |
+| JSON field | Reason                                                             |
 | ---------- | ------------------------------------------------------------------ |
 | `deceased` | The model records death via `DateOfDeath` but has no boolean flag. |
 
@@ -41,29 +41,29 @@ person field maps to the model. In particular the raw `dateOfBirth` /
 
 ### Structural gaps (worked around)
 
-| Gap                                | Impact                                          | Workaround                                                |
-| ---------------------------------- | ----------------------------------------------- | --------------------------------------------------------- |
-| Unresolvable CoupleId on person    | Person references a couple not in the file.     | Person becomes a root. `UnresolvedCoupleId` warning.      |
-| Unresolvable PersonId on couple    | Couple references a person not in the file.     | Couple dropped. `UnresolvedMember` warning.               |
-|                                    | Persons referencing that couple become roots.   |                                                           |
-| Unresolvable WilpId on person      | Person references a Wilp id not in `huwilp`,    | Person's `Kinship` becomes `NoneProvided`.                |
-|                                    | or one that was ignored due to missing fields.  | `UnresolvedWilpId` warning.                               |
-| Unresolvable birthWilp on person   | Person's `birthWilp` id isn't in `huwilp`.      | `BirthWilp` left `None`. `UnresolvedBirthWilpId` warning. |
-| Pdeeḵ-only birthWilp on person     | `birthWilp` resolves to a name-less entry.      | `BirthWilp` left `None`. `BirthWilpNotNamed` warning.     |
-| `kinshipNote` with a resolved Wilp | Person has both a resolving `wilp` and a note.  | Note dropped. `IgnoredKinshipNote` warning.               |
-| Unresolvable nameId on holding     | `namesHeld` references a `names` id not present.| Holding dropped. `UnresolvedNameId` warning.              |
-| Unresolvable personId on holding   | `namesHeld` references a person not present.    | Holding dropped. `UnresolvedNameHolder` warning.          |
-| Unheld name                        | A `names` entry referenced by no holding.       | Dropped (held-only storage). `UnheldName` warning.        |
-| Duplicate person `id`              | JSON id is the unique key; duplicates would     | Keep first occurrence. `DuplicatePersonId` warning.       |
-|                                    | give two `Person` records the same `PersonId`.  |                                                           |
-| Duplicate `coupleId`               | Same as above for couple lookups.               | Keep first occurrence. `DuplicateCoupleId` warning.       |
-| Duplicate huwilp `id`              | Same as above for Wilp lookups.                 | Keep first occurrence. `DuplicateWilpId` warning.         |
-| Duplicate name `id`                | Same as above for name lookups.                 | Keep first occurrence. `DuplicateNameId` warning.         |
-| Distinct name ids, same `text`     | Redundant `names` entries for one Name.         | Both resolve to one `Name`. `DuplicateNameText` warning.  |
-| Messy date strings (person)        | `DateOnly` requires a valid date.               | Parse `normalizedDateOfBirth/Death` when present; warn if |
-|                                    |                                                 | not ISO 8601. The raw `dateOfBirth/Death` are kept as     |
-|                                    |                                                 | display text regardless.                                  |
-| Messy date string (`dateOfUnion`)  | `DateOnly` requires a valid date.               | Skip unparseable values. `UnparsableCoupleDate` warning.  |
+| Gap                                | Impact                                           | Workaround                                                |
+| ---------------------------------- | ------------------------------------------------ | --------------------------------------------------------- |
+| Unresolvable CoupleId on person    | Person references a couple not in the file.      | Person becomes a root. `UnresolvedCoupleId` warning.      |
+| Unresolvable PersonId on couple    | Couple references a person not in the file.      | Couple dropped. `UnresolvedMember` warning.               |
+|                                    | Persons referencing that couple become roots.    |                                                           |
+| Unresolvable WilpId on person      | Person references a Wilp id not in `huwilp`,     | Person's `Kinship` becomes `NoneProvided`.                |
+|                                    | or one that was ignored due to missing fields.   | `UnresolvedWilpId` warning.                               |
+| Unresolvable birthWilp on person   | Person's `birthWilp` id isn't in `huwilp`.       | `BirthWilp` left `None`. `UnresolvedBirthWilpId` warning. |
+| Pdeeḵ-only birthWilp on person     | `birthWilp` resolves to a name-less entry.       | `BirthWilp` left `None`. `BirthWilpNotNamed` warning.     |
+| `kinshipNote` with a resolved Wilp | Person has both a resolving `wilp` and a note.   | Note dropped. `IgnoredKinshipNote` warning.               |
+| Unresolvable nameId on holding     | `namesHeld` references a `names` id not present. | Holding dropped. `UnresolvedNameId` warning.              |
+| Unresolvable personId on holding   | `namesHeld` references a person not present.     | Holding dropped. `UnresolvedNameHolder` warning.          |
+| Unheld name                        | A `names` entry referenced by no holding.        | Dropped (held-only storage). `UnheldName` warning.        |
+| Duplicate person `id`              | JSON id is the unique key; duplicates would      | Keep first occurrence. `DuplicatePersonId` warning.       |
+|                                    | give two `Person` records the same `PersonId`.   |                                                           |
+| Duplicate `coupleId`               | Same as above for couple lookups.                | Keep first occurrence. `DuplicateCoupleId` warning.       |
+| Duplicate huwilp `id`              | Same as above for Wilp lookups.                  | Keep first occurrence. `DuplicateWilpId` warning.         |
+| Duplicate name `id`                | Same as above for name lookups.                  | Keep first occurrence. `DuplicateNameId` warning.         |
+| Distinct name ids, same `text`     | Redundant `names` entries for one Name.          | Both resolve to one `Name`. `DuplicateNameText` warning.  |
+| Messy date strings (person)        | `DateOnly` requires a valid date.                | Parse `normalizedDateOfBirth/Death` when present; warn if |
+|                                    |                                                  | not ISO 8601. The raw `dateOfBirth/Death` are kept as     |
+|                                    |                                                  | display text regardless.                                  |
+| Messy date string (`dateOfUnion`)  | `DateOnly` requires a valid date.                | Skip unparseable values. `UnparsableCoupleDate` warning.  |
 
 Because a `Name`'s identity is its text, two distinct name `id`s carrying the same
 `text` both resolve to the same `Name`, but the redundant entry is flagged with a
@@ -128,7 +128,7 @@ For each person:
 `birthWilp` is a second reference into `huwilp` naming the Wilp a person was
 **born into** (which differs from their current `wilp` after adoption). It
 resolves against the same validated huwilp table, but into
-`Person.BirthWilp : Wilp option` — only a *named* Wilp qualifies:
+`Person.BirthWilp : Wilp option` — only a _named_ Wilp qualifies:
 
 - absent / `null` → `None`.
 - resolves to a named `Wilp w` → `Some w`.

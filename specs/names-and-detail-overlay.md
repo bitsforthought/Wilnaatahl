@@ -48,7 +48,7 @@ extends is described in
   the people who have held it.
 - Enforcing that no two living people hold the same Name.
 - Editing Names, dates, or Kinship in-app.
-- Modeling adoption *structurally* (e.g. distinct birth-parents vs.
+- Modeling adoption _structurally_ (e.g. distinct birth-parents vs.
   adoptive-parents links, or a person appearing in two forests): this iteration
   honors only the `birthWilp` **field** to detect and display adoption, not any
   structural rework of the family graph.
@@ -323,7 +323,7 @@ content. One comparison covers both cases the requirement calls out:
 - an **adopted** member whose current `Kinship` Wilp differs from the Wilp
   they're rendered in.
 
-Crucially, the line is **never** shown when the current Wilp *equals* the
+Crucially, the line is **never** shown when the current Wilp _equals_ the
 rendered Wilp — so an adopted person shown in their own current Wilp `A` does
 **not** get a redundant `(A)` line. This is why the gate compares against the
 rendered Wilp rather than against `BirthWilp` directly: comparing to
