@@ -21,9 +21,10 @@ open Wilnaatahl.Tests.TestData
 let private spawnTestScene (world: IWorld) =
     let graph = createFamilyGraph testPeopleAndParents testCouples
     let wilpId = world |> People.spawnWilpBox testWilpName
+    let nodes = Scene.enumerateHuwilpToRender graph |> Map.find testWilpName
 
-    for person, _ in testPeopleAndParents do
-        world |> People.spawnTreeNode person wilpId
+    for nodeKey, person in nodes do
+        world |> People.spawnTreeNode person nodeKey wilpId
 
     graph
 

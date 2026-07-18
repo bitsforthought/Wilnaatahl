@@ -92,7 +92,7 @@ type LayoutBox<[<Measure>] 'u> = {
 
 /// Contains the parts of a LayoutBox that vary based on whether it contains other LayoutBoxes or not.
 and LayoutBoxPayload<[<Measure>] 'u> =
-    | LeafBox of PersonId * LayoutVector<'u>
+    | LeafBox of NodeKey * LayoutVector<'u>
     | CompositeBox of CompositeLayoutBox<'u>
 
 /// Defines properties specific to a Composite LayoutBox.
@@ -149,10 +149,10 @@ module LayoutBox =
     let nearZero = 1e-9<w>
 
     /// Creates a leaf LayoutBox with the given property values.
-    let createLeaf size connectX personId offset = {
+    let createLeaf size connectX nodeKey offset = {
         Size = size
         ConnectX = connectX
-        Payload = LeafBox(personId, offset)
+        Payload = LeafBox(nodeKey, offset)
     }
 
     /// Creates a composite LayoutBox with the given property values.
@@ -177,7 +177,7 @@ module LayoutBox =
     let visit visitLeaf visitComposite initialPosition rootBox =
         let rec recurse (box, pos) =
             match box.Payload with
-            | LeafBox(personId, offset) -> visitLeaf pos personId offset
+            | LeafBox(nodeKey, offset) -> visitLeaf pos nodeKey offset
             | CompositeBox composite -> composite.Followers |> Seq.map recurse |> visitComposite pos
 
         recurse (rootBox, initialPosition)

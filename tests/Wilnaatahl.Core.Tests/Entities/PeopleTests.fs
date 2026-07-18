@@ -38,7 +38,7 @@ type Tests() =
 
     [<Fact>]
     member _.``spawnTreeNode creates entity with PersonRef and Position``() =
-        world |> People.spawnTreeNode p0 wilpId
+        world |> People.spawnTreeNode p0 (MemberNode p0.Id) wilpId
 
         let nodes = world.Query(With PersonRef) |> Seq.toList
         nodes.Length =! 1
@@ -49,7 +49,7 @@ type Tests() =
 
     [<Fact>]
     member _.``spawnTreeNode uses sphere size for Sphere shape``() =
-        world |> People.spawnTreeNode p0 wilpId // p0 has Shape = Sphere
+        world |> People.spawnTreeNode p0 (MemberNode p0.Id) wilpId // p0 has Shape = Sphere
 
         let nodeId = world.Query(With PersonRef) |> Seq.head
         let size = (nodeId |> get Size).Value
@@ -60,7 +60,7 @@ type Tests() =
 
     [<Fact>]
     member _.``spawnTreeNode uses cube size for Cube shape``() =
-        world |> People.spawnTreeNode p1 wilpId // p1 has Shape = Cube
+        world |> People.spawnTreeNode p1 (MemberNode p1.Id) wilpId // p1 has Shape = Cube
 
         let nodeId = world.Query(With PersonRef) |> Seq.head
         let size = (nodeId |> get Size).Value
@@ -71,10 +71,24 @@ type Tests() =
 
     [<Fact>]
     member _.``spawnTreeNode adds RenderedIn relation to wilp``() =
-        world |> People.spawnTreeNode p0 wilpId
+        world |> People.spawnTreeNode p0 (MemberNode p0.Id) wilpId
 
         let nodeId = world.Query(With PersonRef) |> Seq.head
         nodeId |> targetFor RenderedIn =! Some wilpId
+
+    [<Fact>]
+    member _.``spawnTreeNode records a MemberNode's identity in NodeKeyRef``() =
+        world |> People.spawnTreeNode p0 (MemberNode p0.Id) wilpId
+
+        let nodeId = world.Query(With PersonRef) |> Seq.head
+        (nodeId |> get NodeKeyRef).Value =! MemberNode p0.Id
+
+    [<Fact>]
+    member _.``spawnTreeNode records a PartnerNode's identity, with its marriage CoupleId, in NodeKeyRef``() =
+        world |> People.spawnTreeNode p1 (PartnerNode(p1.Id, coupleP0P1Id)) wilpId
+
+        let nodeId = world.Query(With PersonRef) |> Seq.head
+        (nodeId |> get NodeKeyRef).Value =! PartnerNode(p1.Id, coupleP0P1Id)
 
     interface IDisposable with
         member _.Dispose() = (ecs :> IDisposable).Dispose()

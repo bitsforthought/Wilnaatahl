@@ -24,12 +24,12 @@ let spawnControls (world: IWorld) =
 let spawnScene (world: IWorld) familyGraph =
     // TODO: Spawn multiple huwilp once we support that.
     let huwilpMap = Scene.enumerateHuwilpToRender familyGraph
-    let firstWilp, people = huwilpMap |> Seq.head |> (fun kvp -> kvp.Key, kvp.Value)
+    let firstWilp, nodes = huwilpMap |> Seq.head |> (fun kvp -> kvp.Key, kvp.Value)
 
     let wilpId = world |> spawnWilpBox firstWilp
 
     // Spawn the tree nodes before connectors so the connectors can connect to them.
-    for person in people do
-        world |> spawnTreeNode person wilpId
+    for nodeKey, person in nodes do
+        world |> spawnTreeNode person nodeKey wilpId
 
     world |> spawnAllConnectors familyGraph

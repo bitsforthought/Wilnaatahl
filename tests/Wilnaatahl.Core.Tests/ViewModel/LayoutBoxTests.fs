@@ -33,16 +33,16 @@ let ``LayoutVector.reframe changes units correctly`` () =
 let ``createLeaf creates correct LayoutBox`` () =
     let size = { X = 1.0<w>; Y = 2.0<w>; Z = 3.0<w> }
     let connectX = 0.5<w>
-    let personId = PersonId 42
+    let nodeKey = MemberNode(PersonId 42)
     let offset = { X = 0.1<w>; Y = 0.2<w>; Z = 0.3<w> }
 
     let expected = {
         Size = size
         ConnectX = connectX
-        Payload = LeafBox(personId, offset)
+        Payload = LeafBox(nodeKey, offset)
     }
 
-    let actual = createLeaf size connectX personId offset
+    let actual = createLeaf size connectX nodeKey offset
     actual =! expected
 
 [<Fact>]
@@ -61,7 +61,7 @@ let ``reframe changes LayoutBox units correctly`` () =
     let size = { X = 1.0<w>; Y = 2.0<w>; Z = 3.0<w> }
     let connectX = 0.5<w>
     let offset = { X = 0.1<w>; Y = 0.2<w>; Z = 0.3<w> }
-    let leaf = createLeaf size connectX (PersonId 1) offset
+    let leaf = createLeaf size connectX (MemberNode(PersonId 1)) offset
 
     let composite =
         createComposite size connectX {
@@ -75,7 +75,7 @@ let ``reframe changes LayoutBox units correctly`` () =
 
         let followers =
             let leaf =
-                createLeaf size 0.5<u> (PersonId 1) { X = 0.1<u>; Y = 0.2<u>; Z = 0.3<u> }
+                createLeaf size 0.5<u> (MemberNode(PersonId 1)) { X = 0.1<u>; Y = 0.2<u>; Z = 0.3<u> }
 
             [ (leaf, vecZeroU) ]
 
@@ -104,7 +104,7 @@ let ``reframe round-trip relabel returns the same LayoutBox`` () =
     let size = { X = 1.0<w>; Y = 2.0<w>; Z = 3.0<w> }
 
     let leaf =
-        createLeaf size 0.5<w> (PersonId 1) { X = 0.1<w>; Y = 0.2<w>; Z = 0.3<w> }
+        createLeaf size 0.5<w> (MemberNode(PersonId 1)) { X = 0.1<w>; Y = 0.2<w>; Z = 0.3<w> }
 
     let box =
         createComposite size 0.5<w> {
@@ -121,8 +121,8 @@ let ``visit visits all boxes and passes correct positions`` () =
     let size = { X = 1.0<w>; Y = 2.0<w>; Z = 3.0<w> }
     let connectX = 0.5<w>
     let offset = { X = 0.1<w>; Y = 0.2<w>; Z = 0.3<w> }
-    let leaf1 = createLeaf size connectX (PersonId 1) offset
-    let leaf2 = createLeaf size connectX (PersonId 2) offset
+    let leaf1 = createLeaf size connectX (MemberNode(PersonId 1)) offset
+    let leaf2 = createLeaf size connectX (MemberNode(PersonId 2)) offset
 
     let box =
         createComposite size connectX {
@@ -149,8 +149,8 @@ let ``attachHorizontally combines leaf boxes correctly`` () =
     let size = { X = 2.0<w>; Y = 1.0<w>; Z = 1.0<w> }
     let connectX = 1.0<w>
 
-    let leaf1 = createLeaf size connectX (PersonId 1) vecZeroW
-    let leaf2 = createLeaf size connectX (PersonId 2) vecZeroW
+    let leaf1 = createLeaf size connectX (MemberNode(PersonId 1)) vecZeroW
+    let leaf2 = createLeaf size connectX (MemberNode(PersonId 2)) vecZeroW
 
     let expected =
         let followers = [ leaf1, vecZeroW; leaf2, { X = 2.0<w>; Y = 0.0<w>; Z = 0.0<w> } ]
@@ -170,7 +170,7 @@ let ``attachHorizontally combines leaf boxes correctly`` () =
 let ``attachHorizontally combines two composite boxes correctly`` () =
     let composite1 =
         let size = { X = 1.0<w>; Y = 1.0<w>; Z = 2.0<w> }
-        let leaf = createLeaf size 0.5<w> (PersonId 1) vecZeroW
+        let leaf = createLeaf size 0.5<w> (MemberNode(PersonId 1)) vecZeroW
 
         createComposite size 0.5<w> {
             TopLeftWidth = 0.5<w>
@@ -180,7 +180,7 @@ let ``attachHorizontally combines two composite boxes correctly`` () =
 
     let composite2 =
         let size = { X = 2.0<w>; Y = 3.0<w>; Z = 1.0<w> }
-        let leaf = createLeaf size 1.0<w> (PersonId 2) vecZeroW
+        let leaf = createLeaf size 1.0<w> (MemberNode(PersonId 2)) vecZeroW
 
         createComposite size 1.0<w> {
             TopLeftWidth = 0.25<w>
@@ -217,7 +217,7 @@ let ``attachHorizontally: Composite on left, Leaf on right, TopRightWidth zero o
     =
     let composite =
         let size = { X = 1.0<w>; Y = 1.0<w>; Z = 1.0<w> }
-        let leaf = createLeaf size 0.5<w> (PersonId 1) vecZeroW
+        let leaf = createLeaf size 0.5<w> (MemberNode(PersonId 1)) vecZeroW
 
         createComposite size 0.5<w> {
             TopLeftWidth = 0.0<w>
@@ -226,7 +226,7 @@ let ``attachHorizontally: Composite on left, Leaf on right, TopRightWidth zero o
         }
 
     let leaf =
-        createLeaf { X = 2.0<w>; Y = 1.0<w>; Z = 1.0<w> } 1.0<w> (PersonId 2) vecZeroW
+        createLeaf { X = 2.0<w>; Y = 1.0<w>; Z = 1.0<w> } 1.0<w> (MemberNode(PersonId 2)) vecZeroW
 
     let expected =
         let followers = [ composite, vecZeroW; leaf, { X = leafOffsetX; Y = 0.0<w>; Z = 0.0<w> } ]
@@ -253,11 +253,11 @@ let ``attachHorizontally: Leaf on left, Composite on right, TopLeftWidth zero or
     (compositeOffsetX: float<w>)
     =
     let leaf =
-        createLeaf { X = 1.0<w>; Y = 1.0<w>; Z = 1.0<w> } 0.5<w> (PersonId 1) vecZeroW
+        createLeaf { X = 1.0<w>; Y = 1.0<w>; Z = 1.0<w> } 0.5<w> (MemberNode(PersonId 1)) vecZeroW
 
     let composite =
         let size = { X = 2.0<w>; Y = 1.0<w>; Z = 1.0<w> }
-        let leaf = createLeaf size 1.0<w> (PersonId 2) vecZeroW
+        let leaf = createLeaf size 1.0<w> (MemberNode(PersonId 2)) vecZeroW
 
         createComposite size 1.0<w> {
             TopLeftWidth = topLeftWidth
@@ -282,13 +282,13 @@ let ``attachHorizontally: Leaf on left, Composite on right, TopLeftWidth zero or
 [<Fact>]
 let ``attachHorizontally with odd number of boxes uses correct ConnectX calculation`` () =
     let leaf1 =
-        createLeaf { X = 1.0<w>; Y = 1.0<w>; Z = 1.0<w> } 0.5<w> (PersonId 1) vecZeroW
+        createLeaf { X = 1.0<w>; Y = 1.0<w>; Z = 1.0<w> } 0.5<w> (MemberNode(PersonId 1)) vecZeroW
 
     let leaf2 =
-        createLeaf { X = 2.0<w>; Y = 1.0<w>; Z = 1.0<w> } 1.0<w> (PersonId 2) vecZeroW
+        createLeaf { X = 2.0<w>; Y = 1.0<w>; Z = 1.0<w> } 1.0<w> (MemberNode(PersonId 2)) vecZeroW
 
     let leaf3 =
-        createLeaf { X = 3.0<w>; Y = 1.0<w>; Z = 1.0<w> } 1.5<w> (PersonId 3) vecZeroW
+        createLeaf { X = 3.0<w>; Y = 1.0<w>; Z = 1.0<w> } 1.5<w> (MemberNode(PersonId 3)) vecZeroW
 
     let expected =
         let followers = [
@@ -311,7 +311,7 @@ let ``attachHorizontally with odd number of boxes uses correct ConnectX calculat
 [<Fact>]
 let ``attachHorizontally returns the same box when only one box is given`` () =
     let box =
-        createLeaf { X = 2.0<w>; Y = 1.0<w>; Z = 1.0<w> } 1.0<w> (PersonId 1) vecZeroW
+        createLeaf { X = 2.0<w>; Y = 1.0<w>; Z = 1.0<w> } 1.0<w> (MemberNode(PersonId 1)) vecZeroW
 
     let actual = attachHorizontally [| box |]
     test <@ LanguagePrimitives.PhysicalEquality actual box @>
@@ -321,10 +321,10 @@ let ``attachHorizontally returns the same box when only one box is given`` () =
 [<InlineData(false, 1.0<w>)>]
 let ``attachAbove attaches boxes vertically and produces expected box`` useUpperConnectX expectedConnectX =
     let lower =
-        createLeaf { X = 2.0<l>; Y = 1.0<l>; Z = 1.0<l> } 1.0<l> (PersonId 1) vecZeroL
+        createLeaf { X = 2.0<l>; Y = 1.0<l>; Z = 1.0<l> } 1.0<l> (MemberNode(PersonId 1)) vecZeroL
 
     let upper =
-        createLeaf { X = 3.0<u>; Y = 2.0<u>; Z = 1.0<u> } 1.5<u> (PersonId 2) vecZeroU
+        createLeaf { X = 3.0<u>; Y = 2.0<u>; Z = 1.0<u> } 1.5<u> (MemberNode(PersonId 2)) vecZeroU
 
     let options = { UseUpperConnectX = useUpperConnectX; UpperOffset = 1.0<l> }
 
@@ -355,7 +355,7 @@ let ``attachAbove with lower Composite and upper height zero or non-zero affects
     =
     let lower =
         let size = { X = 2.0<l>; Y = 1.0<l>; Z = 1.0<l> }
-        let lowerLeaf = createLeaf size 1.0<l> (PersonId 1) vecZeroL
+        let lowerLeaf = createLeaf size 1.0<l> (MemberNode(PersonId 1)) vecZeroL
 
         createComposite size 1.0<l> {
             TopLeftWidth = 0.0<l>
@@ -364,7 +364,7 @@ let ``attachAbove with lower Composite and upper height zero or non-zero affects
         }
 
     let upper =
-        createLeaf { X = 3.0<u>; Y = upperHeight; Z = 1.0<u> } 1.5<u> (PersonId 2) {
+        createLeaf { X = 3.0<u>; Y = upperHeight; Z = 1.0<u> } 1.5<u> (MemberNode(PersonId 2)) {
             X = 0.0<u>
             Y = 0.0<u>
             Z = 0.0<u>
@@ -443,7 +443,7 @@ let private leafGen: Gen<LayoutBox<w>> =
         let! connectX = coordinateGen
         let! personId = Gen.choose (0, 1000)
         let! offset = layoutVectorGen
-        return createLeaf size connectX (PersonId personId) offset
+        return createLeaf size connectX (MemberNode(PersonId personId)) offset
     }
 
 [<Property>]

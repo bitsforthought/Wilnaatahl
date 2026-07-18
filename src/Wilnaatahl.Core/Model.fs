@@ -27,6 +27,21 @@ type CoupleId =
         let (CoupleId coupleId) = this
         coupleId
 
+/// Identity of a rendered family-tree node. A member of the rendered Wilp has
+/// exactly one node (`MemberNode`), keyed by their PersonId. An outside spouse
+/// gets a distinct node for each marriage they appear in (`PartnerNode`), keyed
+/// by their PersonId together with the CoupleId of that marriage, so a spouse
+/// married to several Wilp members renders as several separate nodes.
+type NodeKey =
+    | MemberNode of PersonId
+    | PartnerNode of PersonId * CoupleId
+
+    /// The PersonId of the node, regardless of which case it is.
+    member this.PersonId =
+        match this with
+        | MemberNode personId -> personId
+        | PartnerNode(personId, _) -> personId
+
 /// Represents a Wilp's name; strongly typed to distinguish a Wilp name from other strings.
 #if FABLE_COMPILER
 [<Erase>]
@@ -304,6 +319,8 @@ module FamilyGraph =
     /// Catamorphism for WilpTree forests, one per WilpName. Returns a sequence of 'R, one
     /// for each root in the forest. The visitLeaf, visitParent, visitPartner and visitFamily
     /// callbacks combine each visited node (or its constituent parts) into a result.
+    /// visitPartner is passed both the partner's PersonId and the Couple that links the
+    /// partner to the Wilp parent, so a partner can be identified per marriage.
     ///
     /// Sorting is delegated entirely to the caller through two predicates:
     ///   - compareTrees orders children within a single Couple's descendant group.
@@ -313,7 +330,7 @@ module FamilyGraph =
         wilpName
         (visitLeaf: PersonId -> 'R)
         (visitParent: PersonId -> 'P)
-        (visitPartner: PersonId -> 'C)
+        (visitPartner: PersonId -> Couple -> 'C)
         (visitFamily: 'P -> ('C * 'R seq)[] -> 'R)
         (compareTrees: WilpTree -> WilpTree -> int)
         (compareGroups: (Couple * WilpTree list) -> (Couple * WilpTree list) -> int)
@@ -330,8 +347,8 @@ module FamilyGraph =
                 let sortGroupDescendants _ ((couple: Couple), (trees: WilpTree seq)) =
                     couple, trees |> Seq.sortWith compareTrees |> List.ofSeq
 
-                let visitGroup (partnerId, (_, sortedTrees: WilpTree list)) =
-                    visitPartner partnerId, sortedTrees |> List.map visit |> Seq.ofList
+                let visitGroup (partnerId, (couple, sortedTrees: WilpTree list)) =
+                    visitPartner partnerId couple, sortedTrees |> List.map visit |> Seq.ofList
 
                 let sortedGroups =
                     family.PartnersAndDescendants
@@ -362,12 +379,14 @@ module Initial =
     // exercises the full color palette. Wilp A is Giskaast (red) so the bulk of the visible nodes
     // remain red, matching the prior visual impression of the test data.
     //
-    // Two Couples in the seed exercise the childless-marriages path:
+    // Two Couples in the seed were introduced to exercise the childless-marriages path:
     //   - Susan + Frank: Susan is a Wilp leaf with no recorded children, so this Couple
     //     turns her from a Leaf into a Family with empty descendants.
     //   - Margaret + Roy: an extra childless Couple under Margaret (who already has three
     //     procreative Couples) exercises the layout sort that interleaves childless and
     //     procreative Couples by effective date of union.
+    // Victor's two Couples below (to Lucy and Rachel) are also childless; they exercise a
+    // separate scenario — one from-outside spouse married to two different Wilp A members.
     let private wilpA = Wilp { Name = WilpName "A"; Pdeek = Giskaast }
     let private wilpB = Wilp { Name = WilpName "B"; Pdeek = Ganeda }
     let private wilpC = Wilp { Name = WilpName "C"; Pdeek = LaxSkiik }
@@ -461,6 +480,12 @@ module Initial =
     let private frank = person 32 "Frank Hollister" Cube NoneProvided // Susan's husband (childless)
     let private roy = person 33 "Roy Pemberton" Cube NoneProvided // Margaret's fourth partner (childless)
 
+    // A from-outside husband (Wilp B) married to two different Wilp A members — Lucy and
+    // Rachel, who sit in separate branches of Mary's matriline. This exercises the case
+    // where one outside spouse renders as a distinct node per marriage; without that, his
+    // two spouse-bars would cross at a single shared node.
+    let private victor = person 34 "Victor Ashby" Cube wilpB
+
     // Couples for the seed. CoupleIds are assigned sequentially so the seed remains
     // hand-readable; their numeric values do not carry meaning beyond uniqueness.
     let couples = [
@@ -477,6 +502,10 @@ module Initial =
         // Childless Couples introduced for the childless-marriages feature.
         Couple.create (CoupleId 10) susan.Id frank.Id (Some(DateOnly(1955, 6, 15)))
         Couple.create (CoupleId 11) margaret.Id roy.Id (Some(DateOnly(1965, 3, 1)))
+        // Victor is a from-outside spouse married to two Wilp A members in different
+        // branches, so he renders as a separate node per marriage (both childless).
+        Couple.create (CoupleId 12) lucy.Id victor.Id None
+        Couple.create (CoupleId 13) rachel.Id victor.Id None
     ]
 
     // Lookup table from a canonical (lower, higher) pair of PersonId.AsInt to CoupleId,
@@ -555,4 +584,7 @@ module Initial =
         // Childless-Couple husbands.
         frank, None
         roy, None
+
+        // From-outside spouse married to two Wilp A members (Lucy and Rachel).
+        victor, None
     ]

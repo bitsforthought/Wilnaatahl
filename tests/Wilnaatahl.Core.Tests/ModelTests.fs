@@ -108,6 +108,42 @@ let ``Initial peopleAndParents assigns each Wilp to a distinct Pdeek`` () =
     representedPdeek =! Set.ofList [ Giskaast; Ganeda; LaxSkiik; LaxGibuu ]
 
 [<Fact>]
+let ``Initial sample data includes an outside spouse married to multiple members of one Wilp`` () =
+    // The renderer draws each marriage of a from-outside spouse as its own node. The
+    // sample data must exercise that: some person whose Kinship is not Wilp W must be
+    // partnered to at least two distinct members of Wilp W. Without such a case the
+    // crossed-connector scenario the renderer guards against would go undemonstrated.
+    let personById =
+        Initial.peopleAndParents |> List.map (fun (p, _) -> p.Id, p) |> Map.ofList
+
+    let wilpNameOf personId =
+        match (personById |> Map.find personId).Kinship with
+        | Wilp w -> Some w.Name
+        | UnknownWilp _
+        | NoneProvided -> None
+
+    let partnerWilpsByPerson =
+        Initial.couples
+        |> List.collect (fun couple ->
+            let m1, m2 = couple.Members
+            [ m1, m2; m2, m1 ])
+        |> List.groupBy fst
+        |> List.map (fun (personId, pairs) ->
+            // Distinct partner people first, so multiple marriages to the same member
+            // count as one member rather than masquerading as "two distinct members".
+            let distinctPartnerWilps =
+                pairs |> List.map snd |> List.distinct |> List.choose wilpNameOf
+
+            personId, distinctPartnerWilps)
+
+    let isOutsideMultiMarriage (personId, partnerWilps) =
+        partnerWilps
+        |> List.countBy id
+        |> List.exists (fun (wilp, count) -> count >= 2 && wilpNameOf personId <> Some wilp)
+
+    test <@ partnerWilpsByPerson |> List.exists isOutsideMultiMarriage @>
+
+[<Fact>]
 let ``createFamilyGraph excludes UnknownWilp people from huwilp`` () =
     // A person whose specific Wilp is unknown contributes no WilpName to the
     // huwilp set, even if their Pdeek matches that of another person with a
@@ -129,7 +165,15 @@ let ``UnknownWilp person with no Couple does not appear in any forest`` () =
     let visited =
         huwilp graph
         |> Seq.collect (fun wilpName ->
-            visitWilpForest wilpName id id id (fun parent _ -> parent) (fun _ _ -> 0) (fun _ _ -> 0) graph)
+            visitWilpForest
+                wilpName
+                id
+                id
+                (fun partnerId _ -> partnerId)
+                (fun parent _ -> parent)
+                (fun _ _ -> 0)
+                (fun _ _ -> 0)
+                graph)
         |> Set.ofSeq
 
     visited =! Set.singleton wilpKMember.Id
@@ -192,7 +236,7 @@ let ``visitWilpForest computes correct tree statistics`` () =
         | _ -> 0 // The fixture has no childless Couples, so this branch is unreachable.
 
     let totalStats =
-        visitWilpForest wilp visitLeaf id id visitFamily compareTrees compareGroups graph
+        visitWilpForest wilp visitLeaf id (fun partnerId _ -> partnerId) visitFamily compareTrees compareGroups graph
         |> aggregateStats
 
     let expected = {
@@ -220,6 +264,45 @@ let ``visitWilpForest computes correct tree statistics`` () =
     totalStats =! expected
 
 [<Fact>]
+let ``visitWilpForest passes the marriage Couple to visitPartner`` () =
+    // A Wilp member married to a single outside partner. visitPartner must receive both
+    // the partner's PersonId and the Couple linking them, so a partner can be identified
+    // per marriage.
+    let wilpMember = {
+        Person.Empty with
+            Id = PersonId 400
+            Kinship = Wilp { Name = WilpName "V"; Pdeek = Giskaast }
+            Shape = Sphere
+    }
+
+    let outsider = { Person.Empty with Id = PersonId 401; Shape = Cube }
+    let marriage = Couple.create (CoupleId 400) wilpMember.Id outsider.Id None
+    let graph = createFamilyGraph [ wilpMember, None; outsider, None ] [ marriage ]
+
+    let visitPartner (partnerId: PersonId) (couple: Couple) = partnerId, couple.Id
+
+    let visitFamily _ (groups: ((PersonId * CoupleId) * (PersonId * CoupleId) list seq)[]) =
+        groups |> Array.map fst |> List.ofArray
+
+    let neverCompareTrees _ _ = 0
+    let neverCompareGroups _ _ = 0
+
+    let results =
+        visitWilpForest
+            (WilpName "V")
+            (fun _ -> [])
+            ignore
+            visitPartner
+            visitFamily
+            neverCompareTrees
+            neverCompareGroups
+            graph
+        |> Seq.collect id
+        |> Seq.toList
+
+    results =! [ (outsider.Id, marriage.Id) ]
+
+[<Fact>]
 let ``allPeople returns all people in the graph`` () =
     let graph = createFamilyGraph testPeopleAndParents testCouples
     let people = allPeople graph |> Seq.toList
@@ -236,7 +319,15 @@ let ``visitWilpForest returns empty sequence for missing Wilp`` () =
     let trivialCompareGroups (_: Couple * WilpTree list) (_: Couple * WilpTree list) = 0
 
     let results =
-        visitWilpForest missingWilp (fun _ -> 0) id id (fun _ _ -> 0) trivialCompareTrees trivialCompareGroups graph
+        visitWilpForest
+            missingWilp
+            (fun _ -> 0)
+            id
+            (fun partnerId _ -> partnerId)
+            (fun _ _ -> 0)
+            trivialCompareTrees
+            trivialCompareGroups
+            graph
         |> Seq.toList
 
     results =! []
@@ -348,7 +439,15 @@ let ``buildWilpTree exposes childless Couples as empty PartnersAndDescendants en
     let neverCompareGroups _ _ = 0
 
     let results =
-        visitWilpForest (WilpName "M") CapturedLeaf id id visitFamily neverCompareTrees neverCompareGroups graph
+        visitWilpForest
+            (WilpName "M")
+            CapturedLeaf
+            id
+            (fun partnerId _ -> partnerId)
+            visitFamily
+            neverCompareTrees
+            neverCompareGroups
+            graph
         |> Seq.toList
 
     results =! [ CapturedFamily(mWilp.Id, [ (pOutsider.Id, []) ]) ]

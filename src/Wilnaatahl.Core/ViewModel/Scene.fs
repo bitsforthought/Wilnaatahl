@@ -8,6 +8,7 @@ open Wilnaatahl.ViewModel.LayoutBox
 type IFamilyMemberInfo =
     abstract Person: Person
     abstract RenderedInWilp: WilpName
+    abstract NodeKey: NodeKey
 
 /// This is a handy data structure for creating the connectors between members of an
 /// immediate family.
@@ -99,7 +100,7 @@ module Scene =
             | n -> n
         | _ -> compare c1.Id.AsInt c2.Id.AsInt
 
-    let private leafBox<[<Measure>] 'u> (spacing: LayoutVector<'u>) height personId =
+    let private leafBox<[<Measure>] 'u> (spacing: LayoutVector<'u>) height nodeKey =
         let leafWidth = spacing.X
         let connectX = leafWidth / 2.0
 
@@ -107,7 +108,7 @@ module Scene =
         // it makes the layout math easier. With any height, the Person shape centerpoint lies on the top edge.
         let offset = { X = connectX; Y = height; Z = 0.0<_> }
         let outerBoxSize = { X = leafWidth; Y = height; Z = 0.0<_> }
-        createLeaf outerBoxSize connectX personId offset
+        createLeaf outerBoxSize connectX nodeKey offset
 
     let private attachParentsToDescendants
         (spacing: LayoutVector<w>)
@@ -166,11 +167,27 @@ module Scene =
         parentLeafBox
         |> attachAbove descendantsBox { UseUpperConnectX = true; UpperOffset = parentLeftEdge }
 
-    /// Produces a map from WilpName to the people that will render along with that Wilp.
-    /// Since people can play roles in different huwilp, the same Person may appear under
-    /// different WilpName keys in the result. Each Wilp's people set covers every PersonId
-    /// that surfaces in that Wilp's forest — the Wilp members themselves plus the
-    /// from-outside partners that show up in any Family node.
+    /// Derives the NodeKey for a partner appearing in the rendered Wilp's tree, keyed on the
+    /// partner's Kinship relative to that Wilp. A partner who is themselves a member of the
+    /// rendered Wilp (an endogamous marriage) surfaces as their single MemberNode; a partner
+    /// from outside the rendered Wilp surfaces as a PartnerNode carrying that marriage's
+    /// CoupleId.
+    let private partnerNodeKey renderedWilpName familyGraph partnerId (couple: Couple) =
+        match (familyGraph |> findPerson partnerId).Kinship with
+        | Wilp w when w.Name = renderedWilpName -> MemberNode partnerId
+        | Wilp _
+        | UnknownWilp _
+        | NoneProvided -> PartnerNode(partnerId, couple.Id)
+
+    /// Produces a map from WilpName to the rendered nodes that will appear along with that
+    /// Wilp. Each entry pairs a NodeKey with the Person it renders. Classification is by
+    /// Kinship relative to the rendered Wilp: a member of the rendered Wilp surfaces as a
+    /// single MemberNode — even when they also appear as a partner in an endogamous marriage
+    /// to another member of the same Wilp — while a partner from outside the rendered Wilp
+    /// surfaces as one PartnerNode per marriage, so an outside spouse married to several Wilp
+    /// members yields several entries (all carrying the same Person). Since people can play
+    /// roles in different huwilp, the same Person may appear under different WilpName keys in
+    /// the result.
     let enumerateHuwilpToRender familyGraph =
         // TODO: Extend to support multilple huwilp.
         // Until then, pick the Wilp with the most members (counted by Person.Kinship's
@@ -206,25 +223,25 @@ module Scene =
         let rec collect tree =
             seq {
                 match tree with
-                | Leaf personId -> yield personId
+                | Leaf personId -> yield MemberNode personId
                 | Family family ->
-                    yield family.WilpParent
+                    yield MemberNode family.WilpParent
 
-                    for KeyValue(partnerId, (_, descendants)) in family.PartnersAndDescendants do
-                        yield partnerId
+                    for KeyValue(partnerId, (couple, descendants)) in family.PartnersAndDescendants do
+                        yield partnerNodeKey wilpName familyGraph partnerId couple
 
                         for descendant in descendants do
                             yield! collect descendant
             }
 
-        let people =
+        let nodes =
             familyGraph
             |> huwilpForest wilpName
             |> Seq.collect collect
             |> Seq.distinct
-            |> Seq.map (fun pid -> familyGraph |> findPerson pid)
+            |> Seq.map (fun nodeKey -> nodeKey, familyGraph |> findPerson nodeKey.PersonId)
 
-        [ (wilpName, people) ] |> Map.ofList
+        [ (wilpName, nodes) ] |> Map.ofList
 
     /// Produces a LayoutBox and initial position for the given Wilp. The LayoutBox, along with its nested boxes,
     /// specifies relative offsets that determine the position of every node in the Wilp family tree. The caller
@@ -233,9 +250,15 @@ module Scene =
         let spacing = { X = defaultXSpacing; Y = defaultYSpacing; Z = defaultZSpacing }
         let upperSpacing = spacing |> LayoutVector.reframe Reframe.w2u
 
-        let visitLeaf = leafBox spacing 0.0<w>
-        let visitParent = leafBox upperSpacing 0.0<u>
-        let visitPartner = leafBox upperSpacing upperSpacing.Y
+        let visitLeaf personId =
+            leafBox spacing 0.0<w> (MemberNode personId)
+
+        let visitParent personId =
+            leafBox upperSpacing 0.0<u> (MemberNode personId)
+
+        let visitPartner partnerId (couple: Couple) =
+            leafBox upperSpacing upperSpacing.Y (partnerNodeKey wilp familyGraph partnerId couple)
+
         let visitFamilies = attachParentsToDescendants spacing
 
         let compareTrees (t1: WilpTree) (t2: WilpTree) =
@@ -264,14 +287,20 @@ module Scene =
     let extractFamilies<'T when 'T :> IFamilyMemberInfo> familyGraph (nodes: 'T seq) =
         // TODO: Make this a recursive depth-first traversal so that leaf-most families are returned before root-most.
         // It needs to produce one tree traversal per Wilp and return the Wilp info with each Family.
-        let nodesByPersonInWilp =
-            nodes
-            |> Seq.map (fun f -> (f.Person.Id.AsInt, f.RenderedInWilp), f)
-            |> Map.ofSeq
+        let nodesByKeyInWilp =
+            nodes |> Seq.map (fun f -> (f.NodeKey, f.RenderedInWilp), f) |> Map.ofSeq
 
-        // Each Person appears at most once in a rendered Wilp, so this mapping is guaranteed to be unique.
-        let personIdToNode wilp (personId: PersonId) =
-            nodesByPersonInWilp |> Map.tryFind (personId.AsInt, wilp)
+        // A Couple member resolves to that member's dedicated partner node for this
+        // marriage if one exists (a from-outside spouse), falling back to the member's
+        // single MemberNode otherwise (a Wilp member). Children always resolve to their
+        // MemberNode, since matrilineal descendants are never a partner-from-outside.
+        let memberNode wilp (personId: PersonId) =
+            nodesByKeyInWilp |> Map.tryFind (MemberNode personId, wilp)
+
+        let coupleMemberNode wilp (personId: PersonId) (coupleId: CoupleId) =
+            match nodesByKeyInWilp |> Map.tryFind (PartnerNode(personId, coupleId), wilp) with
+            | Some partnerNode -> Some partnerNode
+            | None -> memberNode wilp personId
 
         let huwilpToRender = nodes |> Seq.map _.RenderedInWilp |> Seq.distinct
 
@@ -281,11 +310,9 @@ module Scene =
                 let childrenOfCouple = findChildrenOfCouple couple familyGraph
 
                 for wilp in huwilpToRender do
-                    let getNode = personIdToNode wilp
-
-                    match getNode m1, getNode m2 with
+                    match coupleMemberNode wilp m1 couple.Id, coupleMemberNode wilp m2 couple.Id with
                     | Some parent1, Some parent2 ->
-                        let renderedChildren = childrenOfCouple |> List.choose getNode
+                        let renderedChildren = childrenOfCouple |> List.choose (memberNode wilp)
                         yield { Parents = parent1, parent2; Children = renderedChildren }
                     | _ -> () // Need both parents to be in this Wilp's render set.
         }

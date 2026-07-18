@@ -69,11 +69,11 @@ let ``extractFamilies yields RenderedFamily with empty Children for a childless 
     let graph = createFamilyGraph people couples
 
     let nodes = [
-        TestFamilyMember(childlessHead.Id.AsInt, childlessHead, wilpName)
-        TestFamilyMember(childlessPartner.Id.AsInt, childlessPartner, wilpName)
-        TestFamilyMember(procreativeHead.Id.AsInt, procreativeHead, wilpName)
-        TestFamilyMember(procreativeSpouse.Id.AsInt, procreativeSpouse, wilpName)
-        TestFamilyMember(onlyChild.Id.AsInt, onlyChild, wilpName)
+        TestFamilyMember(childlessHead, wilpName, MemberNode childlessHead.Id)
+        TestFamilyMember(childlessPartner, wilpName, MemberNode childlessPartner.Id)
+        TestFamilyMember(procreativeHead, wilpName, MemberNode procreativeHead.Id)
+        TestFamilyMember(procreativeSpouse, wilpName, MemberNode procreativeSpouse.Id)
+        TestFamilyMember(onlyChild, wilpName, MemberNode onlyChild.Id)
     ]
 
     let families = Scene.extractFamilies graph nodes |> Seq.toList |> List.map mapFamily
@@ -475,7 +475,9 @@ let ``enumerateHuwilpToRender for the chosen Wilp excludes people from other huw
 
     let result = Scene.enumerateHuwilpToRender graph
 
-    let aPeople = result |> Map.find (WilpName "A") |> Seq.map _.Id |> Set.ofSeq
+    let aPeople =
+        result |> Map.find (WilpName "A") |> Seq.map (snd >> _.Id) |> Set.ofSeq
+
     aPeople =! Set.singleton (PersonId 0)
 
 [<Fact>]
@@ -497,7 +499,9 @@ let ``enumerateHuwilpToRender includes outside-Wilp partners that appear in the 
 
     let result = Scene.enumerateHuwilpToRender graph
 
-    let aPeople = result |> Map.find (WilpName "A") |> Seq.map _.Id |> Set.ofSeq
+    let aPeople =
+        result |> Map.find (WilpName "A") |> Seq.map (snd >> _.Id) |> Set.ofSeq
+
     aPeople =! Set.ofList [ PersonId 0; PersonId 1 ]
 
 [<Fact>]
@@ -570,3 +574,135 @@ let ``enumerateHuwilpToRender counts members by Person.Kinship, not partners-fro
     let result = Scene.enumerateHuwilpToRender graph
     result |> Map.containsKey (WilpName "A") =! true
     result |> Map.containsKey (WilpName "B") =! false
+
+[<Fact>]
+let ``enumerateHuwilpToRender emits a separate PartnerNode per marriage of an outside spouse`` () =
+    // The shared outside spouse is married to two "MM" members. Each marriage must
+    // surface as its own PartnerNode (keyed by that marriage's CoupleId) so the two
+    // marriages render as distinct nodes; the members surface once each as MemberNodes.
+    let graph = createFamilyGraph multiMarriagePeople multiMarriageCouples
+
+    let nodes =
+        Scene.enumerateHuwilpToRender graph |> Map.find (WilpName "MM") |> Seq.toList
+
+    let spouseNodeKeys =
+        nodes
+        |> List.filter (fun (_, person) -> person.Id = multiMarriageSpouse.Id)
+        |> List.map fst
+
+    Set.ofList spouseNodeKeys
+    =! Set.ofList [
+        PartnerNode(multiMarriageSpouse.Id, multiMarriageCouple1.Id)
+        PartnerNode(multiMarriageSpouse.Id, multiMarriageCouple2.Id)
+    ]
+
+    let memberNodeKeys =
+        nodes
+        |> List.map fst
+        |> List.filter (function
+            | MemberNode _ -> true
+            | PartnerNode _ -> false)
+
+    Set.ofList memberNodeKeys
+    =! Set.ofList [ MemberNode multiMarriageMember1.Id; MemberNode multiMarriageMember2.Id ]
+
+[<Fact>]
+let ``extractFamilies resolves each marriage to its own partner node`` () =
+    // The outside spouse has a dedicated PartnerNode per marriage. extractFamilies must
+    // attach each Couple's spouse-bar to that marriage's partner node (not a shared one),
+    // while the member parent reuses its single MemberNode.
+    let graph = createFamilyGraph multiMarriagePeople multiMarriageCouples
+    let wilpName = WilpName "MM"
+
+    let member1Key = MemberNode multiMarriageMember1.Id
+    let member2Key = MemberNode multiMarriageMember2.Id
+    let spouseKey1 = PartnerNode(multiMarriageSpouse.Id, multiMarriageCouple1.Id)
+    let spouseKey2 = PartnerNode(multiMarriageSpouse.Id, multiMarriageCouple2.Id)
+
+    let nodes = [
+        TestFamilyMember(multiMarriageMember1, wilpName, member1Key)
+        TestFamilyMember(multiMarriageMember2, wilpName, member2Key)
+        TestFamilyMember(multiMarriageSpouse, wilpName, spouseKey1)
+        TestFamilyMember(multiMarriageSpouse, wilpName, spouseKey2)
+    ]
+
+    let familyKeys =
+        Scene.extractFamilies graph nodes
+        |> Seq.map (fun family ->
+            let parent1, parent2 = family.Parents
+
+            Set.ofList [
+                (parent1 :> IFamilyMemberInfo).NodeKey
+                (parent2 :> IFamilyMemberInfo).NodeKey
+            ])
+        |> Set.ofSeq
+
+    // One family per marriage; each pairs the member's MemberNode with that marriage's PartnerNode.
+    familyKeys
+    =! Set.ofList [ Set.ofList [ member1Key; spouseKey1 ]; Set.ofList [ member2Key; spouseKey2 ] ]
+
+[<Fact>]
+let ``enumerateHuwilpToRender emits one MemberNode per member for an endogamous couple`` () =
+    // Two members of the same rendered Wilp married to each other. Because neither
+    // partner is from outside the Wilp, each must surface exactly once as a MemberNode
+    // with no PartnerNode — otherwise each member would render as two nodes.
+    let graph = createFamilyGraph endogamyPeople endogamyCouples
+
+    let nodes =
+        Scene.enumerateHuwilpToRender graph |> Map.find (WilpName "EN") |> Seq.toList
+
+    let nodeKeys = nodes |> List.map fst
+
+    // Exactly two node entities, one MemberNode per member and no PartnerNode.
+    nodeKeys.Length =! 2
+
+    Set.ofList nodeKeys
+    =! Set.ofList [ MemberNode endogamyMember1.Id; MemberNode endogamyMember2.Id ]
+
+[<Fact>]
+let ``extractFamilies resolves an endogamous couple's parents to two MemberNodes`` () =
+    // Feed extractFamilies the production node set (from enumerateHuwilpToRender) so
+    // the realistic key shape is exercised: an endogamous couple must resolve both
+    // parents to their MemberNodes, yielding a single family joining the two members.
+    let graph = createFamilyGraph endogamyPeople endogamyCouples
+    let wilpName = WilpName "EN"
+
+    let nodes =
+        Scene.enumerateHuwilpToRender graph
+        |> Map.find wilpName
+        |> Seq.map (fun (nodeKey, person) -> TestFamilyMember(person, wilpName, nodeKey))
+
+    let familyKeys =
+        Scene.extractFamilies graph nodes
+        |> Seq.map (fun family ->
+            let parent1, parent2 = family.Parents
+
+            Set.ofList [
+                (parent1 :> IFamilyMemberInfo).NodeKey
+                (parent2 :> IFamilyMemberInfo).NodeKey
+            ])
+        |> Seq.toList
+
+    familyKeys
+    =! [ Set.ofList [ MemberNode endogamyMember1.Id; MemberNode endogamyMember2.Id ] ]
+
+[<Fact>]
+let ``layoutGraph emits only MemberNode leaves for an endogamous couple`` () =
+    // layoutGraph must classify the endogamous partner by Kinship exactly as
+    // enumerateHuwilpToRender does: both members are inside the rendered Wilp, so every
+    // emitted leaf is a MemberNode and no PartnerNode appears. If the partner were
+    // misclassified as a PartnerNode here, its key would diverge from the MemberNode
+    // entity that spawns, and this set would contain that stray PartnerNode.
+    let graph = createFamilyGraph endogamyPeople endogamyCouples
+    let _, rootBox = Scene.layoutGraph (WilpName "EN") graph
+
+    let emittedKeys =
+        rootBox
+        |> LayoutBox.visit
+            (fun _ (nodeKey: NodeKey) _ -> Seq.singleton nodeKey)
+            (fun _ results -> Seq.concat results)
+            LayoutVector<w>.Zero
+        |> List.ofSeq
+
+    Set.ofList emittedKeys
+    =! Set.ofList [ MemberNode endogamyMember1.Id; MemberNode endogamyMember2.Id ]

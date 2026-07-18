@@ -13,7 +13,7 @@ open Wilnaatahl.Persistence.ImportService
 
 [<Fact>]
 let ``loadSampleGraph returns graph with expected people count`` () =
-    loadSampleGraph () |> allPeople |> Seq.length =! 34
+    loadSampleGraph () |> allPeople |> Seq.length =! 35
 
 [<Fact>]
 let ``loadSampleGraph returns graph with expected huwilp`` () =

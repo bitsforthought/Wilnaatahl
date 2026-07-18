@@ -10,13 +10,13 @@ open Wilnaatahl.Traits.SpaceTraits
 
 let layoutNodes (world: IWorld) familyGraph =
     let setPositions (initialPosition, rootBox) =
-        let visitLeaf pos personId offset =
-            (personId, pos + offset) |> Seq.singleton
+        let visitLeaf pos nodeKey offset =
+            (nodeKey, pos + offset) |> Seq.singleton
 
         let visitComposite pos results =
             results
             |> Seq.concat
-            |> Seq.map (fun (personId, offset) -> personId, pos + offset)
+            |> Seq.map (fun (nodeKey, offset) -> nodeKey, pos + offset)
 
         rootBox |> LayoutBox.visit visitLeaf visitComposite initialPosition
 
@@ -25,9 +25,9 @@ let layoutNodes (world: IWorld) familyGraph =
         let wilp = WilpName wilpData.wilpName
         let layoutMap = Scene.layoutGraph wilp familyGraph |> setPositions |> Map.ofSeq
 
-        world.QueryTrait(PersonRef, Related(RenderedIn, wilpId)).ForEach
-        <| fun (person: Person, treeNodeId) ->
-            let pos = layoutMap |> Map.find person.Id
+        world.QueryTrait(NodeKeyRef, Related(RenderedIn, wilpId)).ForEach
+        <| fun (nodeKey: NodeKey, treeNodeId) ->
+            let pos = layoutMap |> Map.find nodeKey
 
             treeNodeId
             |> addWith TargetPosition {| x = float pos.X; y = float pos.Y; z = float pos.Z |}

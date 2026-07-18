@@ -244,7 +244,14 @@
       "gender": "M"
     },
     { "id": 32, "name": "Frank Hollister", "birthOrder": 0, "gender": "M" },
-    { "id": 33, "name": "Roy Pemberton", "birthOrder": 0, "gender": "M" }
+    { "id": 33, "name": "Roy Pemberton", "birthOrder": 0, "gender": "M" },
+    {
+      "id": 34,
+      "name": "Victor Ashby",
+      "wilp": 1,
+      "birthOrder": 0,
+      "gender": "M"
+    }
   ],
   "couples": [
     { "coupleId": 0, "member1": 0, "member2": 1 },
@@ -263,7 +270,9 @@
       "member2": 32,
       "dateOfUnion": "1955-06-15"
     },
-    { "coupleId": 11, "member1": 6, "member2": 33, "dateOfUnion": "1965-03-01" }
+    { "coupleId": 11, "member1": 6, "member2": 33, "dateOfUnion": "1965-03-01" },
+    { "coupleId": 12, "member1": 25, "member2": 34 },
+    { "coupleId": 13, "member1": 27, "member2": 34 }
   ],
   "huwilp": [
     { "id": 0, "name": "A", "pdeek": "Giskaast" },

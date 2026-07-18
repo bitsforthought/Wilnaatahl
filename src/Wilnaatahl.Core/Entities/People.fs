@@ -19,8 +19,10 @@ let spawnWilpBox (wilp: WilpName) (world: IWorld) =
     // TODO: Add Follows => Layout entity to track increasing z co-ordinate during layout.
     boundingBoxId
 
-/// Spawns a tree node entity representing the given person in the specified wilp.
-let spawnTreeNode person wilp (world: IWorld) =
+/// Spawns a tree node entity representing the given person in the specified wilp. The nodeKey
+/// records the node's identity, so a from-outside spouse married to several Wilp members spawns
+/// a distinct node per marriage.
+let spawnTreeNode person nodeKey wilp (world: IWorld) =
     let nodeSize =
         let s = defaultSphereRadius
         let c = defaultCubeSize
@@ -29,5 +31,11 @@ let spawnTreeNode person wilp (world: IWorld) =
         | Sphere -> {| x = s; y = s; z = s |}
         | Cube -> {| x = c; y = c; z = c |}
 
-    world.Spawn(PersonRef.Val person, Position.Val zeroPosition, Size.Val nodeSize, RenderedIn.ToTarget wilp)
+    world.Spawn(
+        PersonRef.Val person,
+        NodeKeyRef.Val nodeKey,
+        Position.Val zeroPosition,
+        Size.Val nodeSize,
+        RenderedIn.ToTarget wilp
+    )
     |> ignore
