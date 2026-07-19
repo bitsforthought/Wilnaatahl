@@ -9,29 +9,29 @@ open Wilnaatahl.ViewModel
 open Wilnaatahl.ViewModel.SceneConstants
 open Wilnaatahl.ViewModel.Vector
 open Wilnaatahl.Traits.ConnectorTraits
+open Wilnaatahl.Traits.ViewTraits
 open Wilnaatahl.Traits.PeopleTraits
 open Wilnaatahl.Traits.SpaceTraits
 
 /// Holds trait data for a node representing a person in the family tree.
-type private FamilyMember(entity, position, person, wilp, nodeKey) =
+type private FamilyMember(entity, position, wilp, nodeKey) =
     // NOTE: Because this tracks an EntityId, it must be ephemeral and not persist between frames.
     // This type is only meant to be used while initializing connectors.
     member _.Entity: EntityId = entity
     member _.Position: {| x: float; y: float; z: float |} = position
 
     interface IFamilyMemberInfo with
-        member _.Person = person
         member _.RenderedInWilp = wilp
         member _.NodeKey = nodeKey
 
 let private queryFamilies familyGraph (world: IWorld) =
-    let createFamilyNode ((person, position, nodeKey), entity) =
+    let createFamilyNode ((_, position, nodeKey), entity) =
         let maybeWilpId = entity |> targetFor RenderedIn
 
         match maybeWilpId with
         | Some wilpId ->
             match wilpId |> get RenderedWilp with
-            | Some wilp -> FamilyMember(entity, position, person, WilpName wilp.wilpName, nodeKey)
+            | Some wilp -> FamilyMember(entity, position, WilpName wilp.wilpName, nodeKey)
             | None -> failwith $"Found Wilp {wilpId} without a name."
         | None -> failwith $"Found tree node {entity} with no Wilp."
 

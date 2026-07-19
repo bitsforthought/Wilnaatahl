@@ -7,15 +7,18 @@ namespace Wilnaatahl.Persistence
 /// disk. Semantic interpretation lives in Transform.
 module internal JsonContracts =
 
-    /// One person in the JSON persistence format. Fields the format carries but
-    /// the domain model has no representation for (`dateOfBirth`, `dateOfDeath`,
-    /// `birthWilp`, `deceased`) are not captured here.
+    /// One person in the JSON persistence format. `deceased` is the only source
+    /// field the domain model has no representation for and is not captured here.
     type RawPerson = {
         Id: int
-        Name: string
+        Name: string option
         Parents: int option
         Wilp: int option
+        BirthWilp: int option
+        KinshipNote: string option
         BirthOrder: int option
+        RawDateOfBirth: string option
+        RawDateOfDeath: string option
         NormalizedDateOfBirth: string option
         NormalizedDateOfDeath: string option
         Gender: string
@@ -34,10 +37,28 @@ module internal JsonContracts =
     /// format. Both `Name` and `Pdeek` are optional.
     type RawWilp = { Id: int; Name: string option; Pdeek: string option }
 
-    /// The full contents of a JSON persistence file: the three top-level
-    /// arrays.
+    /// One entry of the top-level `names` array: a Gitxsan Name with a
+    /// file-local id. The id only links `namesHeld` rows to this entry on disk;
+    /// a Name's identity is its text.
+    type RawName = { Id: int; Text: string }
+
+    /// One entry of the top-level `namesHeld` array: a person (`PersonId`) holds
+    /// a Name (`NameId`), with the optional recency keys `NameDate` and
+    /// `NameOrder`.
+    type RawNameHeld = {
+        NameId: int
+        PersonId: int
+        NameDate: string option
+        NameOrder: int option
+    }
+
+    /// The full contents of a JSON persistence file: the five top-level arrays.
+    /// `Couples`, `Huwilp`, `Names`, and `NamesHeld` default to empty when their
+    /// top-level key is absent.
     type RawFile = {
         People: RawPerson list
         Couples: RawCouple list
         Huwilp: RawWilp list
+        Names: RawName list
+        NamesHeld: RawNameHeld list
     }

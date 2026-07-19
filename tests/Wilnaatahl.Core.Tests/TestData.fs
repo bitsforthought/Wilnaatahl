@@ -3,19 +3,23 @@ module Wilnaatahl.Tests.TestData
 open System
 open Wilnaatahl.Model
 open Wilnaatahl.ViewModel
+open Wilnaatahl.Persistence.JsonContracts
 
 type TestFamilyMember(person: Person, wilp, nodeKey) =
     member _.Id: int = person.Id.AsInt
 
     interface IFamilyMemberInfo with
-        member _.Person = person
         member _.RenderedInWilp = wilp
         member _.NodeKey = nodeKey
+
+/// A parsed `DateOnly option` date, e.g. `on 1990 1 1` — reads better than
+/// `Some(DateOnly(…))` at holding/date assertion sites. Shared across test files.
+let on year month day = Some(DateOnly(year, month, day))
 
 let private person id name shape kinship = {
     Person.Empty with
         Id = PersonId id
-        Label = Some name
+        ColonialName = Some name
         Kinship = kinship
         Shape = shape
 }
@@ -29,7 +33,7 @@ let testWilpName = WilpName "H"
 // Test data is public because they are shared by other tests.
 // Include some birthdates to exercise sorting.
 let p0 = person 0 "Mother" Sphere testWilp
-let p1 = person 1 "Father" Cube NoneProvided
+let p1 = person 1 "Father" Cube (NoneProvided None)
 
 let p2 = {
     person 2 "Child1" Sphere testWilp with
@@ -63,8 +67,8 @@ let testPeopleAndParents = [
 
 // Now we define an extended test data set to cover all corner cases.
 let p5 = person 5 "Child4" Cube testWilp
-let p6 = person 6 "DaughterInLaw1" Sphere NoneProvided
-let p7 = person 7 "DaughterInLaw2" Sphere NoneProvided
+let p6 = person 6 "DaughterInLaw1" Sphere (NoneProvided None)
+let p7 = person 7 "DaughterInLaw2" Sphere (NoneProvided None)
 
 let p8 = {
     person 8 "GrandChild1" Sphere testWilp with
@@ -105,23 +109,22 @@ let extendedFamily =
 /// re-deriving people, a Wilp, or a Couple from scratch.
 let childlessWilp = Wilp { Name = WilpName "Q"; Pdeek = LaxSkiik }
 let childlessHead = person 100 "Quinn" Sphere childlessWilp
-let childlessPartner = person 101 "Robin" Cube NoneProvided
+let childlessPartner = person 101 "Robin" Cube (NoneProvided None)
 
 let childlessCouple =
     Couple.create (CoupleId 100) childlessHead.Id childlessPartner.Id None
 
-/// Four Persons with no Wilp and no other attributes, useful for tests that need
-/// some distinct anonymous Persons to construct Couples between (e.g. the
-/// comparator tests in SceneTests). Small AsInt values keep diagnostics readable.
+/// Four anonymous Persons (no Wilp, no other attributes) for tests that need
+/// distinct Persons to build Couples between. Small AsInt values keep diagnostics
+/// readable.
 let anon1 = { Person.Empty with Id = PersonId 200 }
 let anon2 = { Person.Empty with Id = PersonId 201 }
 let anon3 = { Person.Empty with Id = PersonId 202 }
 let anon4 = { Person.Empty with Id = PersonId 203 }
 
-// Two unrelated Persons (no Couples, no parents) drawn from the same Pdeek (Ganeda).
-// One has a fully-known Wilp ("K"); the other has only the Pdeek recorded. The
-// shared Pdeek lets tests exercise the boundary between the `Wilp` and
-// `UnknownWilp` Kinship cases without conflating other variables.
+// Two unrelated Persons in the same Pdeek (Ganeda): one with a fully-known Wilp
+// ("K"), one with only the Pdeek recorded — exercising the `Wilp`/`UnknownWilp`
+// boundary while the shared Pdeek holds other variables constant.
 
 /// Person whose Kinship is a fully-known Wilp ("K", Ganeda).
 let wilpKMember = {
@@ -134,9 +137,9 @@ let wilpKMember = {
 let ganedaPdeekOnlyPerson = { Person.Empty with Id = PersonId 211; Kinship = UnknownWilp Ganeda }
 
 // ---- Multi-marriage fixture: one outside spouse married to two distinct members
-// of the same rendered Wilp ("MM"). This is the scenario the seed data never
-// exercises — the spouse must render as a separate node per marriage so the two
-// spouse-bars attach to distinct nodes instead of crossing at one shared node.
+// of the same rendered Wilp ("MM"). The spouse must render as a separate node per
+// marriage, so the two spouse-bars attach to distinct nodes rather than crossing
+// at one shared node.
 
 /// A rendered Wilp ("MM") used only by the multi-marriage fixture.
 let multiMarriageWilp = Wilp { Name = WilpName "MM"; Pdeek = Giskaast }
@@ -208,3 +211,36 @@ let node3 = treeNode 3
 let node4 = treeNode 4
 
 let initialNodes = [ node0; node1; node2; node3; node4 ]
+
+// ---- Raw-persistence (JSON contract) fixtures. The two raw persons below carry
+// deliberately different defaults, one per side of the persistence boundary (see
+// each fixture's doc below). Used as the *expected* value of a decode or
+// writer-output assertion, the wrong base states a value that side never produces,
+// so the test fails loudly rather than silently mislead. (As raw *input* the two
+// are less distinguishable — e.g. an absent vs. zero BirthOrder both normalize to
+// 0 — so pick the base that names the intent.)
+
+/// A raw person with every optional field absent and the required bare-string
+/// `Gender` empty: the reader's output for a minimal JSON object, and the base for
+/// raw *inputs* whose optional fields are unset. Callers set `Gender` explicitly
+/// when they need a specific value.
+let internal emptyRawPerson: RawPerson = {
+    Id = 0
+    Name = None
+    Parents = None
+    Wilp = None
+    BirthWilp = None
+    KinshipNote = None
+    BirthOrder = None
+    RawDateOfBirth = None
+    RawDateOfDeath = None
+    NormalizedDateOfBirth = None
+    NormalizedDateOfDeath = None
+    Gender = ""
+}
+
+/// The raw person the *writer* emits for a default model `Person` (Sphere shape,
+/// birth order 0): an explicit `BirthOrder` of 0 and `Gender` "F" — values the
+/// writer always produces. Use as the base for writer / round-trip *output*
+/// assertions, where an absent `BirthOrder` or empty `Gender` can never occur.
+let internal defaultRawPerson: RawPerson = { emptyRawPerson with BirthOrder = Some 0; Gender = "F" }

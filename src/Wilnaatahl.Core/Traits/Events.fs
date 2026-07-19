@@ -5,6 +5,7 @@ open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Trait
 open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.ViewModel.Vector
+open Wilnaatahl.Traits.ViewTraits
 
 // The following traits are used to flag input events, some global, some on entities.
 // They are deleted at the end of every frame to avoid being processed multiple times.
@@ -15,7 +16,12 @@ let DragStartEvent = tagTrait ()
 let PointerDownEvent = tagTrait ()
 let PointerMissedEvent = tagTrait ()
 
-let handleClick entity = entity |> add ClickEvent
+/// Raises a click on the entity, unless it is `Hidden` — an unavailable control takes no input.
+/// The app hides a control a frame before the view layer stops rendering it, so a click can
+/// still land on one; discarding it here keeps that window from reaching any consumer.
+let handleClick entity =
+    if not (entity |> has Hidden) then
+        entity |> add ClickEvent
 
 let handleDrag (world: IWorld) x y z =
     world.AddWith DragEvent {| x = x; y = y; z = z |}

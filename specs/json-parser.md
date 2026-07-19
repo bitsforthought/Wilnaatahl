@@ -46,13 +46,19 @@ person field maps to the model. In particular the raw `dateOfBirth` /
 | Unresolvable CoupleId on person    | Person references a couple not in the file.      | Person becomes a root. `UnresolvedCoupleId` warning.      |
 | Unresolvable PersonId on couple    | Couple references a person not in the file.      | Couple dropped. `UnresolvedMember` warning.               |
 |                                    | Persons referencing that couple become roots.    |                                                           |
+| Self-married couple                | Couple's two members are the same person.        | Couple dropped. `SelfCoupledMember` warning.              |
+|                                    | Persons referencing that couple become roots.    |                                                           |
 | Unresolvable WilpId on person      | Person references a Wilp id not in `huwilp`,     | Person's `Kinship` becomes `NoneProvided`.                |
 |                                    | or one that was ignored due to missing fields.   | `UnresolvedWilpId` warning.                               |
 | Unresolvable birthWilp on person   | Person's `birthWilp` id isn't in `huwilp`.       | `BirthWilp` left `None`. `UnresolvedBirthWilpId` warning. |
-| Pdeeḵ-only birthWilp on person     | `birthWilp` resolves to a name-less entry.       | `BirthWilp` left `None`. `BirthWilpNotNamed` warning.     |
+| Pdeeḵ-only birthWilp on person     | `birthWilp` resolves to a name-less entry.       | `BirthWilp` left `None`. `BirthWilpNotNamed` warning.     |
 | `kinshipNote` with a resolved Wilp | Person has both a resolving `wilp` and a note.   | Note dropped. `IgnoredKinshipNote` warning.               |
 | Unresolvable nameId on holding     | `namesHeld` references a `names` id not present. | Holding dropped. `UnresolvedNameId` warning.              |
 | Unresolvable personId on holding   | `namesHeld` references a person not present.     | Holding dropped. `UnresolvedNameHolder` warning.          |
+| Unparseable name date              | A resolved `namesHeld` row's `nameDate` is       | Date dropped (treated as absent). Always                  |
+|                                    | present but not a readable date.                 | `UnparseableNameDate` warning.                            |
+| Unordered name holding             | `namesHeld` row has no `nameOrder` and no        | Holding kept, sorted alphabetically after all dated/      |
+|                                    | readable `nameDate`.                             | ordered names. `UnorderedNameHolding` warning.            |
 | Unheld name                        | A `names` entry referenced by no holding.        | Dropped (held-only storage). `UnheldName` warning.        |
 | Duplicate person `id`              | JSON id is the unique key; duplicates would      | Keep first occurrence. `DuplicatePersonId` warning.       |
 |                                    | give two `Person` records the same `PersonId`.   |                                                           |
@@ -132,7 +138,7 @@ resolves against the same validated huwilp table, but into
 
 - absent / `null` → `None`.
 - resolves to a named `Wilp w` → `Some w`.
-- resolves to a Pdeeḵ-only (name-less) entry → `None` + `BirthWilpNotNamed`.
+- resolves to a Pdeeḵ-only (name-less) entry → `None` + `BirthWilpNotNamed`.
 - present but unresolvable → `None` + `UnresolvedBirthWilpId`.
 
 ### Names and holdings
@@ -147,7 +153,11 @@ the person set:
 - unresolvable `nameId` → holding dropped, `UnresolvedNameId` warning.
 - unresolvable `personId` → holding dropped, `UnresolvedNameHolder` warning.
 - otherwise → a `(PersonId, NameHeld)` pair, the `NameHeld` carrying the resolved
-  `Name` by value (plus `nameDate` / `nameOrder`).
+  `Name` by value. The `nameDate` is parsed to a date here: a present but
+  unreadable `nameDate` is dropped (the model stores no date) and always flagged
+  with an `UnparseableNameDate` warning. A holding left with neither a `nameOrder`
+  nor a `nameDate` has no well-defined recency order; it is kept (and sorted
+  alphabetically) but flagged with an `UnorderedNameHolding` warning.
 
 A `names` entry referenced by no surviving holding is an **unheld** name — dropped
 (the graph stores held names only) with an `UnheldName` warning. See
@@ -270,6 +280,7 @@ type RawFile = {
 type ImportWarning =
     | UnresolvedCoupleId of personName: string * coupleId: int
     | UnresolvedMember of coupleId: int * memberId: int
+    | SelfCoupledMember of coupleId: int * memberId: int
     | UnresolvedWilpId of personName: string * wilpId: int
     | UnresolvedBirthWilpId of personName: string * wilpId: int
     | BirthWilpNotNamed of personName: string * wilpId: int
@@ -283,6 +294,8 @@ type ImportWarning =
     | DuplicateNameText of text: string
     | UnresolvedNameId of personId: int * nameId: int
     | UnresolvedNameHolder of nameId: int * personId: int
+    | UnparseableNameDate of nameId: int * personId: int * rawValue: string
+    | UnorderedNameHolding of nameId: int * personId: int
     | UnheldName of nameId: int * text: string
     | WilpMissingPdeek of id: int
     | WilpMissingNameAndPdeek of id: int

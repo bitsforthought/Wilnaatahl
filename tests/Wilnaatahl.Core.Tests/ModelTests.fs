@@ -10,7 +10,7 @@ open Wilnaatahl.Tests.TestData
 
 [<Fact>]
 let ``findPerson returns correct person for all ids`` () =
-    let graph = createFamilyGraph testPeopleAndParents testCouples
+    let graph = createFamilyGraph testPeopleAndParents testCouples []
     let expectedPeople = [| p0; p1; p2; p3; p4 |]
 
     [ 0..4 ]
@@ -18,7 +18,7 @@ let ``findPerson returns correct person for all ids`` () =
 
 [<Fact>]
 let ``createFamilyGraph handles empty input`` () =
-    let graph = createFamilyGraph [] []
+    let graph = createFamilyGraph [] [] []
     // All public API should return empty/throw as appropriate
     <@ findPerson (PersonId 0) graph |> ignore @> |> raises<KeyNotFoundException>
 
@@ -26,14 +26,14 @@ let ``createFamilyGraph handles empty input`` () =
 
 [<Fact>]
 let ``couples returns all couples`` () =
-    let graph = createFamilyGraph testPeopleAndParents testCouples
+    let graph = createFamilyGraph testPeopleAndParents testCouples []
     let couplesSet = couples graph |> Set.ofSeq
     couplesSet =! Set.ofList testCouples
 
 [<Fact>]
 let ``findChildrenOfCouple returns children in input order for a procreative Couple`` () =
     // testPeopleAndParents lists p2, p3, p4 as children of coupleP0P1 in that order.
-    let graph = createFamilyGraph testPeopleAndParents testCouples
+    let graph = createFamilyGraph testPeopleAndParents testCouples []
     findChildrenOfCouple coupleP0P1 graph =! [ p2.Id; p3.Id; p4.Id ]
 
 [<Fact>]
@@ -41,7 +41,7 @@ let ``findChildrenOfCouple returns the empty list for a childless Couple`` () =
     // Construct a Couple between two roots that no Person references as their parents.
     let childlessCouple = Couple.create (CoupleId 999) p0.Id p1.Id None
 
-    let graph = createFamilyGraph [ p0, None; p1, None ] [ childlessCouple ]
+    let graph = createFamilyGraph [ p0, None; p1, None ] [ childlessCouple ] []
 
     findChildrenOfCouple childlessCouple graph =! []
 
@@ -49,13 +49,13 @@ let ``findChildrenOfCouple returns the empty list for a childless Couple`` () =
 let ``findChildrenOfCouple returns the empty list for a Couple absent from the graph`` () =
     // The function's contract is keyed on CoupleId, and a Couple that the graph never
     // saw cannot have any children attributed to it.
-    let graph = createFamilyGraph testPeopleAndParents testCouples
+    let graph = createFamilyGraph testPeopleAndParents testCouples []
     let strangerCouple = Couple.create (CoupleId 12345) p0.Id p1.Id None
     findChildrenOfCouple strangerCouple graph =! []
 
 [<Fact>]
 let ``huwilp returns all unique huwilp`` () =
-    let graph = createFamilyGraph testPeopleAndParents testCouples
+    let graph = createFamilyGraph testPeopleAndParents testCouples []
     let huwilpSet = huwilp graph
     huwilpSet =! Set.ofList [ WilpName "H"; WilpName "L" ]
 
@@ -82,7 +82,10 @@ let ``Kinship.Pdeek exposes the Pdeek of an UnknownWilp`` () =
     kinship.Pdeek =! Some Ganeda
 
 [<Fact>]
-let ``Kinship.Pdeek is None for NoneProvided`` () = NoneProvided.Pdeek =! None
+let ``Kinship.Pdeek is None for NoneProvided`` () =
+    (NoneProvided None).Pdeek =! None
+    // The note payload must not affect Pdeek resolution.
+    (NoneProvided(Some "raised by aunt")).Pdeek =! None
 
 [<Fact>]
 let ``Initial peopleAndParents assigns each Wilp to a distinct Pdeek`` () =
@@ -120,7 +123,7 @@ let ``Initial sample data includes an outside spouse married to multiple members
         match (personById |> Map.find personId).Kinship with
         | Wilp w -> Some w.Name
         | UnknownWilp _
-        | NoneProvided -> None
+        | NoneProvided _ -> None
 
     let partnerWilpsByPerson =
         Initial.couples
@@ -149,7 +152,8 @@ let ``createFamilyGraph excludes UnknownWilp people from huwilp`` () =
     // huwilp set, even if their Pdeek matches that of another person with a
     // fully known Wilp. The fully known Wilp is the only entry that should
     // appear in the set.
-    let graph = createFamilyGraph [ wilpKMember, None; ganedaPdeekOnlyPerson, None ] []
+    let graph =
+        createFamilyGraph [ wilpKMember, None; ganedaPdeekOnlyPerson, None ] [] []
 
     huwilp graph =! Set.singleton (WilpName "K")
 
@@ -160,7 +164,8 @@ let ``UnknownWilp person with no Couple does not appear in any forest`` () =
     // forest. The shared Pdeek between `wilpKMember` and `ganedaPdeekOnlyPerson`
     // means a buggy implementation that grouped by Pdeek would mis-include
     // ganedaPdeekOnlyPerson in wilpKMember's forest.
-    let graph = createFamilyGraph [ wilpKMember, None; ganedaPdeekOnlyPerson, None ] []
+    let graph =
+        createFamilyGraph [ wilpKMember, None; ganedaPdeekOnlyPerson, None ] [] []
 
     let visited =
         huwilp graph
@@ -180,7 +185,7 @@ let ``UnknownWilp person with no Couple does not appear in any forest`` () =
 
 [<Fact>]
 let ``visitWilpForest computes correct tree statistics`` () =
-    let graph = createFamilyGraph extendedFamily extendedCouples
+    let graph = createFamilyGraph extendedFamily extendedCouples []
     let wilp = WilpName "H"
 
     let aggregateStats stats = {
@@ -277,7 +282,8 @@ let ``visitWilpForest passes the marriage Couple to visitPartner`` () =
 
     let outsider = { Person.Empty with Id = PersonId 401; Shape = Cube }
     let marriage = Couple.create (CoupleId 400) wilpMember.Id outsider.Id None
-    let graph = createFamilyGraph [ wilpMember, None; outsider, None ] [ marriage ]
+
+    let graph = createFamilyGraph [ wilpMember, None; outsider, None ] [ marriage ] []
 
     let visitPartner (partnerId: PersonId) (couple: Couple) = partnerId, couple.Id
 
@@ -304,7 +310,7 @@ let ``visitWilpForest passes the marriage Couple to visitPartner`` () =
 
 [<Fact>]
 let ``allPeople returns all people in the graph`` () =
-    let graph = createFamilyGraph testPeopleAndParents testCouples
+    let graph = createFamilyGraph testPeopleAndParents testCouples []
     let people = allPeople graph |> Seq.toList
 
     // Should contain all test data people, regardless of parentage
@@ -312,7 +318,7 @@ let ``allPeople returns all people in the graph`` () =
 
 [<Fact>]
 let ``visitWilpForest returns empty sequence for missing Wilp`` () =
-    let graph = createFamilyGraph testPeopleAndParents testCouples
+    let graph = createFamilyGraph testPeopleAndParents testCouples []
     let missingWilp = WilpName "Nonexistent"
 
     let trivialCompareTrees (_: WilpTree) (_: WilpTree) = 0
@@ -350,7 +356,18 @@ let ``Couple.create canonicalizes Members so order does not matter`` () =
 let ``Couple.create rejects equal members`` () =
     let p = PersonId 5
     let cId = CoupleId 1
-    raises<exn> <@ Couple.create cId p p None @>
+
+    let ex =
+        Assert.Throws<ArgumentException>(fun () -> Couple.create cId p p None |> ignore)
+
+    ex.ParamName =! "member2"
+
+    // Build the expected message via ArgumentException itself so the framework's
+    // "(Parameter 'member2')" suffix formatting stays portable across runtimes.
+    let expected =
+        ArgumentException("A Couple's two members must differ; got PersonId 5 for both.", "member2")
+
+    ex.Message =! expected.Message
 
 [<Fact>]
 let ``Couple.create stores Id and DateOfUnion as supplied`` () =
@@ -370,9 +387,10 @@ let ``createFamilyGraph throws when a Person references an unknown CoupleId`` ()
     let people = [ p1, None; p2, Some(CoupleId 99) ]
     let couples: Couple list = []
 
-    let ex = Assert.ThrowsAny<exn>(fun () -> createFamilyGraph people couples |> ignore)
+    let ex =
+        Assert.ThrowsAny<exn>(fun () -> createFamilyGraph people couples [] |> ignore)
 
-    test <@ ex.Message.Contains "99" @>
+    test <@ ex.Message = "Person 2 references unknown CoupleId 99; not present in the supplied couples." @>
 
 [<Fact>]
 let ``createFamilyGraph throws when a Couple references an unknown PersonId`` () =
@@ -383,9 +401,10 @@ let ``createFamilyGraph throws when a Couple references an unknown PersonId`` ()
     let people = [ p1, None; p2, None ]
     let couples = [ couple ]
 
-    let ex = Assert.ThrowsAny<exn>(fun () -> createFamilyGraph people couples |> ignore)
+    let ex =
+        Assert.ThrowsAny<exn>(fun () -> createFamilyGraph people couples [] |> ignore)
 
-    test <@ ex.Message.Contains "99" @>
+    test <@ ex.Message = "Couple 0 references unknown PersonId 99; not present in the supplied people." @>
 
 [<Fact>]
 let ``createFamilyGraph throws on duplicate CoupleId`` () =
@@ -399,9 +418,10 @@ let ``createFamilyGraph throws on duplicate CoupleId`` () =
     let people = [ p1, None; p2, None; p3, None; p4, None ]
     let couples = [ c1; c2 ]
 
-    let ex = Assert.ThrowsAny<exn>(fun () -> createFamilyGraph people couples |> ignore)
+    let ex =
+        Assert.ThrowsAny<exn>(fun () -> createFamilyGraph people couples [] |> ignore)
 
-    test <@ ex.Message.Contains "5" @>
+    test <@ ex.Message = "Duplicate CoupleId 5 appears 2 times in the supplied couples." @>
 
 // Captures the tree shape produced by visitWilpForest for use in equality assertions.
 type private CapturedTree =
@@ -423,7 +443,7 @@ let ``buildWilpTree exposes childless Couples as empty PartnersAndDescendants en
     let people = [ mWilp, None; pOutsider, None ]
     let couples = [ childlessCouple ]
 
-    let graph = createFamilyGraph people couples
+    let graph = createFamilyGraph people couples []
 
     let visitFamily wilpParent (partnerResults: (PersonId * CapturedTree seq)[]) =
         let partners =
@@ -451,3 +471,234 @@ let ``buildWilpTree exposes childless Couples as empty PartnersAndDescendants en
         |> Seq.toList
 
     results =! [ CapturedFamily(mWilp.Id, [ (pOutsider.Id, []) ]) ]
+
+// ---------------------------------------------------------------------------
+// Name and Pdeek.displayName
+// ---------------------------------------------------------------------------
+
+[<Fact>]
+let ``Name.AsString returns the underlying text`` () = (Name "Tinker").AsString =! "Tinker"
+
+[<Fact>]
+let ``Pdeek.displayName renders the Gitxsan orthography for every clan`` () =
+    // Exact spelling is a fixed convention: these carry the underline diacritic
+    // (combining U+0331) and a glottal apostrophe that must match precisely.
+    Pdeek.displayName LaxGibuu =! "Lax̱ Gibuu"
+    Pdeek.displayName LaxSkiik =! "Lax̱ Skiik"
+    Pdeek.displayName Ganeda =! "G̱aneda"
+    Pdeek.displayName Giskaast =! "Gisḵ'aast"
+
+// ---------------------------------------------------------------------------
+// Name holdings: storage, recency ordering, and accessors
+// ---------------------------------------------------------------------------
+
+let private holder id = { Person.Empty with Id = PersonId id }
+let private held text date order = { Name = Name text; NameDate = date; NameOrder = order }
+
+[<Fact>]
+let ``namesHeldBy orders holdings with parseable dates most-recent-first`` () =
+    let recent = held "Recent" (on 2000 1 1) None
+    let older = held "Older" (on 1990 1 1) None
+
+    let graph =
+        createFamilyGraph [ (holder 1, None) ] [] [ PersonId 1, older; PersonId 1, recent ]
+
+    graph |> namesHeldBy (PersonId 1) =! [ recent; older ]
+
+[<Fact>]
+let ``namesHeldBy ranks a dated holding ahead of undated ones`` () =
+    let dated = held "Dated" (on 2000 1 1) None
+    let absentDate = held "AbsentDate" None None
+    let undated = held "Undated" None None
+
+    // A holding with a NameDate is the most recent group and heads the list. The
+    // two undated holdings share the unordered group and so are ordered
+    // alphabetically by Name text ("AbsentDate" before "Undated") — not by input
+    // order. The dated holding is supplied at the head so the sort must actively
+    // relocate it ahead of the undated ones anyway.
+    let graph =
+        createFamilyGraph [ (holder 1, None) ] [] [ PersonId 1, dated; PersonId 1, absentDate; PersonId 1, undated ]
+
+    graph |> namesHeldBy (PersonId 1) =! [ dated; absentDate; undated ]
+
+[<Fact>]
+let ``namesHeldBy falls back to NameOrder descending when dates are absent`` () =
+    let high = held "High" None (Some 5)
+    let low = held "Low" None (Some 1)
+    let noOrder = held "NoOrder" None None
+
+    let graph =
+        createFamilyGraph [ (holder 1, None) ] [] [ PersonId 1, low; PersonId 1, noOrder; PersonId 1, high ]
+
+    graph |> namesHeldBy (PersonId 1) =! [ high; low; noOrder ]
+
+[<Fact>]
+let ``namesHeldBy ranks a dated holding ahead of an order-only holding`` () =
+    // A holding with a parseable date is in the most-recent group, ahead of any
+    // holding that has only a NameOrder — even when that order (99) is far higher
+    // than the dated holding's absent order. The date group dominates; order only
+    // sorts within the dateless group.
+    let datedLowOrder = held "Dated" (on 2000 1 1) None
+    let undatedHighOrder = held "Undated" None (Some 99)
+
+    let graph =
+        createFamilyGraph [ (holder 1, None) ] [] [ PersonId 1, undatedHighOrder; PersonId 1, datedLowOrder ]
+
+    graph |> namesHeldBy (PersonId 1) =! [ datedLowOrder; undatedHighOrder ]
+
+[<Fact>]
+let ``namesHeldBy tiebreaks equal parseable dates on NameOrder descending`` () =
+    // Same date on both, so the primary key ties and NameOrder decides:
+    // the higher order is more recent.
+    let sameDateHighOrder = held "HighOrder" (on 2000 1 1) (Some 5)
+    let sameDateLowOrder = held "LowOrder" (on 2000 1 1) (Some 1)
+
+    let graph =
+        createFamilyGraph [ (holder 1, None) ] [] [ PersonId 1, sameDateLowOrder; PersonId 1, sameDateHighOrder ]
+
+    graph |> namesHeldBy (PersonId 1) =! [ sameDateHighOrder; sameDateLowOrder ]
+
+[<Fact>]
+let ``namesHeldBy tiebreaks equal dates with a present NameOrder ahead of an absent one`` () =
+    // Equal parseable dates: the holding carrying a NameOrder is treated as more
+    // recent than one with none. Asserted for both input orders, so the comparator
+    // is symmetric about which argument holds the order.
+    let withOrder = held "WithOrder" (on 2000 1 1) (Some 3)
+    let withoutOrder = held "WithoutOrder" (on 2000 1 1) None
+
+    let ordered input =
+        createFamilyGraph [ (holder 1, None) ] [] input |> namesHeldBy (PersonId 1)
+
+    ordered [ PersonId 1, withoutOrder; PersonId 1, withOrder ]
+    =! [ withOrder; withoutOrder ]
+
+    ordered [ PersonId 1, withOrder; PersonId 1, withoutOrder ]
+    =! [ withOrder; withoutOrder ]
+
+[<Fact>]
+let ``namesHeldBy tiebreaks equal dates with no orders alphabetically by Name text`` () =
+    // Equal parseable dates and neither holding carries a NameOrder, so the
+    // alphabetical final tiebreak decides ("Alpha" before "Beta"), not input order.
+    let beta = held "Beta" (on 2000 1 1) None
+    let alpha = held "Alpha" (on 2000 1 1) None
+
+    let graph =
+        createFamilyGraph [ (holder 1, None) ] [] [ PersonId 1, beta; PersonId 1, alpha ]
+
+    graph |> namesHeldBy (PersonId 1) =! [ alpha; beta ]
+
+[<Fact>]
+let ``namesHeldBy tiebreaks equal dates with equal NameOrders alphabetically by Name text`` () =
+    // Group 1, equal parseable dates AND equal (non-absent) NameOrders, so neither
+    // the date nor the order separates them and the alphabetical final tiebreak
+    // decides ("Alpha" before "Beta"). Asserted for both input orders so a
+    // regression that returned 0 on equal orders (leaning on stable input order)
+    // would be caught.
+    let ordered input =
+        createFamilyGraph [ (holder 1, None) ] [] input |> namesHeldBy (PersonId 1)
+
+    let beta = held "Beta" (on 2000 1 1) (Some 3)
+    let alpha = held "Alpha" (on 2000 1 1) (Some 3)
+
+    ordered [ PersonId 1, beta; PersonId 1, alpha ] =! [ alpha; beta ]
+    ordered [ PersonId 1, alpha; PersonId 1, beta ] =! [ alpha; beta ]
+
+[<Fact>]
+let ``namesHeldBy tiebreaks equal NameOrders in the order-only group alphabetically by Name text`` () =
+    // Group 2 (no parseable date), equal NameOrders, so the order does not separate
+    // them and the alphabetical final tiebreak decides ("Alpha" before "Beta").
+    // Asserted for both input orders so a regression that returned 0 on equal
+    // orders (leaning on stable input order) would be caught.
+    let ordered input =
+        createFamilyGraph [ (holder 1, None) ] [] input |> namesHeldBy (PersonId 1)
+
+    let beta = held "Beta" None (Some 3)
+    let alpha = held "Alpha" None (Some 3)
+
+    ordered [ PersonId 1, beta; PersonId 1, alpha ] =! [ alpha; beta ]
+    ordered [ PersonId 1, alpha; PersonId 1, beta ] =! [ alpha; beta ]
+
+[<Fact>]
+let ``namesHeldBy orders holdings by the three recency groups most-recent-first`` () =
+    // The full group ordering in one case: two dated holdings (group 1, date
+    // descending), two order-only holdings (group 2, order descending), and two
+    // unordered holdings (group 3, alphabetical). Groups never interleave, so the
+    // most-recent-first result is:
+    //   Cook (1990) > Ledger (1980) | Mason (5) > Piper (2) | Cobbler < Tinker
+    let ledger = held "Ledger" (on 1980 1 1) None
+    let cook = held "Cook" (on 1990 6 15) None
+    let piper = held "Piper" None (Some 2)
+    let mason = held "Mason" None (Some 5)
+    let tinker = held "Tinker" None None
+    let cobbler = held "Cobbler" None None
+
+    let graph =
+        createFamilyGraph [ (holder 1, None) ] [] [
+            PersonId 1, ledger
+            PersonId 1, cook
+            PersonId 1, piper
+            PersonId 1, mason
+            PersonId 1, tinker
+            PersonId 1, cobbler
+        ]
+
+    graph |> namesHeldBy (PersonId 1)
+    =! [ cook; ledger; mason; piper; cobbler; tinker ]
+
+[<Fact>]
+let ``namesHeldBy tiebreaks unordered holdings alphabetically by Name text`` () =
+    // Both holdings fall in the unordered group — neither has a date or an order.
+    // With nothing to separate them, they sort alphabetically by Name text
+    // ascending ("Apple" before "Zebra"), regardless of input order.
+    let zebra = held "Zebra" None None
+    let apple = held "Apple" None None
+
+    let graph =
+        createFamilyGraph [ (holder 1, None) ] [] [ PersonId 1, zebra; PersonId 1, apple ]
+
+    graph |> namesHeldBy (PersonId 1) =! [ apple; zebra ]
+
+[<Fact>]
+let ``namesHeldBy tiebreaks names by ordinal, not culture-sensitive, comparison`` () =
+    // The tiebreak must be ordinal (String.CompareOrdinal), not culture-sensitive,
+    // so the ordering is locale-independent and the .NET and Fable/browser builds
+    // agree. Ordinal puts all uppercase ASCII (e.g. 'Z' = 90) before all lowercase
+    // ('a' = 97), so "Zulu" precedes "alpha"; a culture-sensitive comparison would
+    // instead order "alpha" first. Both holdings sit in the unordered group so only
+    // the name tiebreak decides.
+    let zulu = held "Zulu" None None
+    let alpha = held "alpha" None None
+
+    let graph =
+        createFamilyGraph [ (holder 1, None) ] [] [ PersonId 1, alpha; PersonId 1, zulu ]
+
+    graph |> namesHeldBy (PersonId 1) =! [ zulu; alpha ]
+
+[<Fact>]
+let ``namesHeldBy is empty for a person with no holdings and one absent from the graph`` () =
+    let graph = createFamilyGraph [ (holder 1, None) ] [] []
+    graph |> namesHeldBy (PersonId 1) =! []
+    graph |> namesHeldBy (PersonId 42) =! []
+
+[<Fact>]
+let ``allNameHoldings exposes every holding across all holders`` () =
+    let a = held "A" None (Some 1)
+    let b = held "B" None (Some 1)
+
+    let graph =
+        createFamilyGraph [ holder 1, None; holder 2, None ] [] [ PersonId 1, a; PersonId 2, b ]
+
+    graph
+    |> allNameHoldings
+    |> Seq.sortBy (fun (p: PersonId, _) -> p.AsInt)
+    |> Seq.toList
+    =! [ PersonId 1, a; PersonId 2, b ]
+
+[<Fact>]
+let ``createFamilyGraph throws when a Name holding references an unknown PersonId`` () =
+    let ex =
+        Assert.ThrowsAny<exn>(fun () ->
+            createFamilyGraph [ (holder 1, None) ] [] [ (PersonId 99, held "X" None None) ]
+            |> ignore)
+
+    test <@ ex.Message = "Name holding references unknown PersonId 99; not present in the supplied people." @>

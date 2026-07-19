@@ -19,10 +19,14 @@ module internal JsonReader =
     let private rawPersonDecoder: Decoder<RawPerson> =
         Decode.object (fun get -> {
             Id = get.Required.Field "id" Decode.int
-            Name = get.Required.Field "name" Decode.string
+            Name = get.Optional.Field "name" Decode.string
             Parents = get.Optional.Field "parents" Decode.int
             Wilp = get.Optional.Field "wilp" Decode.int
+            BirthWilp = get.Optional.Field "birthWilp" Decode.int
+            KinshipNote = get.Optional.Field "kinshipNote" Decode.string
             BirthOrder = get.Optional.Field "birthOrder" Decode.int
+            RawDateOfBirth = get.Optional.Field "dateOfBirth" Decode.string
+            RawDateOfDeath = get.Optional.Field "dateOfDeath" Decode.string
             NormalizedDateOfBirth = get.Optional.Field "normalizedDateOfBirth" Decode.string
             NormalizedDateOfDeath = get.Optional.Field "normalizedDateOfDeath" Decode.string
             Gender = get.Required.Field "gender" Decode.string
@@ -45,8 +49,24 @@ module internal JsonReader =
             Pdeek = get.Optional.Field "pdeek" Decode.string
         })
 
-    /// Decodes the top-level file object. The `couples` and `huwilp` keys are
-    /// optional; absent → empty list.
+    /// Decodes a single `names` entry.
+    let private rawNameDecoder: Decoder<RawName> =
+        Decode.object (fun get -> {
+            Id = get.Required.Field "id" Decode.int
+            Text = get.Required.Field "text" Decode.string
+        })
+
+    /// Decodes a single `namesHeld` entry.
+    let private rawNameHeldDecoder: Decoder<RawNameHeld> =
+        Decode.object (fun get -> {
+            NameId = get.Required.Field "nameId" Decode.int
+            PersonId = get.Required.Field "personId" Decode.int
+            NameDate = get.Optional.Field "nameDate" Decode.string
+            NameOrder = get.Optional.Field "nameOrder" Decode.int
+        })
+
+    /// Decodes the top-level file object. The `couples`, `huwilp`, `names`, and
+    /// `namesHeld` keys are optional; absent → empty list.
     let private rawFileDecoder: Decoder<RawFile> =
         Decode.object (fun get -> {
             People = get.Required.Field "people" (Decode.list rawPersonDecoder)
@@ -55,6 +75,12 @@ module internal JsonReader =
                 |> Option.defaultValue []
             Huwilp =
                 get.Optional.Field "huwilp" (Decode.list rawWilpDecoder)
+                |> Option.defaultValue []
+            Names =
+                get.Optional.Field "names" (Decode.list rawNameDecoder)
+                |> Option.defaultValue []
+            NamesHeld =
+                get.Optional.Field "namesHeld" (Decode.list rawNameHeldDecoder)
                 |> Option.defaultValue []
         })
 

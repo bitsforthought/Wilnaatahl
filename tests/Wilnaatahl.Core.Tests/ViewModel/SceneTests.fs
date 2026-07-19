@@ -19,7 +19,7 @@ let private mapFamily (family: RenderedFamily<TestFamilyMember>) =
 
 [<Fact>]
 let ``ExtractFamilies produces correct results`` () =
-    let graph = createFamilyGraph testPeopleAndParents testCouples
+    let graph = createFamilyGraph testPeopleAndParents testCouples []
 
     let families =
         Scene.extractFamilies graph initialNodes |> Seq.toList |> List.map mapFamily
@@ -66,7 +66,7 @@ let ``extractFamilies yields RenderedFamily with empty Children for a childless 
     ]
 
     let couples = [ childlessCouple; procreativeCouple ]
-    let graph = createFamilyGraph people couples
+    let graph = createFamilyGraph people couples []
 
     let nodes = [
         TestFamilyMember(childlessHead, wilpName, MemberNode childlessHead.Id)
@@ -95,7 +95,7 @@ let ``extractFamilies yields RenderedFamily with empty Children for a childless 
 
 [<Fact>]
 let ``layoutGraph assigns correct positions`` () =
-    let graph = createFamilyGraph extendedFamily extendedCouples
+    let graph = createFamilyGraph extendedFamily extendedCouples []
     let rootOffset, rootBox = Scene.layoutGraph (WilpName "H") graph
 
     let actual =
@@ -143,7 +143,7 @@ let ``layoutGraph positions partner of a childless Couple adjacent to the Wilp p
     // default spacing unit horizontally from the Wilp parent (i.e. adjacent, with
     // no other partners or descendants between them).
     let graph =
-        createFamilyGraph [ childlessHead, None; childlessPartner, None ] [ childlessCouple ]
+        createFamilyGraph [ childlessHead, None; childlessPartner, None ] [ childlessCouple ] []
 
     let rootOffset, rootBox = Scene.layoutGraph (WilpName "Q") graph
     let positions = setPositions (rootOffset, rootBox) |> List.ofSeq |> Map.ofList
@@ -171,7 +171,7 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
     let mother = {
         Person.Empty with
             Id = PersonId 100
-            Label = Some "Mother"
+            ColonialName = Some "Mother"
             Shape = Sphere
             Kinship = Wilp { Name = WilpName "T"; Pdeek = Giskaast }
     }
@@ -179,14 +179,14 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
     let father = {
         Person.Empty with
             Id = PersonId 101
-            Label = Some "Father"
+            ColonialName = Some "Father"
             Shape = Cube
     }
 
     let childA = {
         Person.Empty with
             Id = PersonId 102
-            Label = Some "ChildA"
+            ColonialName = Some "ChildA"
             Shape = Sphere
             Kinship = Wilp { Name = WilpName "T"; Pdeek = Giskaast }
             DateOfBirth = Some(System.DateOnly(2000, 6, 1))
@@ -196,7 +196,7 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
     let childB = {
         Person.Empty with
             Id = PersonId 103
-            Label = Some "ChildB"
+            ColonialName = Some "ChildB"
             Shape = Sphere
             Kinship = Wilp { Name = WilpName "T"; Pdeek = Giskaast }
             DateOfBirth = Some(System.DateOnly(2005, 1, 1))
@@ -205,7 +205,7 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
     let childC = {
         Person.Empty with
             Id = PersonId 104
-            Label = Some "ChildC"
+            ColonialName = Some "ChildC"
             Shape = Sphere
             Kinship = Wilp { Name = WilpName "T"; Pdeek = Giskaast }
             DateOfBirth = Some(System.DateOnly(2000, 6, 1))
@@ -222,7 +222,7 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
         childC, Some parentsCouple.Id
     ]
 
-    let graph = createFamilyGraph family [ parentsCouple ]
+    let graph = createFamilyGraph family [ parentsCouple ] []
     let _, rootBox = Scene.layoutGraph (WilpName "T") graph
 
     // Collect the X positions of children from the layout.
@@ -258,7 +258,7 @@ let private makeComparatorGraph (couples: Couple list) (procreativeChild: (Perso
         | None -> baseEntries, []
         | Some(child, parentCouple) -> baseEntries @ [ (child, Some parentCouple.Id) ], [ Leaf child.Id ]
 
-    createFamilyGraph people couples, descendants
+    createFamilyGraph people couples [], descendants
 
 [<Fact>]
 let ``compareCouplesByEffectiveDate: childless-with-date sorts before procreative-with-later-DoB`` () =
@@ -446,7 +446,7 @@ let ``layoutGraph interleaves childless and procreative Couples by effective dat
     ]
 
     let couples = [ coupleMid; coupleLate; coupleEarly ]
-    let graph = createFamilyGraph people couples
+    let graph = createFamilyGraph people couples []
 
     let rootOffset, rootBox = Scene.layoutGraph wilpName graph
     let positions = setPositions (rootOffset, rootBox) |> List.ofSeq |> Map.ofList
@@ -471,7 +471,7 @@ let ``enumerateHuwilpToRender for the chosen Wilp excludes people from other huw
 
     let bob = { Person.Empty with Id = PersonId 1; Kinship = wilpB; Shape = Sphere }
 
-    let graph = createFamilyGraph [ alice, None; bob, None ] []
+    let graph = createFamilyGraph [ alice, None; bob, None ] [] []
 
     let result = Scene.enumerateHuwilpToRender graph
 
@@ -495,7 +495,7 @@ let ``enumerateHuwilpToRender includes outside-Wilp partners that appear in the 
     let aliceAndPartner = Couple.create (CoupleId 100) alice.Id outsidePartner.Id None
 
     let graph =
-        createFamilyGraph [ alice, None; outsidePartner, None ] [ aliceAndPartner ]
+        createFamilyGraph [ alice, None; outsidePartner, None ] [ aliceAndPartner ] []
 
     let result = Scene.enumerateHuwilpToRender graph
 
@@ -517,7 +517,7 @@ let ``enumerateHuwilpToRender picks the wilp with the most members`` () =
 
     let carol = { Person.Empty with Id = PersonId 2; Kinship = wilpB; Shape = Sphere }
 
-    let graph = createFamilyGraph [ alice, None; bob, None; carol, None ] []
+    let graph = createFamilyGraph [ alice, None; bob, None; carol, None ] [] []
 
     let result = Scene.enumerateHuwilpToRender graph
     result |> Map.containsKey (WilpName "B") =! true
@@ -544,7 +544,7 @@ let ``enumerateHuwilpToRender breaks ties on member count by alphabetical name``
             Shape = Sphere
     }
 
-    let graph = createFamilyGraph [ alice, None; bob, None ] []
+    let graph = createFamilyGraph [ alice, None; bob, None ] [] []
 
     let result = Scene.enumerateHuwilpToRender graph
     result |> Map.containsKey (WilpName "Bravo") =! true
@@ -569,7 +569,7 @@ let ``enumerateHuwilpToRender counts members by Person.Kinship, not partners-fro
     let bobAndCarol = Couple.create (CoupleId 100) bob.Id carol.Id None
 
     let graph =
-        createFamilyGraph [ alice, None; bob, None; carol, None ] [ bobAndCarol ]
+        createFamilyGraph [ alice, None; bob, None; carol, None ] [ bobAndCarol ] []
 
     let result = Scene.enumerateHuwilpToRender graph
     result |> Map.containsKey (WilpName "A") =! true
@@ -580,7 +580,7 @@ let ``enumerateHuwilpToRender emits a separate PartnerNode per marriage of an ou
     // The shared outside spouse is married to two "MM" members. Each marriage must
     // surface as its own PartnerNode (keyed by that marriage's CoupleId) so the two
     // marriages render as distinct nodes; the members surface once each as MemberNodes.
-    let graph = createFamilyGraph multiMarriagePeople multiMarriageCouples
+    let graph = createFamilyGraph multiMarriagePeople multiMarriageCouples []
 
     let nodes =
         Scene.enumerateHuwilpToRender graph |> Map.find (WilpName "MM") |> Seq.toList
@@ -611,7 +611,7 @@ let ``extractFamilies resolves each marriage to its own partner node`` () =
     // The outside spouse has a dedicated PartnerNode per marriage. extractFamilies must
     // attach each Couple's spouse-bar to that marriage's partner node (not a shared one),
     // while the member parent reuses its single MemberNode.
-    let graph = createFamilyGraph multiMarriagePeople multiMarriageCouples
+    let graph = createFamilyGraph multiMarriagePeople multiMarriageCouples []
     let wilpName = WilpName "MM"
 
     let member1Key = MemberNode multiMarriageMember1.Id
@@ -646,7 +646,7 @@ let ``enumerateHuwilpToRender emits one MemberNode per member for an endogamous 
     // Two members of the same rendered Wilp married to each other. Because neither
     // partner is from outside the Wilp, each must surface exactly once as a MemberNode
     // with no PartnerNode — otherwise each member would render as two nodes.
-    let graph = createFamilyGraph endogamyPeople endogamyCouples
+    let graph = createFamilyGraph endogamyPeople endogamyCouples []
 
     let nodes =
         Scene.enumerateHuwilpToRender graph |> Map.find (WilpName "EN") |> Seq.toList
@@ -664,7 +664,7 @@ let ``extractFamilies resolves an endogamous couple's parents to two MemberNodes
     // Feed extractFamilies the production node set (from enumerateHuwilpToRender) so
     // the realistic key shape is exercised: an endogamous couple must resolve both
     // parents to their MemberNodes, yielding a single family joining the two members.
-    let graph = createFamilyGraph endogamyPeople endogamyCouples
+    let graph = createFamilyGraph endogamyPeople endogamyCouples []
     let wilpName = WilpName "EN"
 
     let nodes =
@@ -693,7 +693,7 @@ let ``layoutGraph emits only MemberNode leaves for an endogamous couple`` () =
     // emitted leaf is a MemberNode and no PartnerNode appears. If the partner were
     // misclassified as a PartnerNode here, its key would diverge from the MemberNode
     // entity that spawns, and this set would contain that stray PartnerNode.
-    let graph = createFamilyGraph endogamyPeople endogamyCouples
+    let graph = createFamilyGraph endogamyPeople endogamyCouples []
     let _, rootBox = Scene.layoutGraph (WilpName "EN") graph
 
     let emittedKeys =

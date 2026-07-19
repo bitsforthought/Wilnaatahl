@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { createWorld, World } from "koota";
 import { WorldProvider } from "koota/react";
 import { FamilyGraph_FamilyGraph as FamilyGraph } from "../generated/Model";
+import { Locale } from "../generated/ViewModel/Localization";
 import {
   ImportError_$union as ImportError,
   ImportWarning_$union as ImportWarning,
@@ -17,6 +18,8 @@ import {
   ImportWarningModule_toMessage,
 } from "../generated/ViewModel/ImportMessages";
 import { FSharpList } from "../generated/fable_modules/fable-library-ts.5.1.0/List";
+import { detectLocale } from "../i18n/format";
+import { dismissButtonStyle } from "./styles";
 import Visualizer from "./Visualizer";
 
 // A single visualization: the graph rendered into its own per-load World, plus a
@@ -29,6 +32,10 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState<string | undefined>(undefined);
   const [warnings, setWarnings] = useState<FSharpList<ImportWarning> | undefined>(undefined);
+  // The active UI language, following the device's preferred language. It is the
+  // source of truth for the out-of-World toasts and is mirrored onto each World by
+  // the Visualizer for the in-scene consumers.
+  const [locale, setLocale] = useState<Locale>(() => detectLocale());
 
   // Mirrors the current World so unmount destroys whatever World is live now
   // (an import may have swapped it), rather than a World captured at mount.
@@ -50,43 +57,60 @@ export default function App() {
     };
   }, []);
 
+  // Follow the device's preferred language while the app is running, so a
+  // mid-session locale change re-localizes the UI without a reload.
+  useEffect(() => {
+    const onLanguageChange = () => setLocale(detectLocale());
+    window.addEventListener("languagechange", onLanguageChange);
+    return () => window.removeEventListener("languagechange", onLanguageChange);
+  }, []);
+
   // Load a file into a brand-new World, discarding the previous one. A parse
   // error leaves the current visualization untouched behind an error toast.
-  const importFile = useCallback(async (file: File) => {
-    try {
-      const text = await file.text();
-      const result = ImportService_importJsonText(text);
-      if (result.tag === 0 /* Ok */) {
-        const success = result.fields[0] as ImportSuccess;
-        // summary is "" exactly when there are no warnings, so it doubles as a
-        // non-emptiness test without reaching into Fable's list representation.
-        const summary = ImportWarningModule_summary(success.Warnings);
+  const importFile = useCallback(
+    async (file: File) => {
+      try {
+        const text = await file.text();
+        const result = ImportService_importJsonText(text);
+        if (result.tag === 0 /* Ok */) {
+          const success = result.fields[0] as ImportSuccess;
+          // summary is "" exactly when there are no warnings, so it doubles as a
+          // non-emptiness test without reaching into Fable's list representation.
+          const summary = ImportWarningModule_summary(locale, success.Warnings);
 
-        const next = createWorld();
-        currentWorld.current?.destroy();
-        currentWorld.current = next;
+          const next = createWorld();
+          currentWorld.current?.destroy();
+          currentWorld.current = next;
 
-        setError(undefined);
-        setWarnings(summary !== "" ? success.Warnings : undefined);
-        setSession({ world: next, graph: success.Graph, key: nextKey.current++ });
-      } else {
-        setError(ImportErrorModule_toMessage(result.fields[0] as ImportError));
+          setError(undefined);
+          setWarnings(summary !== "" ? success.Warnings : undefined);
+          setSession({ world: next, graph: success.Graph, key: nextKey.current++ });
+        } else {
+          setError(ImportErrorModule_toMessage(locale, result.fields[0] as ImportError));
+        }
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        setError(`Could not read file: ${message}`);
       }
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      setError(`Could not read file: ${message}`);
-    }
-  }, []);
+    },
+    [locale]
+  );
 
   if (!session) return null;
 
   return (
     <>
       <WorldProvider key={session.key} world={session.world}>
-        <Visualizer graph={session.graph} onFileSelected={importFile} />
+        <Visualizer graph={session.graph} locale={locale} onFileSelected={importFile} />
       </WorldProvider>
       {error && <ErrorToast message={error} onDismiss={() => setError(undefined)} />}
-      {warnings && <WarningsToast warnings={warnings} onDismiss={() => setWarnings(undefined)} />}
+      {warnings && (
+        <WarningsToast
+          warnings={warnings}
+          locale={locale}
+          onDismiss={() => setWarnings(undefined)}
+        />
+      )}
     </>
   );
 }
@@ -105,16 +129,6 @@ const toastBaseStyle: React.CSSProperties = {
   gap: "0.75em",
 };
 
-const dismissButtonStyle: React.CSSProperties = {
-  background: "transparent",
-  border: "none",
-  color: "inherit",
-  fontSize: "1.6em",
-  lineHeight: 1,
-  padding: "0 0.25em",
-  cursor: "pointer",
-};
-
 function ErrorToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
   return (
     <div
@@ -131,22 +145,24 @@ function ErrorToast({ message, onDismiss }: { message: string; onDismiss: () => 
 
 function WarningsToast({
   warnings,
+  locale,
   onDismiss,
 }: {
   warnings: FSharpList<ImportWarning>;
+  locale: Locale;
   onDismiss: () => void;
 }) {
-  const summary = ImportWarningModule_summary(warnings);
+  const summary = ImportWarningModule_summary(locale, warnings);
 
   // Log each warning to the dev console once when the toast appears, so users can
   // open dev tools to see exactly which records need fixing in their source data.
   useEffect(() => {
     console.groupCollapsed(`Wilnaatahl import warnings: ${summary}`);
     for (const w of warnings) {
-      console.warn(ImportWarningModule_toMessage(w));
+      console.warn(ImportWarningModule_toMessage(locale, w));
     }
     console.groupEnd();
-  }, [warnings, summary]);
+  }, [warnings, summary, locale]);
 
   return (
     <div

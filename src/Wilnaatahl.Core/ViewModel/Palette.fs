@@ -222,7 +222,7 @@ module Palette =
                 match person.Kinship with
                 | Wilp w -> colourForWilp w
                 | UnknownWilp pdeek -> unknownWilpColourForPdeek pdeek
-                | NoneProvided -> unaffiliatedColour
+                | NoneProvided _ -> unaffiliatedColour
 
             {
                 Colour = colour

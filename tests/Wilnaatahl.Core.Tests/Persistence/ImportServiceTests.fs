@@ -1,24 +1,51 @@
 module Wilnaatahl.Tests.Persistence.ImportServiceTests
 
+open System
+open System.IO
 open Xunit
 open Swensen.Unquote
 open Wilnaatahl.Model
 open Wilnaatahl.Model.FamilyGraph
 open Wilnaatahl.Persistence
 open Wilnaatahl.Persistence.ImportService
+open Wilnaatahl.Tests.TestData
 
 // ---------------------------------------------------------------------------
-// loadSampleGraph — builds a valid graph from the hardcoded Initial sample data
+// loadSampleGraph — builds a valid graph from the hardcoded Initial seed data.
+// Its specific contents are asserted by the domain and transform unit tests, so
+// here we only pin that the boot seed builds a non-empty graph.
 // ---------------------------------------------------------------------------
 
 [<Fact>]
-let ``loadSampleGraph returns graph with expected people count`` () =
-    loadSampleGraph () |> allPeople |> Seq.length =! 35
+let ``loadSampleGraph returns a populated graph`` () =
+    loadSampleGraph () |> allPeople |> Seq.isEmpty =! false
+
+/// Builds a NameHeld from text and optional date/order — used by the
+/// name-holding import test below.
+let private held text nameDate nameOrder : NameHeld = { Name = Name text; NameDate = nameDate; NameOrder = nameOrder }
+
+// ---------------------------------------------------------------------------
+// samples/sample.json — the demo showcase must import warning-clean.
+// ---------------------------------------------------------------------------
+
+// Read lazily inside each test rather than in a module initializer, so a missing
+// or unreadable file fails only the sample.json tests (not the whole module) with
+// a legible error.
+let private readSampleJson () =
+    File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "sample.json"))
+
+/// Imports JSON expected to succeed, returning the `ImportResult` (failing the
+/// test with a legible message on an unexpected `Error`). Lifts the success value
+/// to the top level so tests assert on it directly rather than nesting assertions
+/// inside an `Ok`/`Error` match.
+let private importOrFail json =
+    match importJsonText json with
+    | Ok result -> result
+    | Error e -> failwithf "Expected a successful import, got %A" e
 
 [<Fact>]
-let ``loadSampleGraph returns graph with expected huwilp`` () =
-    loadSampleGraph () |> huwilp
-    =! Set.ofList [ WilpName "A"; WilpName "B"; WilpName "C"; WilpName "D" ]
+let ``the demo sample.json imports warning-clean`` () =
+    (importOrFail (readSampleJson ())).Warnings =! []
 
 // ---------------------------------------------------------------------------
 // importJsonText — happy path
@@ -41,17 +68,13 @@ let private validJson =
 
 [<Fact>]
 let ``importJsonText returns Ok with a FamilyGraph for valid input`` () =
-    match importJsonText validJson with
-    | Ok result ->
-        result.Graph |> allPeople |> Seq.length =! 3
-        result.Warnings =! []
-    | Error e -> failwithf "Unexpected error: %A" e
+    let result = importOrFail validJson
+    result.Graph |> allPeople |> Seq.length =! 3
+    result.Warnings =! []
 
 [<Fact>]
 let ``importJsonText populates the graph's huwilp set from the JSON huwilp array`` () =
-    match importJsonText validJson with
-    | Ok result -> result.Graph |> huwilp =! Set.ofList [ WilpName "House" ]
-    | Error e -> failwithf "Unexpected error: %A" e
+    (importOrFail validJson).Graph |> huwilp =! Set.ofList [ WilpName "House" ]
 
 [<Fact>]
 let ``importJsonText surfaces parser warnings`` () =
@@ -64,9 +87,30 @@ let ``importJsonText surfaces parser warnings`` () =
             ]
         }"""
 
-    match importJsonText json with
-    | Ok result -> result.Warnings =! [ UnresolvedCoupleId("Carol", 999) ]
-    | Error e -> failwithf "Unexpected error: %A" e
+    (importOrFail json).Warnings =! [ UnresolvedCoupleId("Carol", 999) ]
+
+[<Fact>]
+let ``importJsonText threads name holdings through into the graph`` () =
+    // Guards that ImportService passes the transform's NameHoldings into
+    // createFamilyGraph rather than dropping them.
+    let json =
+        """{
+            "people": [
+                {"id":0,"name":"Alice","gender":"F"}
+            ],
+            "names": [
+                {"id":10,"text":"Tinker"}
+            ],
+            "namesHeld": [
+                {"nameId":10,"personId":0,"nameDate":"1900-01-01","nameOrder":2}
+            ]
+        }"""
+
+    let result = importOrFail json
+    result.Warnings =! []
+
+    result.Graph |> namesHeldBy (PersonId 0)
+    =! [ held "Tinker" (on 1900 1 1) (Some 2) ]
 
 // ---------------------------------------------------------------------------
 // importJsonText — error path
@@ -80,6 +124,4 @@ let ``importJsonText returns Error InvalidJson for malformed JSON`` () =
 
 [<Fact>]
 let ``importJsonText returns Error EmptyPeopleArray for empty people`` () =
-    match importJsonText """{ "people": [] }""" with
-    | Error EmptyPeopleArray -> ()
-    | other -> failwithf "Expected EmptyPeopleArray, got %A" other
+    importJsonText """{ "people": [] }""" =! Error EmptyPeopleArray

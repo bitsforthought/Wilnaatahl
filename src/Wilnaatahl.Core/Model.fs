@@ -64,17 +64,31 @@ type Pdeek =
     | Ganeda
     | Giskaast
 
+module Pdeek =
+
+    /// The Pdeek's name in Gitxsan (Sim Algyax) orthography, carrying the
+    /// underline diacritics and glottal marks that identify each clan. This is
+    /// the human-facing spelling, distinct from the DU case label — the DU
+    /// label is an ASCII identifier, never shown to users.
+    let internal displayName pdeek =
+        match pdeek with
+        | LaxGibuu -> "Lax̱ Gibuu"
+        | LaxSkiik -> "Lax̱ Skiik"
+        | Ganeda -> "G̱aneda"
+        | Giskaast -> "Gisḵ'aast"
+
 /// A Wilp, identified by its Name and tagged with the Pdeek (Clan) it belongs to.
 type Wilp = { Name: WilpName; Pdeek: Pdeek }
 
 /// What we know about a Person's matrilineal House (Wilp) affiliation.
 ///   - `Wilp w`         — the specific Wilp is known.
 ///   - `UnknownWilp p`  — the Pdeek (Clan) is known but the specific Wilp is not.
-///   - `NoneProvided`   — no affiliation information has been recorded.
+///   - `NoneProvided`   — no structured affiliation is known, carrying an optional
+///                        free-form note describing whatever is recorded instead.
 type Kinship =
     | Wilp of Wilp
     | UnknownWilp of Pdeek
-    | NoneProvided
+    | NoneProvided of string option
 
     /// The Pdeek (Clan) of this Kinship, if known. `Wilp w` exposes the Pdeek
     /// of the inner Wilp; `UnknownWilp p` exposes `p`; `NoneProvided` has no
@@ -83,7 +97,7 @@ type Kinship =
         match this with
         | Wilp w -> Some w.Pdeek
         | UnknownWilp p -> Some p
-        | NoneProvided -> None
+        | NoneProvided _ -> None
 
 /// Stand-in for Gender until we decide how best to handle it.
 #if FABLE_COMPILER
@@ -93,26 +107,52 @@ type NodeShape =
     | Sphere
     | Cube
 
+/// A heritable Gitxsan Name. Its identity *is* its text: two holdings carrying
+/// the same text denote the same Name. Held by value — there is no separate id.
+#if FABLE_COMPILER
+[<Erase>]
+#endif
+type Name =
+    | Name of string
+
+    member this.AsString =
+        let (Name text) = this
+        text
+
+/// One Person's holding of one Name, carrying the life-order in which it was
+/// given. The Name is held *by value* (identity is its text, so value and
+/// reference coincide) — no id indirection. NameDate orders a person's Names by
+/// recency (later is more recent) and is never displayed; NameOrder is the
+/// fallback tiebreak, analogous to Person.BirthOrder. The holder is supplied by
+/// context, so it is not a field here.
+type NameHeld = { Name: Name; NameDate: DateOnly option; NameOrder: int option }
+
 /// Everything we know about a person in the family tree.
 type Person = {
     Id: PersonId
-    Label: string option // TODO: Commit to schema for names (colonial vs. traditional)
+    ColonialName: string option
     Kinship: Kinship
+    BirthWilp: Wilp option
     Shape: NodeShape
     BirthOrder: int
     DateOfBirth: DateOnly option
     DateOfDeath: DateOnly option
+    DateOfBirthText: string option
+    DateOfDeathText: string option
 } with
 
     /// Used for situations where we need a prototypical instance of Person just to infer its type.
     static member Empty = {
         Id = PersonId 0
-        Label = None
-        Kinship = NoneProvided
+        ColonialName = None
+        Kinship = NoneProvided None
+        BirthWilp = None
         Shape = Sphere
         BirthOrder = 0
         DateOfBirth = None
         DateOfDeath = None
+        DateOfBirthText = None
+        DateOfDeathText = None
     }
 
 /// Represents a Couple of two people in a partnered relationship (married, common-law,
@@ -182,11 +222,63 @@ module FamilyGraph =
         ChildrenByCoupleId: Map<int, PersonId list>
         Huwilp: Set<WilpName>
         HuwilpForests: Map<WilpName, WilpTree seq>
+        NamesHeldByPersonId: Map<int, NameHeld list>
     }
 
-    let createFamilyGraph (people: seq<Person * CoupleId option>) (couples: seq<Couple>) =
+    /// The canonical most-recent-first order over a person's Name holdings: the
+    /// head is the person's current (most recent) Name. Holdings fall into three
+    /// groups (an earlier group is more recent and sorts first):
+    ///
+    ///   1. Holdings with a NameDate, ordered by that date descending (later is
+    ///      more recent). Equal dates tiebreak by NameOrder descending — a present
+    ///      order beats an absent one.
+    ///   2. Holdings with no NameDate but a NameOrder, ordered by that order
+    ///      descending (higher is more recent).
+    ///   3. Holdings with neither a NameDate nor a NameOrder, ordered
+    ///      alphabetically by Name text ascending.
+    ///
+    /// Group 1 wholly precedes group 2, which wholly precedes group 3. In every
+    /// group the final tiebreak is alphabetical by Name text ascending. It defines
+    /// a consistent, transitive total order.
+    let private compareHoldingsMostRecentFirst (first: NameHeld) (second: NameHeld) =
+        let groupOf (date: DateOnly option) nameOrder =
+            match date, nameOrder with
+            | Some _, _ -> 1
+            | None, Some _ -> 2
+            | None, None -> 3
+
+        // Alphabetical by Name text, ascending — the final tiebreak in every group.
+        // Ordinal comparison is locale-independent, so the .NET and Fable/browser
+        // builds order identically (a culture-sensitive comparison could diverge
+        // across runtimes).
+        let byName () =
+            String.CompareOrdinal(first.Name.AsString, second.Name.AsString)
+
+        // NameOrder descending, a present order ahead of an absent one, then by name.
+        let byOrderDescending () =
+            match first.NameOrder, second.NameOrder with
+            | Some firstOrder, Some secondOrder when firstOrder <> secondOrder -> compare secondOrder firstOrder
+            | Some _, None -> -1
+            | None, Some _ -> 1
+            | _ -> byName ()
+
+        match groupOf first.NameDate first.NameOrder, groupOf second.NameDate second.NameOrder with
+        | firstGroup, secondGroup when firstGroup <> secondGroup -> compare firstGroup secondGroup
+        | 1, _ ->
+            match first.NameDate, second.NameDate with
+            | Some earlierOrLater, Some other when earlierOrLater <> other -> compare other earlierOrLater
+            | _ -> byOrderDescending ()
+        | 2, _ -> byOrderDescending ()
+        | _ -> byName ()
+
+    let createFamilyGraph
+        (people: seq<Person * CoupleId option>)
+        (couples: seq<Couple>)
+        (nameHoldings: seq<PersonId * NameHeld>)
+        =
         let peopleList = people |> Seq.toList
         let couplesList = couples |> Seq.toList
+        let nameHoldingsList = nameHoldings |> Seq.toList
 
         // Validate that every CoupleId in `couples` is unique. Map.ofList silently
         // overwrites duplicates, so we have to check before constructing the lookup.
@@ -219,6 +311,25 @@ module FamilyGraph =
                 if not (Map.containsKey memberId.AsInt peopleMap) then
                     failwith
                         $"Couple %d{couple.Id.AsInt} references unknown PersonId %d{memberId.AsInt}; not present in the supplied people."
+
+        // Validate that every Name holding is held by a known person. Mirrors the
+        // couple-member validation: fail-fast rather than silently dropping.
+        for holderId, _ in nameHoldingsList do
+            if not (Map.containsKey holderId.AsInt peopleMap) then
+                failwith
+                    $"Name holding references unknown PersonId %d{holderId.AsInt}; not present in the supplied people."
+
+        // Group holdings by holder, each person's list sorted most-recent-first so
+        // the head is the most recent Name and `namesHeldBy` needs no re-sorting.
+        let namesHeldByPersonId =
+            nameHoldingsList
+            |> List.groupBy (fun (holderId, _) -> holderId.AsInt)
+            |> List.map (fun (holderId, holdings) ->
+                let sortedNames =
+                    holdings |> List.map snd |> List.sortWith compareHoldingsMostRecentFirst
+
+                holderId, sortedNames)
+            |> Map.ofList
 
         let childrenByCoupleId =
             peopleList
@@ -291,6 +402,7 @@ module FamilyGraph =
             ChildrenByCoupleId = childrenByCoupleId
             Huwilp = huwilp
             HuwilpForests = huwilpForests
+            NamesHeldByPersonId = namesHeldByPersonId
         }
 
     let allPeople graph =
@@ -309,6 +421,19 @@ module FamilyGraph =
         graph.HuwilpForests |> Map.tryFind wilpName |> Option.defaultValue Seq.empty
 
     let findPerson (PersonId personId) graph = graph.People |> Map.find personId
+
+    /// Returns the Names held by a person, already ordered most-recent-first (the
+    /// head is the person's most recent Name). Returns the empty list for a person
+    /// who holds no Names, or one absent from the graph.
+    let namesHeldBy (PersonId personId) graph =
+        Map.tryFind personId graph.NamesHeldByPersonId |> Option.defaultValue []
+
+    /// Every Name holding in the graph as `(PersonId, NameHeld)` pairs. No ordering
+    /// is guaranteed.
+    let allNameHoldings graph : (PersonId * NameHeld) seq =
+        graph.NamesHeldByPersonId
+        |> Map.toSeq
+        |> Seq.collect (fun (personId, holdings) -> holdings |> Seq.map (fun held -> PersonId personId, held))
 
     /// Returns the recorded children of a given Couple, in insertion order.
     /// Returns an empty list for a Couple that has no recorded children
@@ -366,12 +491,17 @@ module FamilyGraph =
 
 module Initial =
 
-    // Wilp A is the primary (matriline) Wilp; B, C, and D are used only for in-marrying husbands.
-    // The husbands' Kinship varies to exercise all three Kinship cases:
+    // Wilp A is the primary (matriline) Wilp. B, C, and D belong to in-marrying husbands,
+    // and Wilp B doubles as one member's birth Wilp (Catherine's — see adoption below).
+    // The husbands' Kinship varies to exercise every Kinship case:
     //   - `Wilp w` for husbands whose specific Wilp is recorded (most husbands).
     //   - `UnknownWilp pdeek` for Henry Lee, whose Pdeek (Ganeda) is recorded but
     //     whose specific Wilp is not.
-    //   - `NoneProvided` for husbands with no recorded affiliation.
+    //   - `NoneProvided (Some note)` for Albert Fitzgerald, who married in with an
+    //     unrecorded Wilp but a free-form note about it.
+    //   - `NoneProvided None` for husbands with no recorded Kinship at all.
+    // Both `NoneProvided` variants are seeded so the detail overlay's two Kinship rows
+    // ("Kinship: <note>" and "Kinship: Unknown") are exercised on first paint.
     // The matrilineal invariant — every internal mother is Sphere/Wilp A, every internal
     // father is a Cube whose Kinship is not `Wilp A` — holds throughout this dataset.
     //
@@ -379,7 +509,17 @@ module Initial =
     // exercises the full color palette. Wilp A is Giskaast (red) so the bulk of the visible nodes
     // remain red, matching the prior visual impression of the test data.
     //
-    // Two Couples in the seed were introduced to exercise the childless-marriages path:
+    // Adoption is seeded via Catherine Lee, whose current Kinship is Wilp A but whose
+    // `BirthWilp` is Wilp B — the two differ, so the overlay's Birth Wilp / Birth Pdeeḵ
+    // rows are exercised. (The node label draws only on the current Kinship and colonial/
+    // held names, so an adoption surfaces in the detail overlay, not the label.)
+    //
+    // Gitxsan Names are seeded via `nameHoldings` (below): a few people hold several Names
+    // (exercising most-recent selection and the overlay's "other names held" list), one Name
+    // is handed down across generations (held by both Mary and her great-grandson Michael),
+    // and James is recorded by his held Name alone, with no colonial name.
+    //
+    // Two Couples in the seed exercise the childless-marriages path:
     //   - Susan + Frank: Susan is a Wilp leaf with no recorded children, so this Couple
     //     turns her from a Leaf into a Family with empty descendants.
     //   - Margaret + Roy: an extra childless Couple under Margaret (who already has three
@@ -387,15 +527,33 @@ module Initial =
     //     procreative Couples by effective date of union.
     // Victor's two Couples below (to Lucy and Rachel) are also childless; they exercise a
     // separate scenario — one from-outside spouse married to two different Wilp A members.
-    let private wilpA = Wilp { Name = WilpName "A"; Pdeek = Giskaast }
-    let private wilpB = Wilp { Name = WilpName "B"; Pdeek = Ganeda }
-    let private wilpC = Wilp { Name = WilpName "C"; Pdeek = LaxSkiik }
-    let private wilpD = Wilp { Name = WilpName "D"; Pdeek = LaxGibuu }
 
-    let private person id label shape kinship = {
+    // The named Wilp records. Each backs one `Kinship` `Wilp` case (below); `wilpRecordB`
+    // additionally serves as Catherine's `BirthWilp` (a `Wilp option` — the record itself,
+    // not the `Kinship` case), which is why the records are extracted as their own bindings.
+    let private wilpRecordA = { Name = WilpName "A"; Pdeek = Giskaast }
+    let private wilpRecordB = { Name = WilpName "B"; Pdeek = Ganeda }
+    let private wilpRecordC = { Name = WilpName "C"; Pdeek = LaxSkiik }
+    let private wilpRecordD = { Name = WilpName "D"; Pdeek = LaxGibuu }
+
+    let private wilpA = Wilp wilpRecordA
+    let private wilpB = Wilp wilpRecordB
+    let private wilpC = Wilp wilpRecordC
+    let private wilpD = Wilp wilpRecordD
+
+    let private person id colonialName shape kinship = {
         Person.Empty with
             Id = PersonId id
-            Label = Some label
+            ColonialName = Some colonialName
+            Kinship = kinship
+            Shape = shape
+    }
+
+    /// Builds a seed Person recorded by their Gitxsan Name(s) alone — no colonial name.
+    /// (The person reaches their Names only through the graph's holdings.)
+    let private nameOnlyPerson id shape kinship = {
+        Person.Empty with
+            Id = PersonId id
             Kinship = kinship
             Shape = shape
     }
@@ -403,6 +561,10 @@ module Initial =
     let private withDob (year, month, day) p = { p with DateOfBirth = Some(DateOnly(year, month, day)) }
 
     let private withBirthOrder n p = { p with BirthOrder = n }
+
+    /// Records the Wilp a person was born into, marking them as adopted when it differs
+    /// from their current Kinship Wilp.
+    let private withBirthWilp wilpRecord p = { p with BirthWilp = Some wilpRecord }
 
     // ----- Forest root #1: Mary's matriline -----
 
@@ -412,7 +574,9 @@ module Initial =
     // Gen 1 — six children of (Mary, George). DOB tie between Elizabeth and John exercises the
     // equal-DOB branch of the comparator; Susan has no DOB so her ordering falls back to BirthOrder.
     let private anne = person 2 "Anne Ashford" Sphere wilpA |> withDob (1925, 3, 10)
-    let private james = person 3 "James Ashford" Cube wilpA |> withDob (1927, 7, 22)
+
+    // James is recorded by his Gitxsan Name ("The Scholar", seeded below) alone — no colonial name.
+    let private james = nameOnlyPerson 3 Cube wilpA |> withDob (1927, 7, 22)
 
     let private elizabeth =
         person 4 "Elizabeth Ashford" Sphere wilpA |> withDob (1929, 11, 2)
@@ -429,12 +593,18 @@ module Initial =
     let private richard = person 9 "Richard Cromwell" Cube wilpD // Elizabeth spouse #1
     let private charles = person 10 "Charles Davenport" Cube wilpB // Elizabeth spouse #2
     let private frederick = person 11 "Frederick Easton" Cube wilpC // Margaret spouse #1
-    let private albert = person 12 "Albert Fitzgerald" Cube NoneProvided // unaffiliated; Margaret spouse #2
+    // `NoneProvided (Some note)`: married in with an unrecorded Wilp but a note about it.
+    let private albert =
+        person 12 "Albert Fitzgerald" Cube (NoneProvided(Some "Married in; Wilp not recorded")) // Margaret spouse #2
+
     let private samuel = person 13 "Samuel Greenwood" Cube wilpD // Margaret spouse #3
 
     // Gen 2 children.
+    // Catherine was adopted into Wilp A (her current Kinship) from Wilp B (her BirthWilp).
     let private catherine =
-        person 14 "Catherine Lee" Sphere wilpA |> withDob (1950, 5, 1)
+        person 14 "Catherine Lee" Sphere wilpA
+        |> withDob (1950, 5, 1)
+        |> withBirthWilp wilpRecordB
 
     let private robert = person 15 "Robert Cromwell" Cube wilpA |> withDob (1952, 4, 4)
     let private jane = person 16 "Jane Cromwell" Sphere wilpA |> withDob (1954, 8, 19)
@@ -455,7 +625,7 @@ module Initial =
 
     // Gen 2 husbands.
     let private daniel = person 22 "Daniel Featherstonhaugh" Cube wilpC // Catherine's husband
-    let private peter = person 23 "Peter Ng" Cube NoneProvided // unaffiliated; Jane's husband
+    let private peter = person 23 "Peter Ng" Cube (NoneProvided None) // unaffiliated; Jane's husband
 
     // Gen 3 children.
     let private michael =
@@ -477,8 +647,8 @@ module Initial =
     let private benjamin = person 31 "Benjamin Yu" Cube wilpA |> withBirthOrder 1
 
     // Husbands for the childless Couples below. Both unaffiliated.
-    let private frank = person 32 "Frank Hollister" Cube NoneProvided // Susan's husband (childless)
-    let private roy = person 33 "Roy Pemberton" Cube NoneProvided // Margaret's fourth partner (childless)
+    let private frank = person 32 "Frank Hollister" Cube (NoneProvided None) // Susan's husband (childless)
+    let private roy = person 33 "Roy Pemberton" Cube (NoneProvided None) // Margaret's fourth partner (childless)
 
     // A from-outside husband (Wilp B) married to two different Wilp A members — Lucy and
     // Rachel, who sit in separate branches of Mary's matriline. This exercises the case
@@ -488,7 +658,7 @@ module Initial =
 
     // Couples for the seed. CoupleIds are assigned sequentially so the seed remains
     // hand-readable; their numeric values do not carry meaning beyond uniqueness.
-    let couples = [
+    let internal couples = [
         Couple.create (CoupleId 0) mary.Id george.Id None
         Couple.create (CoupleId 1) anne.Id henry.Id None
         Couple.create (CoupleId 2) elizabeth.Id richard.Id None
@@ -522,7 +692,7 @@ module Initial =
         let key = (min mother.Id.AsInt father.Id.AsInt, max mother.Id.AsInt father.Id.AsInt)
         Some(Map.find key coupleIdByPair)
 
-    let peopleAndParents = [
+    let internal peopleAndParents = [
         // Forest #1 roots
         mary, None
         george, None
@@ -587,4 +757,34 @@ module Initial =
 
         // From-outside spouse married to two Wilp A members (Lucy and Rachel).
         victor, None
+    ]
+
+    let private nameHeld text nameDate nameOrder = { Name = Name text; NameDate = nameDate; NameOrder = nameOrder }
+    let private on year month day = Some(DateOnly(year, month, day))
+
+    // Gitxsan Name holdings, passed to `createFamilyGraph` so the labels and detail
+    // overlay have data to render on first paint. A few people hold multiple Names:
+    //   - Mary holds three dated Names, so the most recent ("The Captain") heads her label
+    //     and the overlay lists the other two ("The Steward", "Cook").
+    //   - Margaret holds two undated Names, ordered by NameOrder alone — exercising the
+    //     fallback ordering when no NameDate is present.
+    // "The Captain" is handed down: Mary held it, and later her great-grandson Michael
+    // received the same Name — the same text denotes the same heritable Name.
+    // James holds a single Name and has no colonial name, so it is his only label line.
+    // The Names are ordinary English nicknames — deliberately not attempts at real
+    // Gitxsan names — used purely to exercise the rendering.
+    let internal nameHoldings: (PersonId * NameHeld) list = [
+        mary.Id, nameHeld "Cook" (on 1918 6 1) (Some 1)
+        mary.Id, nameHeld "The Steward" (on 1950 2 1) (Some 2)
+        mary.Id, nameHeld "The Captain" (on 1975 3 1) (Some 3)
+
+        margaret.Id, nameHeld "Smith" None (Some 1)
+        margaret.Id, nameHeld "The Mayor" None (Some 2)
+
+        james.Id, nameHeld "The Scholar" (on 1945 9 1) (Some 1)
+
+        catherine.Id, nameHeld "Doc" (on 1950 5 1) (Some 1)
+
+        // Handed down from Mary — the same Name text, received by a later generation.
+        michael.Id, nameHeld "The Captain" (on 1995 1 1) (Some 1)
     ]

@@ -8,10 +8,11 @@ open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.ECS.Relation
 open Wilnaatahl.Model
+open Wilnaatahl.ViewModel
 open Wilnaatahl.ViewModel.SceneConstants
 open Wilnaatahl.ViewModel.Vector
 open Wilnaatahl.Entities
-open Wilnaatahl.Traits.ConnectorTraits
+open Wilnaatahl.Traits.ViewTraits
 open Wilnaatahl.Traits.PeopleTraits
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Tests.EcsTestSupport
@@ -38,7 +39,7 @@ type Tests() =
 
     [<Fact>]
     member _.``spawnTreeNode creates entity with PersonRef and Position``() =
-        world |> People.spawnTreeNode p0 (MemberNode p0.Id) wilpId
+        world |> People.spawnTreeNode p0 (MemberNode p0.Id) NodeLabelView.Empty wilpId
 
         let nodes = world.Query(With PersonRef) |> Seq.toList
         nodes.Length =! 1
@@ -48,8 +49,22 @@ type Tests() =
         person.Id =! p0.Id
 
     [<Fact>]
+    member _.``spawnTreeNode stores the given label in the NodeLabel trait``() =
+        let label = {
+            NodeLabelView.Empty with
+                ColonialName = Some "Mother"
+                KinshipParen = Some "H"
+        }
+
+        world |> People.spawnTreeNode p0 (MemberNode p0.Id) label wilpId
+
+        let nodeId = world.Query(With PersonRef) |> Seq.head
+        nodeId |> has NodeLabel =! true
+        (nodeId |> get NodeLabel).Value =! label
+
+    [<Fact>]
     member _.``spawnTreeNode uses sphere size for Sphere shape``() =
-        world |> People.spawnTreeNode p0 (MemberNode p0.Id) wilpId // p0 has Shape = Sphere
+        world |> People.spawnTreeNode p0 (MemberNode p0.Id) NodeLabelView.Empty wilpId // p0 has Shape = Sphere
 
         let nodeId = world.Query(With PersonRef) |> Seq.head
         let size = (nodeId |> get Size).Value
@@ -60,7 +75,7 @@ type Tests() =
 
     [<Fact>]
     member _.``spawnTreeNode uses cube size for Cube shape``() =
-        world |> People.spawnTreeNode p1 (MemberNode p1.Id) wilpId // p1 has Shape = Cube
+        world |> People.spawnTreeNode p1 (MemberNode p1.Id) NodeLabelView.Empty wilpId // p1 has Shape = Cube
 
         let nodeId = world.Query(With PersonRef) |> Seq.head
         let size = (nodeId |> get Size).Value
@@ -71,21 +86,22 @@ type Tests() =
 
     [<Fact>]
     member _.``spawnTreeNode adds RenderedIn relation to wilp``() =
-        world |> People.spawnTreeNode p0 (MemberNode p0.Id) wilpId
+        world |> People.spawnTreeNode p0 (MemberNode p0.Id) NodeLabelView.Empty wilpId
 
         let nodeId = world.Query(With PersonRef) |> Seq.head
         nodeId |> targetFor RenderedIn =! Some wilpId
 
     [<Fact>]
     member _.``spawnTreeNode records a MemberNode's identity in NodeKeyRef``() =
-        world |> People.spawnTreeNode p0 (MemberNode p0.Id) wilpId
+        world |> People.spawnTreeNode p0 (MemberNode p0.Id) NodeLabelView.Empty wilpId
 
         let nodeId = world.Query(With PersonRef) |> Seq.head
         (nodeId |> get NodeKeyRef).Value =! MemberNode p0.Id
 
     [<Fact>]
     member _.``spawnTreeNode records a PartnerNode's identity, with its marriage CoupleId, in NodeKeyRef``() =
-        world |> People.spawnTreeNode p1 (PartnerNode(p1.Id, coupleP0P1Id)) wilpId
+        world
+        |> People.spawnTreeNode p1 (PartnerNode(p1.Id, coupleP0P1Id)) NodeLabelView.Empty wilpId
 
         let nodeId = world.Query(With PersonRef) |> Seq.head
         (nodeId |> get NodeKeyRef).Value =! PartnerNode(p1.Id, coupleP0P1Id)

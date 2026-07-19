@@ -9,6 +9,7 @@ open Wilnaatahl.ECS.Relation
 open Wilnaatahl.ViewModel
 open Wilnaatahl.ViewModel.Vector
 open Wilnaatahl.Traits.ConnectorTraits
+open Wilnaatahl.Traits.ViewTraits
 open Wilnaatahl.Traits.SpaceTraits
 
 /// Creates an anonymous record with x, y, z fields for use as a position value.

@@ -71,11 +71,62 @@ deliberately enumerate:
 y, z)`. For frozen Position values (anonymous records from `get Position`), use
   `=! Line3.pos x y z`. Do not deconstruct structured data into a tuple only to
   compare the tuple.
+- **Compare whole values; use sets when order isn't guaranteed.** Assert on the
+  entire record/DU/collection and let F#'s built-in structural equality do the
+  work — don't compare field-by-field or hand-roll a "same elements" helper. When
+  the result has no guaranteed order (a warning list, holdings across holders),
+  compare as sets (`Set.ofList actual =! Set.ofList expected`); never sort both
+  sides and compare lists (sorting is itself a tell that order isn't part of the
+  contract).
+- **Define a minimal/`Empty` record once; set only what matters with `with`.** For
+  record types with many fields, declare one baseline value at the top of the file
+  (e.g. `emptyRawPerson`, or a `minimalFile` with all-empty arrays) and build each
+  case as `{ baseline with Field = … }`. Adding a field later then touches one
+  baseline, not every literal.
+  - ✅ `(readBack graph).People =! [ { defaultRawPerson with Id = 0 } ]`
+  - ❌ a full record literal repeating every field in every test.
+- **Assert on the whole result as one declarative expression.** Compare the value a
+  function returns against an expected literal in a single `=!` — including its
+  `Ok`/`Some` wrapper, so success _and_ shape are pinned at once. Do **not** unwrap
+  a `Result`/`Option` with an inline `match … | Ok x -> <assertions> | Error _ ->
+failwith …` and nest the assertions in the success branch: that is procedural
+  transliteration, buries the assertions, and turns the error branch into
+  boilerplate. When the expected value _can_ be a literal, assert it directly.
+  - ✅ `Transform.toJson graph |> fromJson =! Ok { PeopleAndCoupleIds = [ … ]; Couples = []; Warnings = [] }`
+  - ✅ `importJsonText json =! Error EmptyPeopleArray` (nullary error case — pin it directly)
+  - ❌ `match Transform.toJson graph |> fromJson with | Ok r -> r.Warnings =! []; … | Error e -> failwithf "…" e`
+  - When the result is only _partly_ comparable (an opaque `FamilyGraph`) or must
+    be compared order-independently (sets), lift the value to the top level with a
+    small unwrap-or-fail helper (`readBack`, `roundTrip`, `importOrFail`) — one
+    reusable helper, not an inline `match` per test — then assert directly on it.
+  - Verbosity is not the enemy: a large expected literal is easier to read than a
+    terse chain of projections and pattern matches. Prefer the literal.
 - **No magic numbers in tests.** Extract constants with descriptive names and
   comments explaining the chosen value (e.g., `let frameDelta = 0.016 // one frame
 at 60 FPS`).
+- **Pass `[]` for an empty `seq<_>` argument, not `Seq.empty`.** F# coerces a list
+  literal to `seq<_>` at the call site, so `[]` reads as an ordinary empty
+  collection and lines up with the non-empty literals the same parameter takes
+  elsewhere in the file.
+  - ✅ `createFamilyGraph testPeopleAndParents testCouples []`
+  - ❌ `createFamilyGraph testPeopleAndParents testCouples Seq.empty`
 
 ## Choosing the right test attribute
+
+**Repetition in a test file is the signal to reach for `[<Property>]` or
+`[<Theory>]`.** Before writing a third `[<Fact>]` that varies one argument, stop
+and ask which of the three attributes fits — and if you keep `[<Fact>]`, say in a
+comment or the review notes why. In particular:
+
+- Several facts that differ only in a **boolean or enum argument** are an
+  enumerated table: use `[<Theory>]`, or — when the argument's contract is
+  _universal_ ("this flag never affects any field but one") — a `[<Property>]`
+  that states the contract once and subsumes all the rows.
+- Several facts that differ only in **which constructor of a DU** they feed in are
+  an enumerated table: use `[<Theory>]` with a `TheoryData` row per case.
+- A fact that restates the implementation line-for-line usually has a property
+  hiding behind it. Look for the invariant the example is an instance of
+  (idempotence, "output differs only in field X", "never equals Y", round-trip).
 
 Use `[<Property>]` (FsCheck) for _universal_ properties — mathematical laws,
 round-trip/inverse pairs (e.g. `JsonReader.read ∘ JsonWriter.write`), and
@@ -87,6 +138,13 @@ property can't pin direction or wire format (a two-directional rename passes
 round-trip). For guidance on _which_ properties to look for, see Scott Wlaschin's
 ["Choosing properties for property-based
 testing"](https://fsharpforfunandprofit.com/posts/property-based-testing-2/).
+
+A property is only as good as its generator. **Draw strings and names from a small
+pool** when the behaviour under test turns on two inputs _colliding_ (e.g. a held
+Name that equals a Wilp name): FsCheck's default string generator will essentially
+never produce the collision, so the interesting branch stays untested. **Scope the
+property to the cases where it actually holds** and say why in the doc comment —
+an invariant quietly widened to cases it doesn't cover is worse than no property.
 
 PBT is **.NET-only** via `FsCheck.Xunit.v3` (3.3.x with xunit.v3); the F# API —
 `Gen`, `Arb`, `Prop`, `gen { }`, `==>` — lives under `open FsCheck.FSharp`. Never
@@ -112,11 +170,44 @@ and no per-cell `box`. See `TransformTests.fs` (e.g. `TheoryData<string, Pdeek>`
 - **Test data independence.** Tests in `Wilnaatahl.Core.Tests` should use
   `TestData.testPeopleAndParents` (stable test data), not `Initial.peopleAndParents`
   (app seed data that may change).
+- **Never coin a Gitxsan Name, Wilp, or Pdeeḵ for test data.** Gitxsan Names are
+  real hereditary property, not filler. Sample Names are ordinary, easily-understood
+  English nicknames — `Tinker`, `Sparks`, `The Mayor`, `Lefty`, `Doc` — and Wilp
+  names in fixtures are short opaque tokens like `"H"`, `"L"`, `"MM"`. Avoid
+  Gitxsan-sounding coinages and the animal/clan imagery that model training data
+  gravitates toward; a Gitxsan word used as throwaway data is wrong even when it
+  happens to be spelled correctly. This governs _filler_ only: a Gitxsan string
+  that is the subject of the test — a `Pdeeḵ` spelling fed to the parser, say — is
+  the thing under test, not decoration.
 - **Share test fixtures through `TestData.fs`.** When multiple tests need the same
   shape of setup (e.g. a prototypical childless Couple, or a handful of anonymous
   Persons to wire Couples between), factor it into `TestData.fs` rather than
   re-declaring per-test. This shrinks test bodies, makes each test's _intent_
   obvious, and keeps fixture tweaks from rippling through many files.
+- **A helper belongs at the widest scope that uses it — declare it there the
+  first time.** Repeating a multi-step sequence (drive a drag, click a button,
+  find an entity by label) buries the one line that differs between tests in noise
+  the reader has to diff by eye. Two failure modes to avoid, both seen in this
+  repo:
+  - _Introducing the helper inconsistently_ — factoring the sequence out in one
+    test while the next spells it out longhand, so the file reads as though the
+    two are doing different things when they aren't.
+  - _Copying the helper instead of hoisting it_ — re-declaring the same `let
+click btn = …` inside a second test rather than moving the first one up to
+    the fixture. A local helper that a second test wants is the signal to hoist,
+    not to duplicate.
+    So: before writing a sequence, check whether a sibling test already has it; if
+    it does, hoist that one to the fixture (or to module scope if it needs no
+    world). **Check the shared modules too** — `TestData.fs` already carries helpers
+    like `on year month day` for building an optional `DateOnly`, and re-spelling
+    one inline (`Some(DateOnly(1950, 1, 1))`) is the same duplication with a wider
+    radius. Prefer a helper that takes the varying value as a parameter
+    (`dragNodeTo node x`) over one that closes over a specific entity.
+- **Wait on the end state, not on a frame count.** A loop like `for _ in 1..100 do
+runSystems world 0.1` asserts nothing and silently under-runs if the tuning
+  changes. Loop until the condition the test depends on actually holds, with a
+  bounded number of iterations and an assertion that it was reached — see
+  `RunnerTests.runUntilSettled`.
 
 ## Portability of ECS tests
 
@@ -147,3 +238,14 @@ and no per-cell `box`. See `TransformTests.fs` (e.g. `TheoryData<string, Pdeek>`
   what the body asserts, rewrite the body to demonstrate the named property (e.g.
   don't title a test "accumulates over multiple characters" if it only asserts a
   single hash value — show the accumulation step explicitly).
+- **Name the concrete behaviour; no metaphors, no abstract placeholders.** A test
+  name is read by someone who does not have the code in front of them, so it has
+  to say what actually happens. Two habits to drop:
+  - _Words that mean something else in software._ "threads X into Y", "gated by
+    Z", "wires up W" — `thread` and `gate` have established technical meanings, so
+    they read as claims about concurrency or control flow rather than as
+    description. Say what the code produces: "puts a person's most recent held
+    Name in the composed label", not "threads namesHeldBy into the label".
+  - _Naming a parameter or condition without saying what it is._ Calling a
+    Boolean "the gate" or "the flag" tells the reader nothing; name the condition
+    it expresses ("a person outside the rendered Wilp").

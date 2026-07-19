@@ -5,6 +5,7 @@ open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.ECS.Relation
 open Wilnaatahl.Model
+open Wilnaatahl.ViewModel
 open Wilnaatahl.ViewModel.SceneConstants
 open Wilnaatahl.ViewModel.Vector
 open Wilnaatahl.Entities
@@ -21,8 +22,9 @@ let spawnWilpBox (wilp: WilpName) (world: IWorld) =
 
 /// Spawns a tree node entity representing the given person in the specified wilp. The nodeKey
 /// records the node's identity, so a from-outside spouse married to several Wilp members spawns
-/// a distinct node per marriage.
-let spawnTreeNode person nodeKey wilp (world: IWorld) =
+/// a distinct node per marriage. The label carries the precomputed, presentation-neutral label
+/// content shown on the node.
+let spawnTreeNode person nodeKey (label: NodeLabelView) wilp (world: IWorld) =
     let nodeSize =
         let s = defaultSphereRadius
         let c = defaultCubeSize
@@ -36,6 +38,7 @@ let spawnTreeNode person nodeKey wilp (world: IWorld) =
         NodeKeyRef.Val nodeKey,
         Position.Val zeroPosition,
         Size.Val nodeSize,
+        NodeLabel.Val label,
         RenderedIn.ToTarget wilp
     )
     |> ignore

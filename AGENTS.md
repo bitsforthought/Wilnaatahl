@@ -24,6 +24,11 @@ Sim Algyax (Gitxsanimx) is **not** a Canadian language. The Gitxsan nation
 precedes Canada by more than 10,000 years; do not frame the language or people as
 Canadian.
 
+Avoid the word **"band"** in code, comments, and specs — it carries a specific
+legal meaning under Canada's _Indian Act_ that does not apply here and invites
+confusion. Prefer **"group"** (or a more precise domain term) when naming a
+partition or category.
+
 ## Architecture & Data Flow
 
 - **Frontend:** React (TypeScript) in `src/react-components/` and `src/main.tsx`.
@@ -35,6 +40,48 @@ Canadian.
   library. `src/main.tsx` provides a Koota `World` via `<WorldProvider>`. React
   components access state through Koota hooks (`useWorld()`, `useQuery()`,
   `useTrait()`, `useActions()`).
+- **A system encapsulates one _behaviour_, not one kind of entity.** Decompose
+  systems by what the app _does_, not by what data they touch: removing a system
+  should switch off exactly that behaviour and leave every other one working. So
+  "the mode determines which controls are available" belongs wholly to
+  `Systems/ViewMode.fs` — including hiding the undo/redo and select-mode buttons —
+  even though those buttons are owned by other systems, which declare their own
+  button `MoveModeOnly` and never read the mode themselves. Two consequences:
+  a system that reads another system's state for _chrome_ is usually a misplaced
+  behaviour, whereas one that reads it because the state genuinely changes what
+  its own behaviour means (View mode changes what clicking a node does) is
+  correct; and a system needing to run at two different points in the frame is a
+  sign it holds two behaviours.
+- **Cross-cutting traits belong in `Traits/`, not in the system that writes
+  them.** A system module may declare traits that are private to it (its own
+  button discriminators) or that are outward signals only the TS layer consumes
+  (`FileCommands.OpenFileRequested`). But once _another F# system_ reads a trait,
+  put it in `Traits/` — otherwise every reader has to `open` the writing system's
+  module, which reads as a dependency on that system's behaviour when it is only a
+  dependency on shared state (`ViewTraits.InViewMode`: written by
+  `Systems.ViewMode`, read by `Selection` and the view layer).
+- **Order systems in `Runner.fs` so derived values are recomputed after their
+  inputs.** A system that derives state from another system's output must run
+  after it, or the derived value lags a frame. Better still, remove the
+  constraint: a system that needs to run at _two_ points in the frame is holding
+  two behaviours, and the fix is usually to hand the behaviour to whoever owns the
+  input rather than to split the system across the pipeline. Constraints that
+  remain are real behaviour: state them in the `runSystems` comment and pin them
+  with a test that drives whole frames through `runSystems`, not one that calls a
+  single system.
+- **Resolve ambiguous same-frame input explicitly.** Events live for the whole
+  frame (`cleanupEvents` runs last), so two controls can be clicked in one frame.
+  Where that combination has no coherent meaning, state a policy and enforce it in
+  one place instead of letting pipeline order decide by accident: `updateViewMode`
+  discards every other click on the frame the mode switches, so no later system
+  can act on input belonging to the mode just left.
+- **Never write a trait value that hasn't changed.** Koota's `set` notifies change
+  subscribers unconditionally — it does not diff old against new — so a system
+  that recomputes a value each frame and writes it unconditionally re-renders
+  every subscribed React component at 60 fps. Guard the write on an actual change;
+  where several systems write the same field, factor the guard into one helper
+  (see `Systems.Controls.setButtonDisabled`). Adding or removing a **tag** is safe
+  — Koota's `add`/`remove` no-op when the trait is already in the desired state.
 - **ECS bridge:** `src/ecs/koota/kootaWrapper.ts` bridges Koota's TypeScript API
   and the F# ECS interfaces. F# systems (layout, animation, dragging, movement,
   selection, undo/redo) run each frame via `useFrame()` in `TreeScene.tsx`.
@@ -43,10 +90,34 @@ Canadian.
   LineMesh). The rendering system in `src/ecs/rendering.ts` synchronizes Koota
   trait changes to Three.js meshes.
 - **Styling:** All styles in `src/style.css` (global CSS with light/dark mode).
-- **F# is authoritative.** All business logic and data structures originate in F#
-  and are generated to TypeScript via Fable. React components must use the
-  F#-generated view model and ECS systems for state and actions — do not
-  reimplement domain logic in TypeScript.
+- **F# is authoritative — but that is a principle, not a law.** All business logic
+  and data structures originate in F# and are generated to TypeScript via Fable.
+  React components must use the F#-generated view model and ECS systems for state
+  and actions — do not reimplement domain logic in TypeScript.
+- **Avoiding redundant state outranks "F# is authoritative".** Koota is a bridge:
+  the same world is queryable from both F# and TypeScript. So when a value is a
+  one-line derivation of world state both sides can already see (e.g. "the overlay
+  shows" = in View mode **and** exactly one node `Selected`), derive it where it is
+  consumed rather than mirroring it into an extra trait that F# recomputes each
+  frame. A cached copy is a second source of truth that can disagree with the
+  values it came from; that cost is real, whereas "the rule lives in F#" is only a
+  default. Keep the derivation in F# when it is genuinely domain logic (more than
+  a trivial predicate over traits), when several consumers would otherwise repeat
+  it, or when recomputing it per consumer is measurably expensive. Note the price:
+  the TypeScript layer has **no unit tests yet**, so moving a derivation there
+  trades automated coverage for the removal of the cached copy — take that trade
+  only for derivations simple enough to verify by reading.
+- **Presentation formatting is a view-layer (TS) concern, not domain logic.**
+  Locale-dependent **date/number formatting** belongs in the TypeScript view layer
+  (e.g. `Intl.DateTimeFormat`), not F#. **Translatable language strings** come from
+  a shared locale catalog authored in F# and consumed on both sides via Fable (one
+  `Locale` type, no .NET `CultureInfo`), so F# (e.g. import messages) and TS (UI
+  chrome) localize the same way. The F# view model stays presentation-neutral
+  (e.g. a `DateOnly` plus any raw-text fallback), leaving date formatting to TS.
+  Gitxsan **data values** (a specific House's/clan's name, a person's Name) are
+  never translated; Gitxsan words used as UI **labels** (e.g. "Wilp", "Pdeeḵ") are
+  chrome that may in future be localized (an all-English vs all-Gitxsan UI), so
+  they belong in the shared catalog too.
 - **Production runtime is Fable-generated JS in a browser**, not the CLR. Don't
   assume a CLR runtime when reasoning about runtime behaviour.
 - **Licensing:** AGPL-3.0 with a non-commercial restriction (see `LICENSE`).

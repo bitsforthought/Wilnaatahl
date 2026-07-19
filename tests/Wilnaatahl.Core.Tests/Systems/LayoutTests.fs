@@ -19,12 +19,12 @@ open Wilnaatahl.Tests.EcsTestSupport
 open Wilnaatahl.Tests.TestData
 
 let private spawnTestScene (world: IWorld) =
-    let graph = createFamilyGraph testPeopleAndParents testCouples
+    let graph = createFamilyGraph testPeopleAndParents testCouples []
     let wilpId = world |> People.spawnWilpBox testWilpName
     let nodes = Scene.enumerateHuwilpToRender graph |> Map.find testWilpName
 
     for nodeKey, person in nodes do
-        world |> People.spawnTreeNode person nodeKey wilpId
+        world |> People.spawnTreeNode person nodeKey NodeLabelView.Empty wilpId
 
     graph
 

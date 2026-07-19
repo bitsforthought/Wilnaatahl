@@ -6,6 +6,9 @@
 
   <ItemGroup>
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The demo showcase file, copied to the test output so the import smoke
+         test can load it from disk and prove it stays warning-clean. -->
+    <Content Include="..\..\samples\sample.json" Link="sample.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
@@ -18,12 +21,16 @@
     <Compile Include="ViewModel/VectorTests.fs" />
     <Compile Include="ViewModel/PaletteTests.fs" />
     <Compile Include="ViewModel/ImportMessagesTests.fs" />
+    <Compile Include="ViewModel/LocalizationTests.fs" />
+    <Compile Include="ViewModel/NodeContentTests.fs" />
     <Compile Include="Traits/EventsTests.fs" />
     <Compile Include="Entities/LineTests.fs" />
     <Compile Include="Entities/BoundingBoxTests.fs" />
     <Compile Include="Entities/PeopleTests.fs" />
     <Compile Include="Entities/ConnectorsTests.fs" />
     <Compile Include="Systems/AnimationTests.fs" />
+    <Compile Include="Systems/ControlsTests.fs" />
+    <Compile Include="Systems/ViewModeTests.fs" />
     <Compile Include="Systems/SelectionTests.fs" />
     <Compile Include="Systems/FileCommandsTests.fs" />
     <Compile Include="Systems/DraggingTests.fs" />

@@ -45,10 +45,10 @@ let private handleDragStart (world: IWorld) =
 
 let private handleDrag (world: IWorld) =
     match world.Get DragEvent with
-    | None -> None // Nothing to do
+    | None -> world // Nothing to do
     | Some move ->
         match world.QueryFirstTarget Dragging with
-        | Some(dragEntity, nodeEntity, origin) ->
+        | Some(_, nodeEntity, origin) ->
             match nodeEntity |> get Position with
             | Some oldPosition ->
                 let originV, moveV, oldPosV =
@@ -62,28 +62,30 @@ let private handleDrag (world: IWorld) =
                     pos.y <- pos.y + delta.y
                     pos.z <- pos.z + delta.z
 
-                Some dragEntity
+                world
             | None ->
                 // All nodes should have positions.
                 failwith $"Drag target {nodeEntity} found without a Position."
         | None ->
             // No dragging entity found, which probably shouldn't happen.
             printfn $"{nameof handleDrag}: No Dragging entity found even though a drag is in progress."
-            None
+            world
 
-let private handleDragEnd maybeDragEntity (world: IWorld) =
+let private handleDragEnd (world: IWorld) =
     if world.Has DragEndEvent then
-        match maybeDragEntity with
-        | Some dragEntity ->
-            dragEntity |> destroy
-            // There should be a spurious click event in the same frame.
-            // Delete it so it doesn't trigger selection.
+        // Whether a drag is in progress is world state, not something to thread down the pipeline:
+        // a release can arrive in a frame carrying no movement, and that still ends the drag.
+        match world.QueryFirstTarget Dragging with
+        | Some(dragEntity, nodeEntity, _) ->
+            // Releasing a drag raises a spurious click on the dragged node. Remove that one click
+            // so it doesn't trigger selection, but leave every other control's click alone: a tap
+            // on the toolbar in the same frame is real input, not drag fallout.
             // ASSUMPTION: The dragging system must run before the selection system!
-            world.RemoveAll ClickEvent
+            nodeEntity |> remove ClickEvent
+            dragEntity |> destroy
         | None ->
-            // If there is no drag operation present, that means this is a spurious
-            // DragEndEvent. We need to prevent it from propagating or it could interfere
-            // with Undo/Redo.
+            // No drag is in progress, so this is a spurious DragEndEvent. We need to prevent it
+            // from propagating or it could interfere with Undo/Redo.
             // ASSUMPTION: The dragging system must run before the undo/redo system!
             world.Remove DragEndEvent
 
@@ -92,5 +94,4 @@ let private handleDragEnd maybeDragEntity (world: IWorld) =
 let dragNodes (world: IWorld) =
     // There are no early returns because it's possible to have some
     // combination of these events happen in the same frame.
-    let dragEntity = world |> trackTouchedNodes |> handleDragStart |> handleDrag
-    world |> handleDragEnd dragEntity
+    world |> trackTouchedNodes |> handleDragStart |> handleDrag |> handleDragEnd

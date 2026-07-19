@@ -23,6 +23,30 @@ that describes only the thing it sits on stays true exactly as long as that thin
 does. When you catch yourself naming something defined elsewhere, that is the
 smell.
 
+**The second through-line: every comment costs the reader more than it costs
+you.** A human reviewer cannot skim a comment — they have to fact-check it
+against the code, because a confident, wrong comment is worse than none. So each
+sentence you add spends someone else's attention, and a paragraph that restates
+what the code already says spends it for nothing. The default is therefore **no
+comment**: write the code so it speaks for itself, and reserve comments for what
+the code cannot say — a constraint, a rejected alternative, a non-obvious
+consequence, a reference to an external contract.
+
+Before writing any comment, check it against all three:
+
+1. **Does the code already say this?** If the comment narrates the next few lines
+   ("Toggle the multi-select state and deselect all nodes", "Find the node that
+   received a click"), delete it. Naming things well is the fix, not annotating.
+2. **Does this belong here?** Explaining another module's mechanism, or an
+   architectural principle, at a call site puts the explanation where it will
+   drift. Move it to the declaration it describes, or to `AGENTS.md`.
+3. **Would one sentence do?** Length is not thoroughness. If it reads like an
+   essay — background, then justification, then implication — cut it to the
+   single fact a reader could not have derived.
+
+Applies equally to comments inside function bodies, which no rule below covers
+but which is where verbosity most often accumulates.
+
 - **Describe the contract, not the consumer.** Say what the value/function _is_
   on its own terms. Don't reference downstream callers, name the function that
   will operate on the result later, or justify a field's shape by what some other
@@ -58,11 +82,39 @@ smell.
   and returns a Result of RawFile or ImportError" adds nothing the signature
   doesn't. Use the doc comment to capture invariants, error shapes, edge cases, or
   semantic nuances the signature can't carry.
+- **Be concise — no motivational prose.** State what the value/fixture _is_ in one
+  or two declarative lines. Don't narrate why it exists, what scenario inspired it,
+  or how it relates to other fixtures/seed data. If a comment reads like a story,
+  cut it to the contract. (This also keeps out the cross-module references the
+  "describe the contract" rule forbids.)
+  - ✅ `/// Outside spouse married to both "MM" members; renders one node per marriage.`
+  - ❌ a multi-line paragraph explaining the scenario, naming another module's seed, and justifying the fixture.
 - **Direction matters.** It is fine for a comment in a _consumer_ module to
   reference the dependency it uses (`Import.fs` mentioning `Couple.create` is
   natural — `Couple` is what it's calling). It is **not** fine for a comment in a
   _dependency_ module to reference the consumer (`JsonTypes.fs` mentioning
   `Couple.create` reverses the dependency arrow in doc form).
+- **Document a shared contract once, at its declaration — never again at each use
+  site.** When several call sites depend on the same trait, type, or helper, put
+  the explanation on the declaration and let the _name_ carry it at the use sites.
+  A mechanism restated in three modules is three copies free to drift apart, and
+  it makes each caller read as though it were implementing the mechanism rather
+  than opting into it. If a use site seems to need the explanation, the
+  declaration's comment is the thing to improve.
+  - ✅ `ViewTraits.MoveModeOnly`'s doc comment says the ViewMode system hides its
+    bearers in View mode; the modules that spawn `MoveModeOnly` buttons say nothing.
+  - ❌ every spawner repeating "…so it is marked `MoveModeOnly` and the ViewMode
+    system hides it in View mode".
+- **Attach a single-declaration comment as `///`, not a `//` banner.** When a
+  comment describes one type, function, or test, write it as a `///` doc comment
+  directly above the declaration (above its attributes, e.g. `[<Fact>]`/`[<Theory>]`)
+  — not as a free-floating `// -----` banner box. This applies in **test files**
+  too: a banner sitting above exactly one `[<Fact>]`/`[<Theory>]` is just a doc
+  comment in disguise, so make it `///`. Reserve `// -----`-style banners for
+  grouping a _section_ of several related declarations under one heading; never use
+  one to annotate a single binding.
+  - ✅ `/// Every BCP-47 tag maps to English while En is the only locale.` above `[<Theory>] … let …`
+  - ❌ a `// -----` box whose only purpose is to describe the one `[<Fact>]` beneath it.
 
 ## Related comment hygiene
 

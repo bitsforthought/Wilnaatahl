@@ -269,7 +269,7 @@ let ``nodePaint of a selected affiliated person paints copper with strong emissi
 let ``nodePaint of a selected unaffiliated person also paints copper`` () =
     // Selection wins over Wilp affiliation: no matter what the Person's Kinship is,
     // a selected node gets the same copper highlight.
-    let person = personWith NoneProvided
+    let person = personWith (NoneProvided None)
 
     Palette.nodePaint person true
     =! {
@@ -292,7 +292,7 @@ let ``nodePaint of an unselected affiliated person uses colourForWilp with no em
 
 [<Fact>]
 let ``nodePaint of an unselected unaffiliated person uses ivory with no emissive`` () =
-    let person = personWith NoneProvided
+    let person = personWith (NoneProvided None)
 
     Palette.nodePaint person false
     =! {

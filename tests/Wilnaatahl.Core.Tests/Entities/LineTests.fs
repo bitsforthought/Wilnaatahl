@@ -10,6 +10,7 @@ open Wilnaatahl.ViewModel
 open Wilnaatahl.ViewModel.Vector
 open Wilnaatahl.Entities
 open Wilnaatahl.Traits.ConnectorTraits
+open Wilnaatahl.Traits.ViewTraits
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Tests.EcsTestSupport
 

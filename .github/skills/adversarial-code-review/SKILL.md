@@ -35,6 +35,24 @@ touched, ask:
 - **A RED test that only failed to compile was never RED.** Confirm new tests
   fail for the right reason against a returning stub, not because a name is
   missing.
+- **Imperative-style assertions.** Flag tests that unwrap a `Result`/`Option` with
+  an inline `match … | Ok x -> <assertions> | Error _ -> failwith …` and nest the
+  checks in the success branch, rather than asserting on the whole result in one
+  declarative `=!` (e.g. `f x =! Ok expectedLiteral`, or lifting the value via a
+  reusable unwrap-or-fail helper like `readBack`/`importOrFail` and asserting
+  directly). Also flag whole-value checks re-expressed as terse projections/tuples
+  where a plain expected literal would read more clearly — verbosity is fine when
+  it aids understanding. See the `fsharp-testing` skill.
+- **Repetitive facts that should be a `[<Theory>]` or `[<Property>]`.** Flag runs
+  of `[<Fact>]`s that differ only in one boolean/enum argument, or only in which
+  DU case they feed in. These are enumerated tables (`[<Theory>]` with
+  `TheoryData`) or, when the argument's contract is universal ("this flag affects
+  no field but one"), a single `[<Property>]`. Do not accept "the change didn't
+  introduce PBT" as a reason to skip the question — a diff that adds repetitive
+  facts must justify why a property or theory was rejected. Conversely, flag
+  properties whose **generator can't reach the interesting branch** (e.g. default
+  string generation where the behaviour turns on two strings colliding) and
+  properties **asserted more widely than they hold**.
 
 ## 2. F# idiom violations (C#-in-F#)
 
@@ -66,6 +84,19 @@ Check the diff against the `fsharp-style` skill. Common regressions to hunt for:
   `choose`-ing errors then `choose`-ing successes (sequence/traverse it once); the
   same `when …` guard or predicate copy-pasted across several matches instead of a
   shared helper/active pattern.
+- **Subject not piped / inside-out application.** The `fsharp-style` "pipe the
+  subject" rule is about the whole expression's data flow, and its two violations
+  are easy to skim past because they don't look like an obvious `f x y` call:
+  (a) nested/inside-out application — `Set.ofList (List.map fst xs)` instead of
+  `xs |> List.map fst |> Set.ofList`; and (b) a subject left in application form as
+  an **operand** of an operator — `actual =! List.map snd xs` instead of
+  `actual =! (xs |> List.map snd)`. Check operator operands (both sides of `=!`,
+  `=`, `@`, …) and innermost parens, not just top-level `let` calls. (Watch the
+  precedence trap that hides the second shape: `|>` and `=!`/`=` share precedence
+  and are left-associative, so the correct pipe on an operator's right needs
+  parens — its absence is not an excuse to keep the application form. The same
+  left-associativity means a pipeline on an operator's **left** needs no parens:
+  flag `(xs |> f) =! y`, which should be `xs |> f =! y`.)
 - `emitJsExpr` used where plain F# would work.
 - **Dated idioms / unverified new syntax.** Flag clearly older constructs where
   the repo's modern convention applies (e.g. `expr.[i]`, `sprintf` for trivial
@@ -85,6 +116,16 @@ Check the diff against the `fsharp-style` skill. Common regressions to hunt for:
 
 - Doc comments follow the `fsharp-doc-comments` skill: contract-not-consumer, no
   version numbers, no restating the signature, dependency→consumer direction.
+- **Duplicated explanation is drift waiting to happen.** If the same mechanism is
+  explained at more than one use site, flag it: the explanation belongs once, on
+  the declaration the sites share. Grep the diff for a sentence repeated across
+  modules.
+- **Comment volume is a defect, not a matter of taste.** Every comment must be
+  fact-checked by a human reviewer, so one that restates the code, explains
+  another module's mechanism, or runs to a paragraph where a sentence would do is
+  a real cost with no benefit. Flag comments that narrate the lines beneath them,
+  and comments whose content belongs on a declaration elsewhere or in `AGENTS.md`.
+  This applies inside function bodies, not only to `///` doc comments.
 - **Dead-code removal is deep**: when code was deleted, were its
   data structures, derivation logic, and helper types removed too? Grep for
   leftover references.
@@ -95,6 +136,16 @@ Check the diff against the `fsharp-style` skill. Common regressions to hunt for:
 ## 4. Correctness and validation
 
 - Does the change actually solve the stated problem, including edge cases?
+- **Redundant state.** Flag any new trait/field that is recomputed each frame from
+  other state — it is a cached second source of truth that can disagree with its
+  inputs. Ask whether the consumer (including a TypeScript consumer, since Koota
+  is queryable from both sides) could just derive it. Per `AGENTS.md`, avoiding
+  redundant state outranks "F# is authoritative"; only keep the mirror for genuine
+  domain logic, several repeating consumers, or measured cost.
+- **Unconditional per-frame trait writes.** Koota's `set` notifies change
+  subscribers without diffing, so a system that writes a recomputed value every
+  frame re-renders subscribed components at 60 fps. Flag writes in per-frame
+  systems that aren't guarded on an actual change.
 - Were `npm run build`, `npm test`/`test:koota`, and `npm run coverage:check`
   run and green? (Fable can emit bad TS that `dotnet test` misses.)
 - For ECS tests: are they portable across the .NET mock and real Koota, and

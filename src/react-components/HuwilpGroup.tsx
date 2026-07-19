@@ -1,15 +1,29 @@
 import React from "react";
 import { DragControls } from "@react-three/drei";
 import { Not } from "koota";
-import { useActions, useQuery } from "koota/react";
-import { eventActions, Elbow, Hidden, Line, Size, PersonRef, Position, Selected } from "../ecs";
+import { useActions, useHas, useQuery, useWorld } from "koota/react";
+import {
+  eventActions,
+  Elbow,
+  Hidden,
+  InViewMode,
+  Line,
+  Size,
+  PersonRef,
+  Position,
+  Selected,
+} from "../ecs";
 import { ElbowSphereMesh } from "./ElbowSphereMesh";
 import { LineMesh } from "./LineMesh";
 import { TreeNodeMesh } from "./TreeNodeMesh";
 
 export function HuwilpGroup() {
-  const staticEntities = useQuery(Size, PersonRef, Not(Selected, Hidden));
-  const draggableEntities = useQuery(Size, PersonRef, Selected, Not(Hidden));
+  const world = useWorld();
+  const inViewMode = useHas(world, InViewMode);
+  const staticNodes = useQuery(Size, PersonRef, Not(Selected, Hidden));
+  const draggableNodes = useQuery(Size, PersonRef, Selected, Not(Hidden));
+  // In View mode nothing is draggable, so every visible node renders statically.
+  const allNodes = useQuery(Size, PersonRef, Not(Hidden));
   const lines = useQuery(Line, Not(Hidden));
   const elbows = useQuery(Elbow, Position, Not(Hidden));
   const { handleDrag, handleDragEnd, handleDragStart } = useActions(eventActions);
@@ -56,20 +70,26 @@ export function HuwilpGroup() {
     <group rotation-y={0}>
       <group rotation-y={0}>
         <group position={[0, 1, faceDepth]}>
-          <DragControls
-            autoTransform={false}
-            axisLock="z"
-            onDrag={handleDrag}
-            onDragEnd={handleDragEnd}
-            onDragStart={handleDragStart}
-          >
-            {draggableEntities.map((entity) => (
-              <TreeNodeMesh entity={entity} key={entity.id()} />
-            ))}
-          </DragControls>
-          {staticEntities.map((entity) => (
-            <TreeNodeMesh entity={entity} key={entity.id()} />
-          ))}
+          {inViewMode ? (
+            allNodes.map((entity) => <TreeNodeMesh entity={entity} key={entity.id()} />)
+          ) : (
+            <>
+              <DragControls
+                autoTransform={false}
+                axisLock="z"
+                onDrag={handleDrag}
+                onDragEnd={handleDragEnd}
+                onDragStart={handleDragStart}
+              >
+                {draggableNodes.map((entity) => (
+                  <TreeNodeMesh entity={entity} key={entity.id()} />
+                ))}
+              </DragControls>
+              {staticNodes.map((entity) => (
+                <TreeNodeMesh entity={entity} key={entity.id()} />
+              ))}
+            </>
+          )}
           {lines.map((entity) => (
             <LineMesh entity={entity} key={entity.id()} />
           ))}

@@ -10,6 +10,7 @@ open Wilnaatahl.ViewModel.Vector
 open Wilnaatahl.Traits.Events
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Traits.ViewTraits
+open Wilnaatahl.Systems.Controls
 
 let private UndoButton = tagTrait ()
 let private RedoButton = tagTrait ()
@@ -24,14 +25,16 @@ let spawnUndoRedoControls (sortOrder, world: IWorld) =
     world.Spawn(
         Button.Val {| sortOrder = sortOrder; label = "Undo"; disabled = true |},
         UndoButton.Tag(),
-        UndoRedoStack.Val(new Stack<EntityId>())
+        UndoRedoStack.Val(new Stack<EntityId>()),
+        MoveModeOnly.Tag()
     )
     |> ignore
 
     world.Spawn(
         Button.Val {| sortOrder = sortOrder + 1; label = "Redo"; disabled = true |},
         RedoButton.Tag(),
-        UndoRedoStack.Val(new Stack<EntityId>())
+        UndoRedoStack.Val(new Stack<EntityId>()),
+        MoveModeOnly.Tag()
     )
     |> ignore
 
@@ -60,17 +63,20 @@ module private Snapshot =
     let getSavedPositionFor entity snapshot =
         entity |> getRelationValue SnapshottedBy snapshot.Entity
 
+    /// Keeps the snapshot by pushing it onto the given stack, or discards it when it captured
+    /// nothing — the entity is spawned before that is known, so an empty one must be destroyed
+    /// rather than left orphaned in the world.
     let pushTo (stack: Stack<EntityId>) snapshot =
         if snapshot.HasItems then
             stack.Push snapshot.Entity
+        else
+            snapshot |> destroy
 
 let private handleDragStart (world: IWorld) (undoStack: Stack<EntityId>) =
     // Before allowing nodes to move as part of a drag operation, we need to capture their
     // starting positions for posterity. We use Selected and the presence of the DragStartEvent
     // to identify the nodes to process.
-    if not (world.Has DragStartEvent) then
-        undoStack
-    else
+    if world.Has DragStartEvent then
         let snapshot = getSnapshot world (world.Spawn())
 
         // There are two distinct cases: Either the node about to be dragged was animating,
@@ -79,12 +85,9 @@ let private handleDragStart (world: IWorld) (undoStack: Stack<EntityId>) =
         <| fun (pos, entity) -> snapshot |> capture entity pos
 
         snapshot |> pushTo undoStack
-        undoStack
 
 let private handleDragEnd (world: IWorld) (redoStack: Stack<EntityId>) =
-    if not (world.Has DragEndEvent) then
-        redoStack
-    else
+    if world.Has DragEndEvent then
         // Drag is ending; Flush the redo history of all nodes to avoid massive time-travel
         // confusion for the user, but only if at least one of the nodes being dragged does
         // *not* have a TargetPosition. Otherwise, that means the user is dragging nodes that
@@ -97,12 +100,9 @@ let private handleDragEnd (world: IWorld) (redoStack: Stack<EntityId>) =
                 let snapshot = getSnapshot world (redoStack.Pop())
                 snapshot |> destroy
 
-        redoStack
-
 let private updateButtonState buttonEntity (stack: Stack<EntityId>) =
-    // Update button status based on whether there is anything to undo/redo.
-    buttonEntity
-    |> setWith Button (fun buttonTrait -> {| buttonTrait with disabled = stack.Count = 0 |})
+    // Enable the button when its stack has something to undo/redo.
+    buttonEntity |> setButtonDisabled (stack.Count = 0)
 
 let private handleButtonClicked (world: IWorld) (toStack: Stack<EntityId>) (fromStack: Stack<EntityId>) =
     // Disabling the Undo/Redo buttons isn't instantaneous due to delays in React rendering the button.
@@ -135,13 +135,7 @@ let private handleButtonClicked (world: IWorld) (toStack: Stack<EntityId>) (from
         newSnapshot |> pushTo toStack
         snapshot |> destroy
 
-    fromStack
-
 let handleUndoRedo (world: IWorld) =
-    // Start by getting the entities representing the Undo/Redo buttons, which also
-    // point to the Undo/Redo stacks. Then check for clicks. Make sure to update button
-    // state whenever the stacks might have changed.
-
     // Buttons must exist and have the right traits or we have an app setup issue.
     let undoStack, undoButtonEntity =
         world.QueryTrait(UndoRedoStack, With Button, With UndoButton).ToSequence()
@@ -151,19 +145,38 @@ let handleUndoRedo (world: IWorld) =
         world.QueryTrait(UndoRedoStack, With Button, With RedoButton).ToSequence()
         |> Seq.exactlyOne
 
+    // Multi-touch makes it possible to tap Undo and Redo together, or to tap either while a drag
+    // is starting or ending. Undo takes precedence over Redo, and both take precedence over the
+    // drag handlers below.
+    //
+    // TODO: That precedence corrupts undo history, because a drag is owned by the Dragging system
+    // and proceeds whether or not this system sees it. Losing a drag *start* loses the snapshot,
+    // so the node moves with no undo entry and cannot be brought back. Losing a drag *end* skips
+    // the redo flush, leaving redo entries the completed drag should have invalidated — a later
+    // Redo then warps a node onto the timeline that drag replaced, which is the same corruption
+    // pinned by `RunnerTests`' stale-redo-history test.
+    //
+    // Running the drag handlers unconditionally does *not* fix it. Measured, both orders fail:
+    // with the buttons first, the undo sets TargetPosition on the node it restores, and
+    // `handleDragStart` filters exactly those out, so it still captures nothing; with the drag
+    // handlers first, the same-frame undo pops the snapshot just pushed instead of the preceding
+    // action, so the undo is wasted and the drag it captured is skipped over later. The fix needs
+    // a policy that keeps a frame atomic, and the two directions differ: a drag *start* can be
+    // refused before `dragNodes` acts on it, since nothing has begun yet, but a drag *end* cannot
+    // be swallowed the same way — the drag is already underway, and dropping the release would
+    // strand the `Dragging` relation the view layer reads as "still dragging". An end has to be
+    // finalized, so it is the button click that must lose the frame or the stacks that must be
+    // reconciled explicitly.
     if undoButtonEntity |> has ClickEvent then
-        undoStack
-        |> handleButtonClicked world redoStack
-        |> updateButtonState undoButtonEntity
-
-        world // Clicking Undo is mutually exclusive with clicking Redo or dragging.
+        undoStack |> handleButtonClicked world redoStack
     elif redoButtonEntity |> has ClickEvent then
-        redoStack
-        |> handleButtonClicked world undoStack
-        |> updateButtonState redoButtonEntity
-
-        world // Clicking Redo is mutually exclusive with clicking Undo or dragging.
+        redoStack |> handleButtonClicked world undoStack
     else
-        undoStack |> handleDragStart world |> updateButtonState undoButtonEntity
-        redoStack |> handleDragEnd world |> updateButtonState redoButtonEntity
-        world
+        undoStack |> handleDragStart world
+        redoStack |> handleDragEnd world
+
+    // Every branch above can move an entry between the two stacks, so settle both buttons
+    // rather than only the one that was clicked.
+    undoStack |> updateButtonState undoButtonEntity
+    redoStack |> updateButtonState redoButtonEntity
+    world

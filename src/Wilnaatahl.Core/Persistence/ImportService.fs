@@ -15,7 +15,7 @@ module ImportService =
     /// Builds a FamilyGraph from the hardcoded sample data in `Initial`. Used
     /// as a demo/exploration affordance until the user imports their own data.
     let loadSampleGraph () : FamilyGraph =
-        createFamilyGraph peopleAndParents couples
+        createFamilyGraph peopleAndParents couples nameHoldings
 
     /// End-to-end import: parses JSON, transforms, and constructs the FamilyGraph.
     /// Returns either an ImportSuccess (graph + warnings) or an ImportError
@@ -23,6 +23,6 @@ module ImportService =
     let importJsonText (json: string) : Result<ImportSuccess, ImportError> =
         Transform.fromJson json
         |> Result.map (fun result -> {
-            Graph = createFamilyGraph result.PeopleAndCoupleIds result.Couples
+            Graph = createFamilyGraph result.PeopleAndCoupleIds result.Couples result.NameHoldings
             Warnings = result.Warnings
         })

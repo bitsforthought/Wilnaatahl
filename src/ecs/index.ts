@@ -8,7 +8,6 @@ import { layoutNodes } from "../generated/Systems/Layout";
 import { runSystems as runFableSystems } from "../generated/Systems/Runner";
 import { spawnControls, spawnScene } from "../generated/EntityLifeCycle";
 import { fromKootaWorld } from "./koota/kootaWrapper";
-import { ClickEvent } from "./traits";
 
 export function runSystems(input: { world: World; delta: number }) {
   runFableSystems(fromKootaWorld(input.world), input.delta);
@@ -38,7 +37,9 @@ export const eventActions = createActions((world: World) => {
       Events.handleDragStart(wrappedWorld);
     },
     handleMeshClick: (entity: Entity) => (e: ThreeEvent<MouseEvent>) => {
-      entity.add(ClickEvent);
+      // Route through the F# handler rather than adding ClickEvent directly, so every click in
+      // the app passes the same hidden-control check.
+      Events.handleClick(entity as Entity & EntityId);
       e.stopPropagation();
     },
     handlePointerDown: (entity: Entity & EntityId) => () => Events.handlePointerDown(entity),
@@ -47,15 +48,18 @@ export const eventActions = createActions((world: World) => {
 });
 
 export { getLinePositions } from "./connectors";
-export { useMeshRef } from "./customHooks";
+export { useMeshRef, useOverlayVisible } from "./customHooks";
 export {
   Button,
+  CurrentLocale,
   Dragging,
   Elbow,
   Hidden,
+  InViewMode,
   Line,
   Size,
   MeshRef,
+  NodeLabel,
   OpenFileRequested,
   PersonRef,
   Position,

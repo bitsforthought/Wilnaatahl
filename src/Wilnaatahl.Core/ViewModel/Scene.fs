@@ -6,7 +6,6 @@ open Wilnaatahl.ViewModel.LayoutBox
 
 /// Represents information needed to render a family member in the context of their Wilp.
 type IFamilyMemberInfo =
-    abstract Person: Person
     abstract RenderedInWilp: WilpName
     abstract NodeKey: NodeKey
 
@@ -177,7 +176,7 @@ module Scene =
         | Wilp w when w.Name = renderedWilpName -> MemberNode partnerId
         | Wilp _
         | UnknownWilp _
-        | NoneProvided -> PartnerNode(partnerId, couple.Id)
+        | NoneProvided _ -> PartnerNode(partnerId, couple.Id)
 
     /// Produces a map from WilpName to the rendered nodes that will appear along with that
     /// Wilp. Each entry pairs a NodeKey with the Person it renders. Classification is by
@@ -202,7 +201,7 @@ module Scene =
                 match p.Kinship with
                 | Wilp w -> Some w.Name
                 | UnknownWilp _
-                | NoneProvided -> None)
+                | NoneProvided _ -> None)
             |> Seq.countBy id
             |> Map.ofSeq
 

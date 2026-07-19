@@ -4,6 +4,7 @@ open Wilnaatahl.ECS
 open Wilnaatahl.ECS.Relation
 open Wilnaatahl.ECS.Trait
 open Wilnaatahl.Model
+open Wilnaatahl.ViewModel
 
 /// Used for entities that represent "tree nodes", i.e. people in the family tree.
 let PersonRef = refTrait (fun () -> Person.Empty)
@@ -27,3 +28,6 @@ let RenderedIn = tagRelationWith { IsExclusive = true }
 /// Identifies an entity that represents a rendered Wilp, which is a special BoundingBox that contains, directly or
 /// indirectly, all tree nodes representing wilp members.
 let RenderedWilp = valueTrait {| wilpName = "" |}
+
+/// The precomputed `NodeLabelView` rendered on this tree node.
+let NodeLabel = refTrait (fun () -> NodeLabelView.Empty)

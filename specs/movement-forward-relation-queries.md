@@ -4,7 +4,7 @@
 > that will make the change, plus the repo owner for review. This describes a
 > targeted, self-contained fix to a confirmed performance bug. It is independent
 > of (but complementary to) the import-UX redesign and the
-> [`koota-relation-model.md`](./koota-relation-model.md) proposal.
+> [`koota-relation-model.md`](./done/koota-relation-model.md) proposal.
 
 ## TL;DR
 

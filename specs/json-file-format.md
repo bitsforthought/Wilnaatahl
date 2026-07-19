@@ -107,7 +107,7 @@ A couple's recorded children are the people whose `parents` reference its
 
 ## `huwilp`
 
-Each entry describes a Wilp (matrilineal House) and the Pdeeḵ (clan) it belongs
+Each entry describes a Wilp (matrilineal House) and the Pdeeḵ (clan) it belongs
 to.
 
 ```json
@@ -122,12 +122,12 @@ to.
 | ------- | -------------- | ---------------------------------------------------------------- |
 | `id`    | int, required  | Unique Wilp identity. Referenced by `people.wilp` / `birthWilp`. |
 | `name`  | string \| null | The Wilp's name.                                                 |
-| `pdeek` | string \| null | The Pdeeḵ (clan) the Wilp belongs to.                            |
+| `pdeek` | string \| null | The Pdeeḵ (clan) the Wilp belongs to.                            |
 
-There are four Pdeeḵ. Their canonical on-disk spellings are `LaxGibuu`,
+There are four Pdeeḵ. Their canonical on-disk spellings are `LaxGibuu`,
 `LaxSkiik`, `Ganeda`, and `Giskaast`. The `pdeek` value is matched leniently:
 case, surrounding/interior whitespace, apostrophes/glottal marks, and underline
-diacritics are all ignored, so `"Lax Gibuu"`, `"Gisḵ'aast"`, and `"giskaast"` are
+diacritics are all ignored, so `"Lax Gibuu"`, `"Gisḵ'aast"`, and `"giskaast"` are
 all accepted. The exact matching rules live in
 [`specs/json-parser.md`](./json-parser.md).
 
@@ -174,9 +174,11 @@ generations.
 | `nameDate`  | string \| null | When the Name was given to this person. Used to order a person's Names (later = more recent). |
 | `nameOrder` | int \| null    | Life-order in which the Name was given; a tiebreak when `nameDate` is equal or absent.        |
 
-At least one of `nameDate` and `nameOrder` must be present — they may not both be
-null — and when `nameDate` is absent or not a valid ISO-8601 date, `nameOrder`
-must be present, so a person's Names always have a well-defined order.
+A row should carry a usable ordering key — an ISO-8601 `nameDate` and/or a
+`nameOrder` — so a person's Names have a well-defined order. A row with neither
+(both `null`, or a `nameDate` that is not a readable date and no `nameOrder`) is
+still valid; see [`specs/json-parser.md`](./json-parser.md) for how such rows are
+ordered and warned about.
 
 A `names` entry that no `namesHeld` record references is an **unheld** name — no
 record of anyone ever having held it. (This differs from a name whose holders are

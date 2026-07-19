@@ -5,7 +5,7 @@ open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.ECS.Relation
 open Wilnaatahl.ViewModel.Vector
-open Wilnaatahl.Traits.ConnectorTraits
+open Wilnaatahl.Traits.ViewTraits
 open Wilnaatahl.Traits.SpaceTraits
 
 /// Marks an entity with Position as being a corner of the target BoundingBox entity. A BoundingBox should

@@ -2,8 +2,9 @@ import React from "react";
 import { Html } from "@react-three/drei";
 import { Entity } from "koota";
 import { useActions, useTrait } from "koota/react";
-import { defaultArg } from "../generated/fable_modules/fable-library-ts.5.1.0/Option.js";
-import { eventActions, Size, PersonRef, useMeshRef } from "../ecs";
+import { eventActions, NodeLabel, Size, PersonRef, useMeshRef } from "../ecs";
+import { composeNodeLabel } from "../i18n/format";
+import { useLocale } from "../i18n/hooks";
 
 // Scales the HTML label so it tracks the apparent size of the node as the camera
 // moves. drei's <Html> handles the per-frame scaling internally by mutating the
@@ -16,7 +17,12 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
   // HuwilpGroup guarantees that the traits are present.
   const person = useTrait(entity, PersonRef)!;
   const size = useTrait(entity, Size)!;
-  const label = defaultArg(person.Label, undefined);
+  // The presentation-neutral label view is built by the F# side and carried on the
+  // NodeLabel trait; this component formats its dates (via Intl) and composes the
+  // multi-line text for the active locale, so a locale change re-composes it.
+  const labelView = useTrait(entity, NodeLabel);
+  const locale = useLocale();
+  const label = labelView ? composeNodeLabel(labelView, locale) : "";
   const ref = useMeshRef(entity);
 
   const { handlePointerDown, handleMeshClick } = useActions(eventActions);
@@ -47,6 +53,7 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
                 color: "white",
                 textAlign: "center",
                 pointerEvents: "none",
+                whiteSpace: "pre-line",
                 width: "160%",
                 marginLeft: "-30%",
               }}

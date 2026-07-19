@@ -25,11 +25,11 @@
     },
     {
       "id": 3,
-      "name": "James Ashford",
       "parents": 0,
       "wilp": 0,
       "birthOrder": 0,
-      "normalizedDateOfBirth": "1927-07-22",
+      "dateOfBirth": "circa 1927",
+      "dateOfDeath": "before 1990",
       "gender": "M"
     },
     {
@@ -89,7 +89,13 @@
       "birthOrder": 0,
       "gender": "M"
     },
-    { "id": 12, "name": "Albert Fitzgerald", "birthOrder": 0, "gender": "M" },
+    {
+      "id": 12,
+      "name": "Albert Fitzgerald",
+      "kinshipNote": "Married in; Wilp not recorded",
+      "birthOrder": 0,
+      "gender": "M"
+    },
     {
       "id": 13,
       "name": "Samuel Greenwood",
@@ -102,6 +108,7 @@
       "name": "Catherine Lee",
       "parents": 1,
       "wilp": 0,
+      "birthWilp": 1,
       "birthOrder": 0,
       "normalizedDateOfBirth": "1950-05-01",
       "gender": "F"
@@ -280,5 +287,24 @@
     { "id": 2, "pdeek": "Ganeda" },
     { "id": 3, "name": "D", "pdeek": "LaxGibuu" },
     { "id": 4, "name": "C", "pdeek": "LaxSkiik" }
+  ],
+  "names": [
+    { "id": 0, "text": "The Captain" },
+    { "id": 1, "text": "Cook" },
+    { "id": 2, "text": "The Mayor" },
+    { "id": 3, "text": "Smith" },
+    { "id": 4, "text": "The Scholar" },
+    { "id": 5, "text": "Doc" },
+    { "id": 6, "text": "The Steward" }
+  ],
+  "namesHeld": [
+    { "nameId": 1, "personId": 0, "nameDate": "1918-06-01", "nameOrder": 1 },
+    { "nameId": 6, "personId": 0, "nameDate": "1950-02-01", "nameOrder": 2 },
+    { "nameId": 0, "personId": 0, "nameDate": "1975-03-01", "nameOrder": 3 },
+    { "nameId": 3, "personId": 6, "nameOrder": 1 },
+    { "nameId": 2, "personId": 6, "nameOrder": 2 },
+    { "nameId": 4, "personId": 3, "nameDate": "1945-09-01", "nameOrder": 1 },
+    { "nameId": 5, "personId": 14, "nameDate": "1950-05-01", "nameOrder": 1 },
+    { "nameId": 0, "personId": 24, "nameDate": "1995-01-01", "nameOrder": 1 }
   ]
 }

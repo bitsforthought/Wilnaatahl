@@ -1,7 +1,8 @@
 import { RefObject, useLayoutEffect, useRef } from "react";
 import { Mesh } from "three";
 import { Entity } from "koota";
-import { MeshRef } from "./traits";
+import { useHas, useQuery, useWorld } from "koota/react";
+import { InViewMode, MeshRef, Selected } from "./traits";
 
 // Custom React hook to dynamically attach a Mesh to an Entity via the MeshRef trait.
 export function useMeshRef(entity: Entity): RefObject<Mesh | null> {
@@ -19,4 +20,16 @@ export function useMeshRef(entity: Entity): RefObject<Mesh | null> {
   }, [entity]);
 
   return ref;
+}
+
+/**
+ * Whether the detail overlay should show: View mode with exactly one node selected.
+ * Derived from the two traits it depends on rather than mirrored into a world trait,
+ * so there is no cached copy that can disagree with the mode or the selection.
+ */
+export function useOverlayVisible(): boolean {
+  const world = useWorld();
+  const inViewMode = useHas(world, InViewMode);
+  const selectedCount = useQuery(Selected).length;
+  return inViewMode && selectedCount === 1;
 }

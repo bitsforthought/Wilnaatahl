@@ -43,6 +43,3 @@ let Parallels = valueRelationWith {| offset = 0.0 |} { IsExclusive = true }
 /// Marks an entity with Position and MeshRef as representing an "elbow" connector, which is rendered as
 /// a small sphere the same diameter and colour as lines.
 let Elbow = tagTrait ()
-
-/// Marks an entity such that it shouldn't be rendered (i.e. -- React components won't add a MeshRef trait).
-let Hidden = tagTrait ()

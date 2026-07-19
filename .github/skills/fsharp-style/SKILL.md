@@ -12,6 +12,16 @@ description: >-
 F# code is functional-first, minimal, and avoids mutation. The rules below steer
 away from C#-in-F# habits. Each is a hard convention for this codebase.
 
+- **Think in declarative expressions, not step-by-step construction.** The most
+  common way F# degrades into "C# with different syntax" is building a result
+  procedurally — unwrap, branch, mutate, append, assert inside a branch — where a
+  single declarative expression would do. Before writing a `match`/`if`/fold that
+  assembles a value or an assertion piece by piece, ask whether the whole thing can
+  be one expression compared against, or built from, a literal. Reach for
+  combinators (`Result.map`, `Option.map`, `List.map`, structural equality on whole
+  values) over manual unwrap-and-reassemble. This is the mindset behind many of the
+  specific rules below.
+
 - **Separate pure and impure code.** Keep I/O (file reads, console output,
   `exit`) at the top level or in a thin shell. Functions called by the top level
   should be pure — no side effects, no `exit`, no file I/O. Communicate errors
@@ -75,6 +85,60 @@ away from C#-in-F# habits. Each is a hard convention for this codebase.
   `choose`-ing the errors and then `choose`-ing the successes separately.
   - ✅ `let kept, dropped = items |> List.partition predicate`
   - ❌ `let kept = items |> List.filter predicate` then `let dropped = items |> List.filter (predicate >> not)`
+- **Pipe the "subject" argument into a call.** When a function's last argument is
+  the thing being operated on, pipe it in so the call reads subject-verb-object.
+  Applies to stdlib (`Map.add`/`Map.find`/`Set.contains`/`List.map`) **and our own
+  functions** — e.g. every `FamilyGraph` accessor takes the graph last, so pipe
+  the graph in. Skip it only for symmetric operations (`Set.union`,
+  `Set.intersect`) where neither argument is the subject.
+  - ✅ `nameById |> Map.add n.Id (Name n.Text)`, `seenTexts |> Set.contains n.Text`
+  - ✅ `graph |> namesHeldBy (PersonId 0)`, `graph |> findPerson pid`
+  - ❌ `Map.add n.Id (Name n.Text) nameById`, `Set.contains n.Text seenTexts`
+  - ❌ `namesHeldBy (PersonId 0) graph`, `findPerson pid graph`
+  - **This is a rule about the whole expression's data flow, not just one call
+    site — it applies everywhere a subject appears, not only at the top of a `let`
+    binding.** The two shapes that keep slipping past author and reviewer both hide
+    the subject, so train your eye on them specifically:
+    - **Nested / inside-out application → a left-to-right pipeline.** Don't write
+      `g (f subject)`; the subject is buried in the innermost parens. Flow it
+      forward: `subject |> f |> g`. This is the C#/OO "transliteration" smell —
+      building a value inside-out instead of reading it as a data pipeline.
+      - ✅ `expected |> List.map fst |> Set.ofList`
+      - ❌ `Set.ofList (List.map fst expected)`
+    - **Operands of operators are expressions too — pipe the subject there as
+      well.** A subject sitting as an argument on either side of `=`, `=!`, `<`,
+      `@`, etc. still gets piped; don't leave it in application form just because
+      it's "only the expected value" or because a pipe there would need parens.
+      - ✅ `actual =! (expected |> List.map snd)`
+      - ❌ `actual =! List.map snd expected`
+      - **Precedence gotcha (why the paren is needed, and why it's easy to dodge
+        the pipe here):** `|>` and comparison/assertion operators like `=!`/`=`
+        share the same precedence and are **left-associative**, so
+        `a =! xs |> List.map f` parses as `(a =! xs) |> List.map f` — a type error,
+        not what you meant. A pipeline on the **right** of such an operator must be
+        parenthesized: `a =! (xs |> List.map f)`. The application form needs no
+        paren, which is exactly the friction that quietly pushes code back to the
+        ❌ shape — resist it; wrap the pipe.
+      - **Left-associativity also means a pipeline on the _left_ needs no parens
+        — don't add them.** `xs |> List.map f =! expected` already parses as
+        `(xs |> List.map f) =! expected`. Wrapping the left side is noise, and it
+        is the more common shape in assertions, so watch for it.
+        - ✅ `world.Query(With Button) |> Seq.length =! 1`
+        - ❌ `(world.Query(With Button) |> Seq.length) =! 1`
+- **Use `List.foldBack` instead of `fold` then `List.rev`.** Folding to build a
+  list and reversing it to restore forward order is two passes for one result;
+  `List.foldBack` accumulates in forward order directly. (Arg order differs:
+  `List.foldBack folder list state`.)
+  - ✅ `List.foldBack folder items initialState`
+  - ❌ `List.fold folder initialState items` then `List.rev`
+- **Parse at the boundary into the strongest type; don't carry raw strings.** A
+  domain value with a precise type (an ISO-8601 date → `DateOnly option`, a fixed
+  set of tags → a DU) is parsed once at the import/decode boundary and stored as
+  that type in the model; unparseable input becomes `None` (with a warning) there.
+  Keeping the raw `string` in the model and re-parsing it at each use site is the
+  "illegal states representable" smell.
+  - ✅ model field `NameDate: DateOnly option`, parsed in `Transform.fs`
+  - ❌ model field `NameDate: string option`, parsed inside a comparator on every call
 - **Parenthesize tuple elements in a single-item list.** A one-element list of a
   tuple written `[ a, b ]` (e.g. `Map [ "k", v ]`) triggers compiler info `FS3886`
   ("This list expression contains a single tuple element. Did you mean to use ';'
@@ -150,6 +214,41 @@ away from C#-in-F# habits. Each is a hard convention for this codebase.
 Production runs as **Fable-generated JS in a browser**, not on the CLR. Don't
 assume a CLR runtime when writing code comments or reasoning about runtime
 behaviour.
+
+### Decorate DUs that cross the F#/TS boundary
+
+An undecorated F# discriminated union compiles to a Fable `Union` **class** plus a
+`Foo_$union` alias, numeric `tag`s, a positional `fields` array, and a factory
+function per case. TypeScript consumers then read `row.tag === 3` and cast
+`row.fields[0] as string` — untyped, unreadable, and silently wrong if case order
+changes. Pick the attribute that fits the DU's shape (guarded by
+`#if FABLE_COMPILER`, so the .NET build and its tests keep a plain DU):
+
+| DU shape                         | Attribute                           | Emitted TypeScript                           |
+| -------------------------------- | ----------------------------------- | -------------------------------------------- |
+| All cases nullary                | `[<StringEnum>]`                    | `type Pdeek = "laxGibuu" \| "laxSkiik" \| …` |
+| Cases carry fields               | `[<TypeScriptTaggedUnion("kind")>]` | `\| { kind: "rawText", text: string }`       |
+| Single-case wrapper over a value | `[<Erase>]`                         | the underlying type, no wrapper              |
+
+- **Name the fields of a tagged-union case** (`RawText of text: string`) — the
+  case-field name becomes the TS property name, so an unnamed field emits a
+  useless `Item`.
+- Consumers then `switch` on the tag string and get **compile-time
+  exhaustiveness** (via a `never` guard) plus narrowed field access — no casts.
+- **`[<StringEnum>]` has a Fable emission bug in lambda-return position:** a
+  lambda returning one is typed `string` while its container is typed by the
+  union, so e.g. an ECS trait factory (`refTrait (fun () -> En)`) emits TS that
+  fails `tsc`. When that bites, leave the DU undecorated and say why in a comment.
+- The `_$union`/`tag`/`fields` shape is the smell; if TS consumption code is
+  casting out of `fields`, the fix belongs on the F# type, not in the TS.
+
+### ECS systems
+
+The rules for writing an ECS system — one behaviour per system, where traits
+live, `Runner.fs` ordering, same-frame input arbitration, and never writing a
+trait value that hasn't changed — are **architecture, not style**, so they live in
+`AGENTS.md` under _Architecture & Data Flow_. Read them before adding or changing
+anything under `Systems/`.
 
 ## Build vs buy: reach for a standard library first
 

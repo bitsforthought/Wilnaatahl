@@ -3,7 +3,7 @@
 Lets users load their own genealogical data into Wilnaatahl from a local file
 (**import**) and save the current graph back out to a JSON file (**export**).
 The on-disk file format and parser are described separately in
-[`specs/json-parser.md`](./json-parser.md); this plan consumes its
+[`specs/json-parser.md`](../json-parser.md); this plan consumes its
 `Transform.fromJson` (import) and `Transform.toJson` (export) entry points and
 otherwise treats them as a black box.
 
@@ -251,7 +251,7 @@ Key points:
 ## Import affordance — UI shape
 
 The universally-portable mechanism is `<input type="file">`
-([File Import Patterns](./file-import-patterns.md)). There is **one** import
+([File Import Patterns](../file-import-patterns.md)). There is **one** import
 path:
 
 - The "Open file…" toolbar button is an ECS `Button` entity; clicking it emits
@@ -347,7 +347,7 @@ spinner is a UI-only addition around the async `importFile` call.
 Koota's `queriesHashMap` grows within a `World`'s lifetime: concrete-target
 relation queries (e.g. `Movement.fs` querying by a specific moved entity) mint
 permanent entries that are only cleared by tearing down the `World` (see
-[`specs/queryhashmap-relation-leak.md`](./queryhashmap-relation-leak.md)). A
+[`specs/issues/queryhashmap-relation-leak.md`](../issues/queryhashmap-relation-leak.md)). A
 fresh `World` per load starts with an empty `queriesHashMap`, so that growth
 cannot accumulate across loads; `destroy()` on the old `World` resets those maps
 and frees the world-id slot.
@@ -355,7 +355,7 @@ and frees the world-id slot.
 **Follow-up (out of scope).** The same growth accrues **within a single
 session** as the user drags nodes (each distinct moved target mints a query).
 Per-load `World` recreation does not address that; it is tracked against
-`specs/queryhashmap-relation-leak.md` (a Koota-side fix, or a periodic reset).
+`specs/issues/queryhashmap-relation-leak.md` (a Koota-side fix, or a periodic reset).
 
 ## Error & warning UI
 

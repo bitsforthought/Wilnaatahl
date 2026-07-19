@@ -9,6 +9,11 @@ open Newtonsoft.Json.Linq
 open Swensen.Unquote
 open Wilnaatahl.Persistence
 open Wilnaatahl.Persistence.JsonContracts
+open Wilnaatahl.Tests.TestData
+
+// MAINTENANCE NOTE: prefer asserting directly on the result of `JsonReader.read`
+// (and the writer/round-trip calls) rather than binding an intermediate and
+// re-deriving expected values — this matches the majority style in this file.
 
 /// Generators for arbitrary RawFile values. Strings are drawn from a character
 /// set that includes JSON-significant characters (quote, backslash, slash,
@@ -34,10 +39,14 @@ module private RawFileGen =
     let private personGen =
         gen {
             let! id = intGen
-            let! name = stringGen
+            let! name = optString
             let! parents = optInt
             let! wilp = optInt
+            let! birthWilp = optInt
+            let! kinshipNote = optString
             let! birthOrder = optInt
+            let! rawDateOfBirth = optString
+            let! rawDateOfDeath = optString
             let! normalizedDateOfBirth = optString
             let! normalizedDateOfDeath = optString
             let! gender = stringGen
@@ -47,7 +56,11 @@ module private RawFileGen =
                 Name = name
                 Parents = parents
                 Wilp = wilp
+                BirthWilp = birthWilp
+                KinshipNote = kinshipNote
                 BirthOrder = birthOrder
+                RawDateOfBirth = rawDateOfBirth
+                RawDateOfDeath = rawDateOfDeath
                 NormalizedDateOfBirth = normalizedDateOfBirth
                 NormalizedDateOfDeath = normalizedDateOfDeath
                 Gender = gender
@@ -77,12 +90,43 @@ module private RawFileGen =
             return { Id = id; Name = name; Pdeek = pdeek }
         }
 
+    let private nameGen =
+        gen {
+            let! id = intGen
+            let! text = stringGen
+            return { Id = id; Text = text }
+        }
+
+    let private nameHeldGen =
+        gen {
+            let! nameId = intGen
+            let! personId = intGen
+            let! nameDate = optString
+            let! nameOrder = optInt
+
+            return {
+                NameId = nameId
+                PersonId = personId
+                NameDate = nameDate
+                NameOrder = nameOrder
+            }
+        }
+
     let fileGen =
         gen {
             let! people = Gen.listOf personGen
             let! couples = Gen.listOf coupleGen
             let! huwilp = Gen.listOf wilpGen
-            return { People = people; Couples = couples; Huwilp = huwilp }
+            let! names = Gen.listOf nameGen
+            let! namesHeld = Gen.listOf nameHeldGen
+
+            return {
+                People = people
+                Couples = couples
+                Huwilp = huwilp
+                Names = names
+                NamesHeld = namesHeld
+            }
         }
 
     let arb = Arb.fromGen fileGen
@@ -104,18 +148,9 @@ module JsonReadWriteTests =
     // the documented minimal shape, error reporting on malformed input, and
     // tolerance of unknown keys.
 
-    /// Builds a RawPerson with all optional fields absent — the minimum a JSON
-    /// object needs to decode successfully.
-    let private minimalPerson id name gender = {
-        Id = id
-        Name = name
-        Parents = None
-        Wilp = None
-        BirthOrder = None
-        NormalizedDateOfBirth = None
-        NormalizedDateOfDeath = None
-        Gender = gender
-    }
+    /// A RawFile with every array empty. Build cases as `{ minimalFile with … }`
+    /// so each sets only the arrays it exercises.
+    let private minimalFile: RawFile = { People = []; Couples = []; Huwilp = []; Names = []; NamesHeld = [] }
 
     [<Fact>]
     let ``read decodes absent optional fields to None and absent arrays to empty`` () =
@@ -123,9 +158,78 @@ module JsonReadWriteTests =
 
         JsonReader.read json
         =! Ok {
-            People = [ minimalPerson 0 "Alice" "F" ]
-            Couples = []
-            Huwilp = []
+            minimalFile with
+                People = [ { emptyRawPerson with Id = 0; Name = Some "Alice"; Gender = "F" } ]
+        }
+
+    [<Fact>]
+    let ``read decodes an absent person name to None`` () =
+        let json = """{"people": [{"id":0,"gender":"F"}]}"""
+
+        JsonReader.read json
+        =! Ok {
+            minimalFile with
+                People = [ { emptyRawPerson with Id = 0; Gender = "F" } ]
+        }
+
+    [<Fact>]
+    let ``read decodes the richer optional person fields`` () =
+        let json =
+            """{"people":[{"id":0,"gender":"M","name":"Dave","birthWilp":5,
+               "kinshipNote":"adopted","dateOfBirth":"circa 1850","dateOfDeath":"1920-ish"}]}"""
+
+        JsonReader.read json
+        =! Ok {
+            minimalFile with
+                People = [
+                    {
+                        emptyRawPerson with
+                            Id = 0
+                            Name = Some "Dave"
+                            Gender = "M"
+                            BirthWilp = Some 5
+                            KinshipNote = Some "adopted"
+                            RawDateOfBirth = Some "circa 1850"
+                            RawDateOfDeath = Some "1920-ish"
+                    }
+                ]
+        }
+
+    [<Fact>]
+    let ``read decodes the names and namesHeld arrays`` () =
+        let json =
+            """{"people":[{"id":0,"gender":"F"}],
+               "names":[{"id":10,"text":"Tinker"}],
+               "namesHeld":[{"nameId":10,"personId":0,"nameDate":"1990","nameOrder":2}]}"""
+
+        JsonReader.read json
+        =! Ok {
+            minimalFile with
+                People = [ { emptyRawPerson with Id = 0; Gender = "F" } ]
+                Names = [ { Id = 10; Text = "Tinker" } ]
+                NamesHeld = [
+                    {
+                        NameId = 10
+                        PersonId = 0
+                        NameDate = Some "1990"
+                        NameOrder = Some 2
+                    }
+                ]
+        }
+
+    [<Fact>]
+    let ``read decodes a namesHeld entry with absent recency keys to None`` () =
+        let json =
+            """{"people":[{"id":0,"gender":"F"}],
+               "names":[{"id":10,"text":"Tinker"}],
+               "namesHeld":[{"nameId":10,"personId":0}]}"""
+
+        JsonReader.read json
+        =! Ok {
+            minimalFile with
+                People = [ { emptyRawPerson with Id = 0; Gender = "F" } ]
+                Names = [ { Id = 10; Text = "Tinker" } ]
+                NamesHeld = [ { NameId = 10; PersonId = 0; NameDate = None; NameOrder = None } ]
         }
 
     [<Fact>]
@@ -137,11 +241,13 @@ module JsonReadWriteTests =
     [<Fact>]
     let ``read ignores extra unknown fields`` () =
         let json =
-            """{"people":[{"id":0,"name":"Dave","gender":"M","deceased":true,
-               "birthWilp":5,"dateOfBirth":"circa 1850","dateOfDeath":"1920-ish"}]}"""
+            """{"people":[{"id":0,"name":"Dave","gender":"M","deceased":true,"nickname":"D"}]}"""
 
         JsonReader.read json
-        =! Ok { People = [ minimalPerson 0 "Dave" "M" ]; Couples = []; Huwilp = [] }
+        =! Ok {
+            minimalFile with
+                People = [ { emptyRawPerson with Id = 0; Name = Some "Dave"; Gender = "M" } ]
+        }
 
     // ---- read/write round-trip ----
 
@@ -166,10 +272,14 @@ module JsonReadWriteTests =
             People = [
                 {
                     Id = 0
-                    Name = "A"
+                    Name = Some "A"
                     Parents = Some 1
                     Wilp = Some 2
+                    BirthWilp = Some 4
+                    KinshipNote = Some "adopted"
                     BirthOrder = Some 3
+                    RawDateOfBirth = Some "circa 1900"
+                    RawDateOfDeath = Some "circa 1980"
                     NormalizedDateOfBirth = Some "1900-01-01"
                     NormalizedDateOfDeath = Some "1980-01-01"
                     Gender = "F"
@@ -184,6 +294,15 @@ module JsonReadWriteTests =
                 }
             ]
             Huwilp = [ { Id = 2; Name = Some "House"; Pdeek = Some "Giskaast" } ]
+            Names = [ { Id = 10; Text = "Tinker" } ]
+            NamesHeld = [
+                {
+                    NameId = 10
+                    PersonId = 0
+                    NameDate = Some "1990"
+                    NameOrder = Some 1
+                }
+            ]
         }
 
         let expected =
@@ -194,8 +313,12 @@ module JsonReadWriteTests =
                         "name": "A",
                         "parents": 1,
                         "wilp": 2,
+                        "birthWilp": 4,
+                        "kinshipNote": "adopted",
                         "birthOrder": 3,
+                        "dateOfBirth": "circa 1900",
                         "normalizedDateOfBirth": "1900-01-01",
+                        "dateOfDeath": "circa 1980",
                         "normalizedDateOfDeath": "1980-01-01",
                         "gender": "F"
                     }
@@ -203,7 +326,9 @@ module JsonReadWriteTests =
                 "couples": [
                     { "coupleId": 1, "member1": 0, "member2": 5, "dateOfUnion": "1950-01-01" }
                 ],
-                "huwilp": [ { "id": 2, "name": "House", "pdeek": "Giskaast" } ]
+                "huwilp": [ { "id": 2, "name": "House", "pdeek": "Giskaast" } ],
+                "names": [ { "id": 10, "text": "Tinker" } ],
+                "namesHeld": [ { "nameId": 10, "personId": 0, "nameDate": "1990", "nameOrder": 1 } ]
             }"""
 
         jsonStructurallyEquals expected (JsonWriter.write raw) =! true
@@ -211,23 +336,11 @@ module JsonReadWriteTests =
     [<Fact>]
     let ``write omits optional fields whose value is None`` () =
         let raw = {
-            People = [
-                {
-                    Id = 0
-                    Name = "A"
-                    Parents = None
-                    Wilp = None
-                    BirthOrder = None
-                    NormalizedDateOfBirth = None
-                    NormalizedDateOfDeath = None
-                    Gender = "M"
-                }
-            ]
-            Couples = []
-            Huwilp = []
+            minimalFile with
+                People = [ { emptyRawPerson with Id = 0; Gender = "M" } ]
         }
 
         let expected =
-            """{ "people": [ { "id": 0, "name": "A", "gender": "M" } ], "couples": [], "huwilp": [] }"""
+            """{ "people": [ { "id": 0, "gender": "M" } ], "couples": [], "huwilp": [], "names": [], "namesHeld": [] }"""
 
         jsonStructurallyEquals expected (JsonWriter.write raw) =! true
