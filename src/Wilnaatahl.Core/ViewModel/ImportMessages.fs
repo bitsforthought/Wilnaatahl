@@ -1,5 +1,6 @@
 namespace Wilnaatahl.ViewModel
 
+open Wilnaatahl.Model
 open Wilnaatahl.Persistence
 
 /// Helpers for converting ImportError values into user-facing messages.
@@ -54,6 +55,8 @@ module ImportWarning =
             | WilpMissingPdeek id -> $"Wilp #{id} has no pdeek; dropped."
             | WilpMissingNameAndPdeek id -> $"Wilp #{id} has neither name nor pdeek; dropped."
             | UnknownPdeek(wilpId, rawPdeek) -> $"Wilp #{wilpId} has unrecognized pdeek '{rawPdeek}'; dropped."
+            | ConflictingWilpPdeek(wilpId, wilpName, pdeek) ->
+                $"Wilp #{wilpId} '{wilpName}' has pdeek {Pdeek.displayName pdeek} but another wilp of the same name has a different pdeek; dropped."
 
     /// Returns "" for an empty list. Otherwise returns a comma-separated summary
     /// like "3 unresolved parent couples, 1 unparseable date, 2 dropped huwilp".
@@ -89,6 +92,7 @@ module ImportWarning =
                     | WilpMissingPdeek _
                     | WilpMissingNameAndPdeek _
                     | UnknownPdeek _ -> "dropped wilp", "dropped huwilp"
+                    | ConflictingWilpPdeek _ -> "conflicting-pdeek wilp", "conflicting-pdeek huwilp"
 
                 // Preserve first-seen order so the summary is deterministic.
                 let counts =

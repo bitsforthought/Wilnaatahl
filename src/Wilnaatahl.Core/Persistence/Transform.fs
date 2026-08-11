@@ -34,6 +34,7 @@ type ImportWarning =
     | WilpMissingPdeek of id: int
     | WilpMissingNameAndPdeek of id: int
     | UnknownPdeek of wilpId: int * rawPdeek: string
+    | ConflictingWilpPdeek of wilpId: int * wilpName: string * pdeek: Pdeek
 
 /// Anything that prevents an import from completing.
 type ImportError =
@@ -130,13 +131,15 @@ module Transform =
     /// become `UnknownWilp pdeek` (no warning — this is a first-class case). All
     /// other shapes are dropped with the corresponding warning: neither field
     /// (`WilpMissingNameAndPdeek`), name only (`WilpMissingPdeek`), or both
-    /// fields present but pdeek unrecognized (`UnknownPdeek`). Returns a Map of
-    /// usable Kinship values keyed by id plus the accumulated warnings.
+    /// fields present but pdeek unrecognized (`UnknownPdeek`).
     ///
-    /// TODO: Reject or merge entries that share a Wilp name but resolve to different Pdeeḵ.
-    /// Nothing rejects them today, so two such entries — distinct ids, so id deduplication
-    /// leaves both — survive as distinct values that anything keyed on `WilpName` alone then
-    /// conflates into a single Wilp.
+    /// After per-entry validation, any Wilp name that resolves to more than one
+    /// distinct Pdeek across the surviving named entries is a conflict: every
+    /// entry sharing that name is dropped (there is no basis to prefer one
+    /// Pdeek), each with a `ConflictingWilpPdeek` warning. Entries agreeing on a
+    /// single Pdeek are consistent and kept; pdeek-only (`UnknownWilp`) entries
+    /// have no name and never participate. Returns a Map of usable Kinship
+    /// values keyed by id plus the accumulated warnings.
     let private validateHuwilp (huwilp: RawWilp list) =
         let folder (huwilpById, warnings) (w: RawWilp) =
             match w.Name, w.Pdeek with
@@ -154,7 +157,40 @@ module Transform =
                     Map.add w.Id kinship huwilpById, warnings
 
         let huwilpById, warningsRev = List.fold folder (Map.empty, []) huwilp
-        huwilpById, List.rev warningsRev
+
+        // Named entries in input order, paired with the resolved Wilp so a name
+        // can be grouped against every Pdeek it carries.
+        let namedEntries =
+            huwilp
+            |> List.choose (fun w ->
+                match Map.tryFind w.Id huwilpById with
+                | Some(Wilp wilp) -> Some(w.Id, wilp)
+                | _ -> None)
+
+        let conflictingNames =
+            namedEntries
+            |> List.groupBy (fun (_, wilp) -> wilp.Name)
+            |> List.choose (fun (name, entries) ->
+                let distinctPdeek =
+                    entries |> List.map (fun (_, wilp) -> wilp.Pdeek) |> List.distinct
+
+                if List.length distinctPdeek > 1 then Some name else None)
+            |> Set.ofList
+
+        let conflictingEntries =
+            namedEntries
+            |> List.filter (fun (_, wilp) -> Set.contains wilp.Name conflictingNames)
+
+        let conflictIds = conflictingEntries |> List.map fst |> Set.ofList
+
+        let conflictWarnings =
+            conflictingEntries
+            |> List.map (fun (id, wilp) -> ConflictingWilpPdeek(id, wilp.Name.AsString, wilp.Pdeek))
+
+        let usableHuwilpById =
+            huwilpById |> Map.filter (fun id _ -> not (Set.contains id conflictIds))
+
+        usableHuwilpById, List.rev warningsRev @ conflictWarnings
 
     /// Validates each couple's members. Drops a couple whose two members are the
     /// same person (`SelfCoupledMember`) — `Couple.create` rejects an equal pair —
@@ -328,7 +364,8 @@ module Transform =
     ///
     /// Steps: reject empty input; deduplicate people, couples, huwilp, and names
     /// by id; validate the huwilp table (warn-and-drop on any entry missing name
-    /// and/or pdeek, or whose pdeek string is unknown); drop couples whose members
+    /// and/or pdeek, whose pdeek string is unknown, or sharing a name with a
+    /// conflicting pdeek); drop couples whose members
     /// don't resolve; resolve each person's parent-couple, wilp, and birth-wilp
     /// links and their kinship note; resolve name holdings and drop unheld names;
     /// parse normalized dates; build Couple values via `Couple.create`.

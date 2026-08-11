@@ -182,12 +182,10 @@ type Tests() =
                    MostRecentName = Some "Tinker"
            }
 
-    /// TODO: Import lets two huwilp share a name while carrying different Pdeeḵ. Nothing rejects
-    /// it — `Transform` deduplicates huwilp by *id*, so two entries named "H" with different ids
-    /// survive as distinct Kinship values. The person keeps their own Pdeeḵ, but the graph's
-    /// Huwilp set, `Scene.enumerateHuwilpToRender`, and this comparison all key on `WilpName`
-    /// alone, so the two collapse into one rendered Wilp whose Pdeeḵ depends on which member is
-    /// looked at. Fix it at import: reject or merge a Wilp name resolving to more than one Pdeeḵ.
+    /// `currentWilpDiffersFromRendered` compares on Wilp name alone: it is false
+    /// exactly when the person's current Wilp has the given name, regardless of
+    /// that Wilp's Pdeeḵ. (Import rejects a single name that carries two Pdeeḵ at
+    /// the boundary, so name-only comparison is unambiguous downstream.)
     [<Fact>]
     member _.``currentWilpDiffersFromRendered is false only when the current Wilp name matches``() =
         // Pdeek is deliberately different from anything else — the comparison is on name only.

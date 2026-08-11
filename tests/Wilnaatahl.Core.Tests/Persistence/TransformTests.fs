@@ -518,6 +518,217 @@ let ``transform multiple people referencing different huwilp each get their own 
     }
 
 // ---------------------------------------------------------------------------
+// Huwilp name/pdeek conflicts. Two entries with distinct ids survive id
+// deduplication, so a shared name resolving to more than one Pdeek is rejected
+// here — every entry in the conflict is dropped, since there is no basis to
+// prefer one Pdeek over another.
+// ---------------------------------------------------------------------------
+
+[<Fact>]
+let ``transform two huwilp sharing a name with different pdeek drops both and references go unresolved`` () =
+    let aliceWithH = aliceRaw |> withWilp 1
+    let bobWithH = bobRaw |> withWilp 2
+    let first = rawWilp 1 "H" "Giskaast"
+    let second = rawWilp 2 "H" "Ganeda"
+
+    transform (rawFile [ aliceWithH; bobWithH ] [] [ first; second ])
+    =! Ok {
+        PeopleAndCoupleIds = [ alice, None; bob, None ]
+        NameHoldings = []
+        Couples = []
+        Warnings = [
+            ConflictingWilpPdeek(1, "H", Giskaast)
+            ConflictingWilpPdeek(2, "H", Ganeda)
+            UnresolvedWilpId("Alice", 1)
+            UnresolvedWilpId("Bob", 2)
+        ]
+    }
+
+[<Fact>]
+let ``transform two huwilp sharing a name and pdeek are consistent and both kept`` () =
+    let aliceWithH = aliceRaw |> withWilp 1
+    let bobWithH = bobRaw |> withWilp 2
+    let first = rawWilp 1 "H" "Giskaast"
+    let second = rawWilp 2 "H" "Giskaast"
+    let kinshipH = Wilp { Name = WilpName "H"; Pdeek = Giskaast }
+    let expectedAlice = { alice with Kinship = kinshipH }
+    let expectedBob = { bob with Kinship = kinshipH }
+
+    transform (rawFile [ aliceWithH; bobWithH ] [] [ first; second ])
+    =! Ok {
+        PeopleAndCoupleIds = [ expectedAlice, None; expectedBob, None ]
+        NameHoldings = []
+        Couples = []
+        Warnings = []
+    }
+
+[<Fact>]
+let ``transform two huwilp sharing a name whose different pdeek spellings resolve equal are kept`` () =
+    // Conflict detection compares the parsed Pdeek, not the raw string: two
+    // orthographic spellings of the same Pdeek under one name are consistent, so
+    // both survive with no conflict warning.
+    let aliceWithH = aliceRaw |> withWilp 1
+    let bobWithH = bobRaw |> withWilp 2
+    let first = rawWilp 1 "H" "Giskaast"
+    let second = rawWilp 2 "H" "giskahaast"
+    let kinshipH = Wilp { Name = WilpName "H"; Pdeek = Giskaast }
+    let expectedAlice = { alice with Kinship = kinshipH }
+    let expectedBob = { bob with Kinship = kinshipH }
+
+    transform (rawFile [ aliceWithH; bobWithH ] [] [ first; second ])
+    =! Ok {
+        PeopleAndCoupleIds = [ expectedAlice, None; expectedBob, None ]
+        NameHoldings = []
+        Couples = []
+        Warnings = []
+    }
+
+[<Fact>]
+let ``transform rejects every entry of a conflicting name even those that agree on pdeek`` () =
+    // Two entries agree on Giskaast and a third dissents with Ganeda. Because the
+    // name "H" resolves to more than one Pdeek and nothing makes the agreeing pair
+    // authoritative, all three are dropped — the majority is not treated as the
+    // truth.
+    let aliceWithH = aliceRaw |> withWilp 1
+    let bobWithH = bobRaw |> withWilp 2
+    let carolWithH = carolRaw |> withWilp 3
+    let first = rawWilp 1 "H" "Giskaast"
+    let second = rawWilp 2 "H" "Giskaast"
+    let third = rawWilp 3 "H" "Ganeda"
+
+    transform (rawFile [ aliceWithH; bobWithH; carolWithH ] [] [ first; second; third ])
+    =! Ok {
+        PeopleAndCoupleIds = [ alice, None; bob, None; carol, None ]
+        NameHoldings = []
+        Couples = []
+        Warnings = [
+            ConflictingWilpPdeek(1, "H", Giskaast)
+            ConflictingWilpPdeek(2, "H", Giskaast)
+            ConflictingWilpPdeek(3, "H", Ganeda)
+            UnresolvedWilpId("Alice", 1)
+            UnresolvedWilpId("Bob", 2)
+            UnresolvedWilpId("Carol", 3)
+        ]
+    }
+
+[<Fact>]
+let ``transform a name conflict leaves unrelated named huwilp in the same file intact`` () =
+    let aliceWithH = aliceRaw |> withWilp 1
+    let bobWithH = bobRaw |> withWilp 2
+    let carolWithL = carolRaw |> withWilp 3
+    let first = rawWilp 1 "H" "Giskaast"
+    let second = rawWilp 2 "H" "Ganeda"
+    let unrelated = rawWilp 3 "L" "LaxGibuu"
+
+    let expectedCarol = {
+        carol with
+            Kinship = Wilp { Name = WilpName "L"; Pdeek = LaxGibuu }
+    }
+
+    transform (rawFile [ aliceWithH; bobWithH; carolWithL ] [] [ first; second; unrelated ])
+    =! Ok {
+        PeopleAndCoupleIds = [ alice, None; bob, None; expectedCarol, None ]
+        NameHoldings = []
+        Couples = []
+        Warnings = [
+            ConflictingWilpPdeek(1, "H", Giskaast)
+            ConflictingWilpPdeek(2, "H", Ganeda)
+            UnresolvedWilpId("Alice", 1)
+            UnresolvedWilpId("Bob", 2)
+        ]
+    }
+
+[<Fact>]
+let ``transform a name conflict does not drop pdeek-only huwilp`` () =
+    // UnknownWilp entries carry no name to conflict on, so even alongside a
+    // rejected name conflict they survive and resolve untouched.
+    let aliceWithH = aliceRaw |> withWilp 1
+    let bobWithH = bobRaw |> withWilp 2
+    let carolWithPdeekOnly = carolRaw |> withWilp 3
+    let first = rawWilp 1 "H" "Giskaast"
+    let second = rawWilp 2 "H" "Ganeda"
+    let pdeekOnly = { Id = 3; Name = None; Pdeek = Some "LaxGibuu" }
+    let expectedCarol = { carol with Kinship = UnknownWilp LaxGibuu }
+
+    transform (rawFile [ aliceWithH; bobWithH; carolWithPdeekOnly ] [] [ first; second; pdeekOnly ])
+    =! Ok {
+        PeopleAndCoupleIds = [ alice, None; bob, None; expectedCarol, None ]
+        NameHoldings = []
+        Couples = []
+        Warnings = [
+            ConflictingWilpPdeek(1, "H", Giskaast)
+            ConflictingWilpPdeek(2, "H", Ganeda)
+            UnresolvedWilpId("Alice", 1)
+            UnresolvedWilpId("Bob", 2)
+        ]
+    }
+
+[<Fact>]
+let ``transform same-id huwilp are deduplicated before conflict detection so no conflict arises`` () =
+    // Two entries with the same id are collapsed to one by id-deduplication before
+    // the name-conflict rule runs, so a differing pdeek on the discarded entry is
+    // reported as a duplicate id, never as a pdeek conflict.
+    let aliceWithDup = aliceRaw |> withWilp 5
+    let first = { Id = 5; Name = Some "H"; Pdeek = Some "Giskaast" }
+    let dup = { Id = 5; Name = Some "H"; Pdeek = Some "Ganeda" }
+
+    let expectedAlice = {
+        alice with
+            Kinship = Wilp { Name = WilpName "H"; Pdeek = Giskaast }
+    }
+
+    transform (rawFile [ aliceWithDup ] [] [ first; dup ])
+    =! Ok {
+        PeopleAndCoupleIds = [ (expectedAlice, None) ]
+        NameHoldings = []
+        Couples = []
+        Warnings = [ DuplicateWilpId 5 ]
+    }
+
+[<Fact>]
+let ``transform birth wilp referencing a dropped conflicting huwilp emits UnresolvedBirthWilpId`` () =
+    let aliceWithBirth = aliceRaw |> withBirthWilp 1
+    let bobWithH = bobRaw |> withWilp 2
+    let first = rawWilp 1 "H" "Giskaast"
+    let second = rawWilp 2 "H" "Ganeda"
+
+    transform (rawFile [ aliceWithBirth; bobWithH ] [] [ first; second ])
+    =! Ok {
+        PeopleAndCoupleIds = [ alice, None; bob, None ]
+        NameHoldings = []
+        Couples = []
+        Warnings = [
+            ConflictingWilpPdeek(1, "H", Giskaast)
+            ConflictingWilpPdeek(2, "H", Ganeda)
+            UnresolvedWilpId("Bob", 2)
+            UnresolvedBirthWilpId("Alice", 1)
+        ]
+    }
+
+[<Fact>]
+let ``transform a same-name entry with an unusable pdeek does not conflict with a valid survivor`` () =
+    // Only entries that survive per-entry validation into a named Wilp take part
+    // in the conflict rule. An entry sharing the name but dropped for an unknown
+    // pdeek never enters the comparison, so the valid entry survives cleanly.
+    let aliceWithH = aliceRaw |> withWilp 1
+    let bobWithBad = bobRaw |> withWilp 2
+    let valid = rawWilp 1 "H" "Giskaast"
+    let unusable = { Id = 2; Name = Some "H"; Pdeek = Some "NotAClan" }
+
+    let expectedAlice = {
+        alice with
+            Kinship = Wilp { Name = WilpName "H"; Pdeek = Giskaast }
+    }
+
+    transform (rawFile [ aliceWithH; bobWithBad ] [] [ valid; unusable ])
+    =! Ok {
+        PeopleAndCoupleIds = [ expectedAlice, None; bob, None ]
+        NameHoldings = []
+        Couples = []
+        Warnings = [ UnknownPdeek(2, "NotAClan"); UnresolvedWilpId("Bob", 2) ]
+    }
+
+// ---------------------------------------------------------------------------
 // Field mapping
 // ---------------------------------------------------------------------------
 

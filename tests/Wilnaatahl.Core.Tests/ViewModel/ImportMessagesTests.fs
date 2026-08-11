@@ -2,6 +2,7 @@ module Wilnaatahl.Tests.ViewModel.ImportMessagesTests
 
 open Xunit
 open Swensen.Unquote
+open Wilnaatahl.Model
 open Wilnaatahl.Persistence
 open Wilnaatahl.ViewModel
 
@@ -78,6 +79,13 @@ let ``ImportWarning toMessage WilpMissingNameAndPdeek`` () =
 let ``ImportWarning toMessage UnknownPdeek`` () =
     ImportWarning.toMessage En (UnknownPdeek(2, "NotAClan"))
     =! "Wilp #2 has unrecognized pdeek 'NotAClan'; dropped."
+
+[<Fact>]
+let ``ImportWarning toMessage ConflictingWilpPdeek names the wilp and its pdeek`` () =
+    // Gisḵ'aast is spelled with a decomposed underlined k (k + U+0331), matching
+    // Pdeek.displayName; \u0331 pins that exact form rather than a precomposed ḵ.
+    ImportWarning.toMessage En (ConflictingWilpPdeek(1, "H", Giskaast))
+    =! "Wilp #1 'H' has pdeek Gisk\u0331'aast but another wilp of the same name has a different pdeek; dropped."
 
 [<Fact>]
 let ``ImportWarning toMessage UnresolvedBirthWilpId`` () =
@@ -207,6 +215,16 @@ let ``ImportWarning summary singular dropped wilp uses wilp not huwilp`` () =
 let ``ImportWarning summary pluralizes dropped wilp as huwilp not wilps`` () =
     ImportWarning.summary En [ WilpMissingPdeek 1; WilpMissingPdeek 2 ]
     =! "2 dropped huwilp"
+
+[<Fact>]
+let ``ImportWarning summary singular conflicting-pdeek wilp`` () =
+    ImportWarning.summary En [ ConflictingWilpPdeek(1, "H", Giskaast) ]
+    =! "1 conflicting-pdeek wilp"
+
+[<Fact>]
+let ``ImportWarning summary pluralizes conflicting-pdeek wilp as huwilp not wilps`` () =
+    ImportWarning.summary En [ ConflictingWilpPdeek(1, "H", Giskaast); ConflictingWilpPdeek(2, "H", Ganeda) ]
+    =! "2 conflicting-pdeek huwilp"
 
 [<Fact>]
 let ``ImportWarning summary pluralizes unresolved wilp as huwilp not wilps`` () =
