@@ -205,6 +205,52 @@ type Tests() =
         runSystems world frameDelta
         (node |> get TargetPosition).Value.x =! 4.0
 
+    /// TODO: Fix the useless undo entry that this test pins.
+    ///
+    /// `runSystems` runs `dragNodes` before `handleUndoRedo`, so `handleDrag` has already moved
+    /// the nodes by the time `UndoRedo.handleDragStart` snapshots their positions. Normally that
+    /// is harmless, because a drag start reaches the pipeline a frame before any movement, so the
+    /// captured position really is the pre-drag one. But the host can coalesce press, move and
+    /// release into a single frame — a stalled or dropped browser frame does exactly that — and
+    /// then the snapshot records the drag's *destination* as if it were its origin. The resulting
+    /// undo entry sends the node to where it already is, so the move cannot be taken back.
+    ///
+    /// This is distinct from the precedence bug in `UndoRedo.handleUndoRedo`: no button is
+    /// involved here, and the stacks are not corrupted — the entry is merely useless. The fix is
+    /// to capture starting positions before `dragNodes` moves anything, which is a change to the
+    /// pipeline rather than to a single system.
+    ///
+    /// Nothing else drives a coalesced frame: the `dragNodeTo` helper above deliberately gives
+    /// each event its own frame, as a responsive host would.
+    [<Fact>]
+    member _.``KNOWN BUG: a drag coalesced into one frame records an undo entry that cannot undo it``() =
+        // Leave View mode so dragging — and therefore undo history — is possible.
+        buttonWithLabel "Move" |> handleClick
+        runSystems world frameDelta
+
+        let node =
+            world.Spawn(PersonRef.Val Person.Empty, Position.Val zeroPosition, Selected.Tag())
+
+        // Press, move and release the node without ever yielding a frame between them, as a
+        // stalled host would deliver them.
+        node |> handlePointerDown
+        handleDragStart world |> ignore
+        handleDrag world 4.0 0.0 0.0 |> ignore
+        handleDragEnd world |> ignore
+        runSystems world frameDelta
+
+        // The drag itself worked: the node moved, and an undo entry was recorded for it.
+        (node |> get Position).Value.x =! 4.0
+        let undoButton = buttonWithLabel "Undo"
+        isDisabled undoButton =! false
+
+        // But the entry saved the position the drag *ended* at, so undoing it targets x = 4 —
+        // where the node already is — instead of the x = 0 it was dragged from. The undo is
+        // spent, and the move is unrecoverable.
+        undoButton |> handleClick
+        runSystems world frameDelta
+        (node |> get TargetPosition).Value.x =! 4.0
+
     [<Fact>]
     member _.``integration: select, drag, and undo on scene nodes``() =
         let graph = createFamilyGraph testPeopleAndParents testCouples []
