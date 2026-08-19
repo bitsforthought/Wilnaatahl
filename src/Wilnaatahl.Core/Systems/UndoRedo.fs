@@ -145,28 +145,11 @@ let handleUndoRedo (world: IWorld) =
         world.QueryTrait(UndoRedoStack, With Button, With RedoButton).ToSequence()
         |> Seq.exactlyOne
 
-    // Multi-touch makes it possible to tap Undo and Redo together, or to tap either while a drag
-    // is starting or ending. Undo takes precedence over Redo, and both take precedence over the
-    // drag handlers below.
-    //
-    // TODO: That precedence corrupts undo history, because a drag is owned by the Dragging system
-    // and proceeds whether or not this system sees it. Losing a drag *start* loses the snapshot,
-    // so the node moves with no undo entry and cannot be brought back. Losing a drag *end* skips
-    // the redo flush, leaving redo entries the completed drag should have invalidated — a later
-    // Redo then warps a node onto the timeline that drag replaced, which is the same corruption
-    // pinned by `RunnerTests`' stale-redo-history test.
-    //
-    // Running the drag handlers unconditionally does *not* fix it. Measured, both orders fail:
-    // with the buttons first, the undo sets TargetPosition on the node it restores, and
-    // `handleDragStart` filters exactly those out, so it still captures nothing; with the drag
-    // handlers first, the same-frame undo pops the snapshot just pushed instead of the preceding
-    // action, so the undo is wasted and the drag it captured is skipped over later. The fix needs
-    // a policy that keeps a frame atomic, and the two directions differ: a drag *start* can be
-    // refused before `dragNodes` acts on it, since nothing has begun yet, but a drag *end* cannot
-    // be swallowed the same way — the drag is already underway, and dropping the release would
-    // strand the `Dragging` relation the view layer reads as "still dragging". An end has to be
-    // finalized, so it is the button click that must lose the frame or the stacks that must be
-    // reconciled explicitly.
+    // Multi-touch makes it possible to tap Undo and Redo together. Undo takes precedence over
+    // Redo. A tap can no longer coexist with a drag in the same frame — `Events` refuses input
+    // once a drag start is raised and discards input raised just before it — so the drag handlers
+    // below are unreachable in any frame that also carries a button click, and the `else` that
+    // guards them is vestigial.
     if undoButtonEntity |> has ClickEvent then
         undoStack |> handleButtonClicked world redoStack
     elif redoButtonEntity |> has ClickEvent then

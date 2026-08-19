@@ -76,13 +76,7 @@ let private handleDragEnd (world: IWorld) =
         // Whether a drag is in progress is world state, not something to thread down the pipeline:
         // a release can arrive in a frame carrying no movement, and that still ends the drag.
         match world.QueryFirstTarget Dragging with
-        | Some(dragEntity, nodeEntity, _) ->
-            // Releasing a drag raises a spurious click on the dragged node. Remove that one click
-            // so it doesn't trigger selection, but leave every other control's click alone: a tap
-            // on the toolbar in the same frame is real input, not drag fallout.
-            // ASSUMPTION: The dragging system must run before the selection system!
-            nodeEntity |> remove ClickEvent
-            dragEntity |> destroy
+        | Some(dragEntity, _, _) -> dragEntity |> destroy
         | None ->
             // No drag is in progress, so this is a spurious DragEndEvent. We need to prevent it
             // from propagating or it could interfere with Undo/Redo.

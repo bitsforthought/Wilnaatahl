@@ -193,7 +193,7 @@ type Tests() =
         let labelBefore = (buttonEntity |> get Button).Value.label
         // View mode hides the button; the view layer may still deliver one delayed click.
         buttonEntity |> add Hidden
-        buttonEntity |> handleClick
+        buttonEntity |> handleClick world
 
         selectNodes world |> ignore
 

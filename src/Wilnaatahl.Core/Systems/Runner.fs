@@ -35,10 +35,8 @@ let private movementTracker = createChanged ()
 /// Runs all systems in the correct order for a single frame.
 let runSystems (world: IWorld) delta =
     // The order is behavioural, not incidental:
-    //   - dragNodes first, because releasing a drag raises a click on the dragged node and a
-    //     drag-end event on the world. It removes the click so selection can't act on it, and
-    //     removes the drag-end only when no drag was in progress; a genuine one survives for
-    //     undo/redo.
+    //   - dragNodes first, because it removes a drag-end event when no drag was in progress; a
+    //     genuine one survives for undo/redo.
     //   - updateViewMode next, so every later system sees one settled mode and no input left
     //     over from the mode just left.
     world

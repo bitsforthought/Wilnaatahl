@@ -274,7 +274,7 @@ type Tests() =
         world.Add InViewMode
         syncModalControls world |> ignore
         let undoBtn = world |> findButton "Undo"
-        undoBtn |> handleClick
+        undoBtn |> handleClick world
         undoBtn |> has ClickEvent =! false
         handleUndoRedo world |> ignore
         node |> has TargetPosition =! false
@@ -285,7 +285,7 @@ type Tests() =
         syncModalControls world |> ignore
         handleUndoRedo world |> ignore
         isButtonDisabled undoBtn =! false
-        undoBtn |> handleClick
+        undoBtn |> handleClick world
         handleUndoRedo world |> ignore
         node |> has TargetPosition =! true
         (node |> get TargetPosition).Value =! Line3.pos 5.0 0.0 0.0

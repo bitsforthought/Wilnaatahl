@@ -82,29 +82,6 @@ type Tests() =
         let pos2 = (node |> get Position).Value
         pos2 =! Line3.pos 12.0 0.0 0.0
 
-    /// Only the spurious click the release raises on the dragged node is fallout; a tap on any
-    /// other control in that frame is real input and must survive.
-    [<Fact>]
-    member _.``drag end clears the dragged node's click and leaves other controls' clicks alone``() =
-        let node =
-            world.Spawn(PersonRef.Val Person.Empty, Position.Val {| x = 0.0; y = 0.0; z = 0.0 |}, Selected.Tag())
-
-        let otherControl = world.Spawn()
-
-        node |> add PointerDownEvent
-        dragNodes world |> ignore
-        world.Add DragStartEvent
-        dragNodes world |> ignore
-
-        node |> add ClickEvent
-        otherControl |> add ClickEvent
-        world.AddWith DragEvent {| x = 0.0; y = 0.0; z = 0.0 |}
-        world.Add DragEndEvent
-        dragNodes world |> ignore
-
-        node |> has ClickEvent =! false
-        otherControl |> has ClickEvent =! true
-
     /// A release can arrive in a frame carrying no movement (the pointer paused before letting
     /// go), and that still ends the drag. Treating it as spurious would leave the Dragging
     /// relation alive forever, which the view layer reads as "a drag is still in progress".
@@ -121,12 +98,10 @@ type Tests() =
 
         // The release frame carries no DragEvent, and the earlier frame's events are gone.
         cleanupEvents world |> ignore
-        node |> add ClickEvent
         world.Add DragEndEvent
         dragNodes world |> ignore
 
         world.Query(RelatedToAny Dragging) |> Seq.length =! 0
-        node |> has ClickEvent =! false
         // The event is left in place so Undo/Redo can still finalize the drag.
         world.Has DragEndEvent =! true
 

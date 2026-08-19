@@ -25,7 +25,7 @@ export const worldActions = createActions((world: World) => {
 export const eventActions = createActions((world: World) => {
   const wrappedWorld = fromKootaWorld(world);
   return {
-    handleClick: (entity: Entity & EntityId) => () => Events.handleClick(entity),
+    handleClick: (entity: Entity & EntityId) => () => Events.handleClick(wrappedWorld, entity),
     handleDrag: (localMatrix: Matrix4) => {
       const local = new Vector3();
       localMatrix.decompose(local, new Quaternion(), new Vector3());
@@ -39,7 +39,7 @@ export const eventActions = createActions((world: World) => {
     handleMeshClick: (entity: Entity) => (e: ThreeEvent<MouseEvent>) => {
       // Route through the F# handler rather than adding ClickEvent directly, so every click in
       // the app passes the same hidden-control check.
-      Events.handleClick(entity as Entity & EntityId);
+      Events.handleClick(wrappedWorld, entity as Entity & EntityId);
       e.stopPropagation();
     },
     handlePointerDown: (entity: Entity & EntityId) => () => Events.handlePointerDown(entity),

@@ -61,6 +61,20 @@ type Tests() =
         handleDrag world x 0.0 0.0 |> ignore
         runSystems world frameDelta
 
+    /// Spawns a selected tree node at the origin, which is what a drag moves.
+    let spawnSelectedNode () =
+        world.Spawn(PersonRef.Val Person.Empty, Position.Val zeroPosition, Selected.Tag())
+
+    /// Leaves the boot View mode for Move mode, where dragging and undo history are possible.
+    let enterMoveMode () =
+        buttonWithLabel "Move" |> handleClick world
+        runSystems world frameDelta
+
+    /// Ends the drag in flight and runs the frame that processes the release.
+    let endDrag () =
+        handleDragEnd world |> ignore
+        runSystems world frameDelta
+
     interface IDisposable with
         member _.Dispose() = (ecs :> IDisposable).Dispose()
 
@@ -69,8 +83,10 @@ type Tests() =
 
     [<Fact>]
     member _.``runSystems cleans up events at end of frame``() =
-        handlePointerMissed world |> ignore
-        handleDragStart world |> ignore
+        // The traits are set directly rather than through the handlers, which refuse and discard
+        // input around a drag and so cannot leave both events standing at once.
+        world.Add PointerMissedEvent
+        world.Add DragStartEvent
         world.Has PointerMissedEvent =! true
         world.Has DragStartEvent =! true
         runSystems world frameDelta
@@ -100,13 +116,13 @@ type Tests() =
         selectModeButton |> has Hidden =! true
 
         // View -> Move: the button becomes meaningful the moment the mode changes.
-        modeButton |> handleClick
+        modeButton |> handleClick world
         runSystems world frameDelta
         world.Has InViewMode =! false
         selectModeButton |> has Hidden =! false
 
         // Move -> View: and meaningless again, still within the toggling frame.
-        modeButton |> handleClick
+        modeButton |> handleClick world
         runSystems world frameDelta
         world.Has InViewMode =! true
         selectModeButton |> has Hidden =! true
@@ -118,8 +134,8 @@ type Tests() =
         let modeButton = buttonWithLabel "Move"
         let node = world.Spawn(PersonRef.Val Person.Empty, Position.Val zeroPosition)
 
-        node |> handleClick
-        modeButton |> handleClick
+        node |> handleClick world
+        modeButton |> handleClick world
         runSystems world frameDelta
 
         world.Has InViewMode =! false
@@ -130,24 +146,19 @@ type Tests() =
     /// intercepted first leaves the history and the node's position both untouched.
     [<Fact>]
     member _.``runSystems discards a same-frame undo click when the mode toggles``() =
-        // Leave View mode so dragging — and therefore undo history — is possible.
-        buttonWithLabel "Move" |> handleClick
-        runSystems world frameDelta
+        enterMoveMode ()
 
         // Build one undo entry by dragging a node from x = 0 to x = 4.
-        let node =
-            world.Spawn(PersonRef.Val Person.Empty, Position.Val zeroPosition, Selected.Tag())
-
+        let node = spawnSelectedNode ()
         dragNodeTo node 4.0
-        handleDragEnd world |> ignore
-        runSystems world frameDelta
+        endDrag ()
 
         let undoButton = buttonWithLabel "Undo"
         undoButton |> has Hidden =! false
 
         // Tap Undo and the mode button together: the switch wins, so no undo is applied.
-        undoButton |> handleClick
-        buttonWithLabel "View" |> handleClick
+        undoButton |> handleClick world
+        buttonWithLabel "View" |> handleClick world
         runSystems world frameDelta
 
         world.Has InViewMode =! true
@@ -156,32 +167,72 @@ type Tests() =
         // and then discarded.
         isDisabled undoButton =! false
 
-    /// TODO: Fix the stale redo history that this test pins.
-    ///
-    /// `UndoRedo.handleDragEnd` decides whether a release was a real move — and so whether to
-    /// discard the redo history — by looking for a `Selected` node that is not animating, using
-    /// `Selected` as a proxy for "what was just dragged". `updateViewMode` clears the selection
-    /// and runs earlier in the frame, so a drag released in the same frame as a mode toggle looks
-    /// like no drag at all: the redo history survives a move that should have invalidated it, and
-    /// a later Redo walks the node onto a discarded timeline. The fix is to discard the redo
-    /// history at drag *start*, where the undo entry is pushed and the dragged nodes are still
-    /// known, instead of inferring the dragged nodes at the end.
+    /// A pointer committed to a drag is not also pressing a control, so a toolbar tap landing
+    /// mid-drag is fallout from the drag rather than input in its own right.
     [<Fact>]
-    member _.``KNOWN BUG: a drag released as the mode toggles leaves stale redo history``() =
-        // Leave View mode so dragging — and therefore undo history — is possible.
-        buttonWithLabel "Move" |> handleClick
+    member _.``runSystems ignores a toolbar tap while a drag is in flight``() =
+        enterMoveMode ()
+        dragNodeTo (spawnSelectedNode ()) 4.0
+
+        buttonWithLabel "View" |> handleClick world
         runSystems world frameDelta
 
-        let node =
-            world.Spawn(PersonRef.Val Person.Empty, Position.Val zeroPosition, Selected.Tag())
+        world.Has InViewMode =! false
+
+    /// A drag released over empty space raises a background miss, which would otherwise read as a
+    /// deliberate click away from the selection and drop what was just dragged.
+    [<Fact>]
+    member _.``runSystems keeps the selection when a background click lands mid-drag``() =
+        enterMoveMode ()
+        let node = spawnSelectedNode ()
+        dragNodeTo node 4.0
+
+        handlePointerMissed world |> ignore
+        runSystems world frameDelta
+
+        node |> has Selected =! true
+
+    /// Releasing a drag raises a click on the node it was dragging, which would otherwise
+    /// deselect the node the moment the user let go of it.
+    [<Fact>]
+    member _.``runSystems keeps the selection when a node click lands mid-drag``() =
+        enterMoveMode ()
+        let node = spawnSelectedNode ()
+        dragNodeTo node 4.0
+
+        node |> handleClick world
+        runSystems world frameDelta
+
+        node |> has Selected =! true
+
+    /// Refusing input during a drag must not outlast the drag, or the app would take no input at
+    /// all after the first one.
+    [<Fact>]
+    member _.``runSystems accepts a toolbar tap once a drag has ended``() =
+        enterMoveMode ()
+        dragNodeTo (spawnSelectedNode ()) 4.0
+        endDrag ()
+
+        buttonWithLabel "View" |> handleClick world
+        runSystems world frameDelta
+
+        world.Has InViewMode =! true
+
+    /// The redo history is discarded by inferring what was dragged from the `Selected` nodes at
+    /// release, so anything clearing the selection in that frame hides the drag from it. Every
+    /// route that clears a selection is driven by input, and input is refused while a drag is in
+    /// flight, so a release now always sees what it dragged.
+    [<Fact>]
+    member _.``runSystems discards redo history for a drag released as the mode is tapped``() =
+        enterMoveMode ()
+        let node = spawnSelectedNode ()
 
         // Drag 0 -> 4 and release it cleanly, then undo. Wait out the undo animation, because
         // only a node that has stopped animating is eligible to be snapshotted again.
         dragNodeTo node 4.0
-        handleDragEnd world |> ignore
-        runSystems world frameDelta
+        endDrag ()
 
-        buttonWithLabel "Undo" |> handleClick
+        buttonWithLabel "Undo" |> handleClick world
         runSystems world frameDelta
         runUntilSettled ()
         isDisabled (buttonWithLabel "Redo") =! false
@@ -189,21 +240,44 @@ type Tests() =
         // Drag 0 -> 7, this time releasing in the same frame as a tap on the mode button.
         dragNodeTo node 7.0
         handleDragEnd world |> ignore
-        buttonWithLabel "View" |> handleClick
+        buttonWithLabel "View" |> handleClick world
         runSystems world frameDelta
-        world.Has InViewMode =! true
 
-        // The second drag replaced the undone one, so its redo entry should be gone. It is not.
+        // The tap belonged to the drag, so the mode is unchanged, and the completed drag
+        // invalidated the redo entry it superseded.
+        world.Has InViewMode =! false
+        isDisabled (buttonWithLabel "Redo") =! true
+
+    /// A drag refuses input from the moment its start is raised, but input accepted just *before*
+    /// that lands in the same frame and would otherwise still take effect. Discarding it when the
+    /// drag starts is what keeps a coalesced frame from applying both.
+    [<Fact>]
+    member _.``runSystems discards redo history for a drag coalesced with an earlier mode tap``() =
+        enterMoveMode ()
+        let node = spawnSelectedNode ()
+
+        // Build a redo entry: drag 0 -> 4, release, undo, and wait out the undo animation.
+        dragNodeTo node 4.0
+        endDrag ()
+        buttonWithLabel "Undo" |> handleClick world
         runSystems world frameDelta
+        runUntilSettled ()
         isDisabled (buttonWithLabel "Redo") =! false
 
-        // Back in Move mode the stale entry is reachable, and sends the node to x = 4 — where the
-        // *undone* drag had left it, a position the second drag was supposed to have superseded.
-        buttonWithLabel "Move" |> handleClick
+        // Tap the mode button, then press, move and release the node — all before a frame runs.
+        buttonWithLabel "View" |> handleClick world
+        node |> handlePointerDown
+        handleDragStart world |> ignore
+        handleDrag world 7.0 0.0 0.0 |> ignore
+        handleDragEnd world |> ignore
         runSystems world frameDelta
-        buttonWithLabel "Redo" |> handleClick
-        runSystems world frameDelta
-        (node |> get TargetPosition).Value.x =! 4.0
+
+        // The drag superseded the tap, so the mode is unchanged and the node moved.
+        world.Has InViewMode =! false
+        (node |> get Position).Value.x =! 7.0
+
+        // The completed drag invalidated the redo entry it superseded.
+        isDisabled (buttonWithLabel "Redo") =! true
 
     /// TODO: Fix the useless undo entry that this test pins.
     ///
@@ -224,12 +298,8 @@ type Tests() =
     /// each event its own frame, as a responsive host would.
     [<Fact>]
     member _.``KNOWN BUG: a drag coalesced into one frame records an undo entry that cannot undo it``() =
-        // Leave View mode so dragging — and therefore undo history — is possible.
-        buttonWithLabel "Move" |> handleClick
-        runSystems world frameDelta
-
-        let node =
-            world.Spawn(PersonRef.Val Person.Empty, Position.Val zeroPosition, Selected.Tag())
+        enterMoveMode ()
+        let node = spawnSelectedNode ()
 
         // Press, move and release the node without ever yielding a frame between them, as a
         // stalled host would deliver them.
@@ -247,7 +317,7 @@ type Tests() =
         // But the entry saved the position the drag *ended* at, so undoing it targets x = 4 —
         // where the node already is — instead of the x = 0 it was dragged from. The undo is
         // spent, and the move is unrecoverable.
-        undoButton |> handleClick
+        undoButton |> handleClick world
         runSystems world frameDelta
         (node |> get TargetPosition).Value.x =! 4.0
 
@@ -263,7 +333,7 @@ type Tests() =
         // boot View mode before exercising a drag and undo.
         let modeBtn = buttonWithLabel "Move"
 
-        modeBtn |> handleClick
+        modeBtn |> handleClick world
         runSystems world frameDelta
         world.Has InViewMode =! false
 
@@ -272,7 +342,7 @@ type Tests() =
         let origX = originalPos.x
 
         handlePointerDown nodeEntity
-        nodeEntity |> handleClick
+        nodeEntity |> handleClick world
         runSystems world frameDelta
         (nodeEntity |> has Selected) =! true
 
@@ -290,7 +360,7 @@ type Tests() =
         let movedPos = (nodeEntity |> get Position).Value
         movedPos.x <>! origX
 
-        buttonWithLabel "Undo" |> handleClick
+        buttonWithLabel "Undo" |> handleClick world
         runSystems world frameDelta
 
         // Undo animates the node back toward its pre-drag position via TargetPosition.
