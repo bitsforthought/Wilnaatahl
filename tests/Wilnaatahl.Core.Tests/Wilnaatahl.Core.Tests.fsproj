@@ -24,6 +24,7 @@
     <Compile Include="ViewModel/LocalizationTests.fs" />
     <Compile Include="ViewModel/NodeContentTests.fs" />
     <Compile Include="Traits/SpaceTraitsTests.fs" />
+    <Compile Include="Traits/HistoryTests.fs" />
     <Compile Include="Traits/EventsTests.fs" />
     <Compile Include="Entities/LineTests.fs" />
     <Compile Include="Entities/BoundingBoxTests.fs" />

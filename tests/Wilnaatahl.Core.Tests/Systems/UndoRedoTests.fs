@@ -23,7 +23,7 @@ type Tests() =
     let world = ecs.World
     let sortOrder, _ = spawnUndoRedoControls (0, world)
 
-    /// Drags a node to the given x: snapshot on drag start, move, then release. Each phase is its
+    /// Drags a node to the given x: record on drag start, move, then release. Each phase is its
     /// own frame, as the host dispatches them.
     let dragNodeTo node x =
         world.Add DragStartEvent
@@ -94,12 +94,10 @@ type Tests() =
         world |> buttonWithLabel "Undo" |> has MoveModeOnly =! true
         world |> buttonWithLabel "Redo" |> has MoveModeOnly =! true
 
-    /// A drag start snapshots only *static* positions, so a drag that begins while every selected
-    /// node is still animating captures nothing by design. The snapshot entity is spawned before
-    /// that is known, so it has to be destroyed rather than left orphaned — otherwise every such
-    /// drag start leaks one entity for the life of the session.
+    /// Only a node that has stopped moving can be put back where it started, so a drag that
+    /// begins while every selected node is still animating records nothing.
     [<Fact>]
-    member _.``a drag start that captures nothing leaves no snapshot entity behind``() =
+    member _.``a drag start that captures nothing records no undo entry``() =
         let _ =
             world.Spawn(
                 Position.Val {| x = 5.0; y = 0.0; z = 0.0 |},
@@ -107,17 +105,11 @@ type Tests() =
                 Selected.Tag()
             )
 
-        let entityCount () = world.Query() |> Seq.length
-        let before = entityCount ()
-
         world.Add DragStartEvent
         handleUndoRedo world |> ignore
         world.Remove DragStartEvent
 
-        // Nothing was captured, so nothing was pushed...
         world |> buttonWithLabel "Undo" |> isButtonDisabled =! true
-        // ...and no entity was left behind either.
-        entityCount () =! before
 
     /// `handleUndoRedo` recomputes both buttons' `disabled` every frame. A trait write
     /// notifies change subscribers whether or not the value moved, so writing
@@ -132,7 +124,7 @@ type Tests() =
         handleUndoRedo world |> ignore
         (world.Query(buttonWrites <=> [| Button |]) |> Seq.length) =! 0
 
-        // A drag start pushes an undo snapshot, so only the Undo button changes.
+        // A drag start records an undo entry, so only the Undo button changes.
         let _ = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
         world.Add DragStartEvent
         handleUndoRedo world |> ignore
@@ -170,6 +162,76 @@ type Tests() =
 
         // Redo restores the position captured just before the undo.
         (node |> get TargetPosition).Value =! Line3.pos 10.0 0.0 0.0
+
+    /// Every other application test drags one node, which a loop that applied only its first or
+    /// last move would still satisfy. Two nodes moving together pin that the whole command is
+    /// applied, in both directions.
+    [<Fact>]
+    member _.``undo and redo restore every node a drag moved``() =
+        let left = world.Spawn(Position.Val {| x = 1.0; y = 0.0; z = 0.0 |}, Selected.Tag())
+
+        let right =
+            world.Spawn(Position.Val {| x = 2.0; y = 0.0; z = 0.0 |}, Selected.Tag())
+
+        world.Add DragStartEvent
+        handleUndoRedo world |> ignore
+        world.Remove DragStartEvent
+        left |> setValue Position {| x = 11.0; y = 0.0; z = 0.0 |}
+        right |> setValue Position {| x = 12.0; y = 0.0; z = 0.0 |}
+        world.Add DragEndEvent
+        handleUndoRedo world |> ignore
+        world.Remove DragEndEvent
+
+        world |> buttonWithLabel "Undo" |> click
+
+        (left |> get TargetPosition).Value =! Line3.pos 1.0 0.0 0.0
+        (right |> get TargetPosition).Value =! Line3.pos 2.0 0.0 0.0
+
+        world |> buttonWithLabel "Redo" |> click
+
+        (left |> get TargetPosition).Value =! Line3.pos 11.0 0.0 0.0
+        (right |> get TargetPosition).Value =! Line3.pos 12.0 0.0 0.0
+
+    /// Multi-touch can deliver a tap on both buttons in one frame. Undo wins, and the redo tap is
+    /// dropped rather than applied after it.
+    [<Fact>]
+    member _.``an undo and a redo click in the same frame apply only the undo``() =
+        let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
+
+        // Two drags and one undo, so both stacks hold an entry.
+        dragNodeTo node 10.0
+        dragNodeTo node 15.0
+        world |> buttonWithLabel "Undo" |> click
+
+        let undoBtn = world |> buttonWithLabel "Undo"
+        let redoBtn = world |> buttonWithLabel "Redo"
+        undoBtn |> add ClickEvent
+        redoBtn |> add ClickEvent
+        handleUndoRedo world |> ignore
+
+        // Undoing again heads back to where the first drag began. Redo would have gone to 15,
+        // and running both would have landed on 10.
+        (node |> get TargetPosition).Value =! Line3.pos 5.0 0.0 0.0
+
+    /// A button is disabled once its stack empties, but the view layer takes a frame to stop
+    /// drawing it, so a click can still reach a button with nothing to pop. Clicking Undo
+    /// afterwards proves the spurious click neither moved the node nor spent the undo entry.
+    [<Fact>]
+    member _.``a click on a button with an empty stack does nothing``() =
+        let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
+        dragNodeTo node 10.0
+
+        let redoBtn = world |> buttonWithLabel "Redo"
+        isButtonDisabled redoBtn =! true
+
+        redoBtn |> click
+
+        node |> has TargetPosition =! false
+
+        world |> buttonWithLabel "Undo" |> click
+
+        (node |> get TargetPosition).Value =! Line3.pos 5.0 0.0 0.0
+        isButtonDisabled redoBtn =! false
 
     [<Fact>]
     member _.``buttons reflect stack state``() =

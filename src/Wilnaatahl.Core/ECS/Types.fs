@@ -260,8 +260,9 @@ type ITraitFactory =
     /// Defines a new value trait. The given values are used for type inference only and are not stored anywhere.
     abstract TraitWith: value: 'T -> mutableValue: 'TMutable -> IMutableValueTrait<'T, 'TMutable>
 
-    /// Defines a new value trait using a factory function. The given function is used for type inference only
-    /// and isn't invoked or stored anywhere.
+    /// Defines a new value trait using a factory function. The factory fixes the value type, and may also
+    /// be called to build a value when an entity is given the trait without one — the implementations
+    /// differ on that, so always supply a value when adding this trait.
     abstract TraitWithRef: valueFactory: (unit -> 'T) -> IMutableValueTrait<'T, 'T>
 
 /// Encapsulates all state of the world (traits indexed by entities) in one place
