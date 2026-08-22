@@ -27,13 +27,6 @@ type Tests() =
     /// Simulates one frame at 60 FPS.
     let frameDelta = 0.016
 
-    let buttonWithLabel label =
-        world.QueryTrait(Button).ToSequence()
-        |> Seq.find (fun (buttonData, _) -> buttonData.label = label)
-        |> snd
-
-    let isDisabled entity = (entity |> get Button).Value.disabled
-
     /// Runs frames until nothing is animating. Waits on the observable end state rather than a
     /// frame count chosen to be big enough. Requires something to be animating on entry, so it
     /// can't report success for a scene that never started moving.
@@ -69,7 +62,7 @@ type Tests() =
 
     /// Leaves the boot View mode for Move mode, where dragging and undo history are possible.
     let enterMoveMode () =
-        buttonWithLabel "Move" |> handleClick world
+        world |> buttonWithLabel "Move" |> handleClick world
         runSystems world frameDelta
 
     /// Ends the drag in flight and runs the frame that processes the release.
@@ -110,8 +103,8 @@ type Tests() =
     /// modal controls consistent within that same frame rather than a frame later.
     [<Fact>]
     member _.``runSystems syncs the Move-mode-only controls within the frame that toggles the mode``() =
-        let modeButton = buttonWithLabel "Move"
-        let selectModeButton = buttonWithLabel "Multi-select"
+        let modeButton = world |> buttonWithLabel "Move"
+        let selectModeButton = world |> buttonWithLabel "Multi-select"
 
         // Boot is View mode, where the select-mode button is meaningless and so hidden.
         world.Has InViewMode =! true
@@ -133,7 +126,7 @@ type Tests() =
     /// mode toggle must not survive into the mode being entered.
     [<Fact>]
     member _.``runSystems clears a same-frame node click when the mode toggles``() =
-        let modeButton = buttonWithLabel "Move"
+        let modeButton = world |> buttonWithLabel "Move"
         let node = world.Spawn(PersonRef.Val Person.Empty, Position.Val zeroPosition)
 
         node |> handleClick world
@@ -155,19 +148,19 @@ type Tests() =
         dragNodeTo node 4.0
         endDrag ()
 
-        let undoButton = buttonWithLabel "Undo"
+        let undoButton = world |> buttonWithLabel "Undo"
         undoButton |> has Hidden =! false
 
         // Tap Undo and the mode button together: the switch wins, so no undo is applied.
         undoButton |> handleClick world
-        buttonWithLabel "View" |> handleClick world
+        world |> buttonWithLabel "View" |> handleClick world
         runSystems world frameDelta
 
         world.Has InViewMode =! true
         node |> has TargetPosition =! false
         // The entry is still on the undo stack, so the click was intercepted rather than applied
         // and then discarded.
-        isDisabled undoButton =! false
+        isButtonDisabled undoButton =! false
 
     /// A second finger can tap a control while the first one drags. The tap is deliberate, but it
     /// has no coherent meaning: the app would have to carry out a toolbar command and a drag in
@@ -177,7 +170,7 @@ type Tests() =
         enterMoveMode ()
         dragNodeTo (spawnSelectedNode ()) 4.0
 
-        buttonWithLabel "View" |> handleClick world
+        world |> buttonWithLabel "View" |> handleClick world
         runSystems world frameDelta
 
         world.Has InViewMode =! false
@@ -215,7 +208,7 @@ type Tests() =
         dragNodeTo (spawnSelectedNode ()) 4.0
         endDrag ()
 
-        buttonWithLabel "View" |> handleClick world
+        world |> buttonWithLabel "View" |> handleClick world
         runSystems world frameDelta
 
         world.Has InViewMode =! true
@@ -234,21 +227,21 @@ type Tests() =
         dragNodeTo node 4.0
         endDrag ()
 
-        buttonWithLabel "Undo" |> handleClick world
+        world |> buttonWithLabel "Undo" |> handleClick world
         runSystems world frameDelta
         runUntilSettled ()
-        isDisabled (buttonWithLabel "Redo") =! false
+        world |> buttonWithLabel "Redo" |> isButtonDisabled =! false
 
         // Drag 0 -> 7, this time releasing in the same frame as a tap on the mode button.
         dragNodeTo node 7.0
         handleDragEnd world
-        buttonWithLabel "View" |> handleClick world
+        world |> buttonWithLabel "View" |> handleClick world
         runSystems world frameDelta
 
         // The tap belonged to the drag, so the mode is unchanged, and the completed drag
         // invalidated the redo entry it superseded.
         world.Has InViewMode =! false
-        isDisabled (buttonWithLabel "Redo") =! true
+        world |> buttonWithLabel "Redo" |> isButtonDisabled =! true
 
     /// Input is refused from the moment a drag start arrives, but a tap accepted just before that
     /// lands in the same frame. Dropping it stops one frame from applying both a tap and a drag.
@@ -260,13 +253,13 @@ type Tests() =
         // Build a redo entry: drag 0 -> 4, release, undo, and wait out the undo animation.
         dragNodeTo node 4.0
         endDrag ()
-        buttonWithLabel "Undo" |> handleClick world
+        world |> buttonWithLabel "Undo" |> handleClick world
         runSystems world frameDelta
         runUntilSettled ()
-        isDisabled (buttonWithLabel "Redo") =! false
+        world |> buttonWithLabel "Redo" |> isButtonDisabled =! false
 
         // Tap the mode button, then press, move and release the node — all before a frame runs.
-        buttonWithLabel "View" |> handleClick world
+        world |> buttonWithLabel "View" |> handleClick world
         node |> handlePointerDown
         handleDragStart world
         handleDrag world 7.0 0.0 0.0
@@ -278,7 +271,7 @@ type Tests() =
         (node |> get Position).Value.x =! 7.0
 
         // The completed drag invalidated the redo entry it superseded.
-        isDisabled (buttonWithLabel "Redo") =! true
+        world |> buttonWithLabel "Redo" |> isButtonDisabled =! true
 
     /// TODO: Fix the wrong undo position that this test pins.
     ///
@@ -317,7 +310,7 @@ type Tests() =
 
         // Undo should send the node back to x = 0, where the drag began. It sends it to x = 1,
         // where the node stood after the first movement.
-        buttonWithLabel "Undo" |> handleClick world
+        world |> buttonWithLabel "Undo" |> handleClick world
         runSystems world frameDelta
         (node |> get TargetPosition).Value.x =! 1.0
 
@@ -344,8 +337,8 @@ type Tests() =
 
         // The drag itself worked: the node moved, and an undo entry was recorded for it.
         (node |> get Position).Value.x =! 4.0
-        let undoButton = buttonWithLabel "Undo"
-        isDisabled undoButton =! false
+        let undoButton = world |> buttonWithLabel "Undo"
+        isButtonDisabled undoButton =! false
 
         // But the entry saved the position the drag *ended* at, so undoing it targets x = 4 —
         // where the node already is — instead of the x = 0 it was dragged from. The undo is
@@ -364,7 +357,7 @@ type Tests() =
 
         // Dragging requires Move mode, and the undo/redo buttons are hidden there, so leave the
         // boot View mode before exercising a drag and undo.
-        let modeBtn = buttonWithLabel "Move"
+        let modeBtn = world |> buttonWithLabel "Move"
 
         modeBtn |> handleClick world
         runSystems world frameDelta
@@ -394,7 +387,7 @@ type Tests() =
         let movedPos = (nodeEntity |> get Position).Value
         movedPos.x <>! origX
 
-        buttonWithLabel "Undo" |> handleClick world
+        world |> buttonWithLabel "Undo" |> handleClick world
         runSystems world frameDelta
 
         // Undo animates the node back toward its pre-drag position via TargetPosition.

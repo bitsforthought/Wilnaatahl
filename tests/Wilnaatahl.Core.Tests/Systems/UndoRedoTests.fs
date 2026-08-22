@@ -12,20 +12,9 @@ open Wilnaatahl.Entities
 open Wilnaatahl.Traits.Events
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Traits.ViewTraits
-open Wilnaatahl.Traits.ConnectorTraits
 open Wilnaatahl.Systems.UndoRedo
 open Wilnaatahl.Systems.ViewMode
 open Wilnaatahl.Tests.EcsTestSupport
-
-let private getButtonLabel entity =
-    match entity |> get Button with
-    | Some b -> b.label
-    | None -> ""
-
-let private findButton label (world: IWorld) =
-    world.Query(With Button) |> Seq.find (fun e -> getButtonLabel e = label)
-
-let private isButtonDisabled entity = (entity |> get Button).Value.disabled
 
 let private isButtonHidden entity = entity |> has Hidden
 
@@ -62,10 +51,10 @@ type Tests() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
         dragNodeTo node 10.0
 
-        let redoBtn = world |> findButton "Redo"
+        let redoBtn = world |> buttonWithLabel "Redo"
         isButtonDisabled redoBtn =! true
 
-        click (world |> findButton "Undo")
+        world |> buttonWithLabel "Undo" |> click
 
         isButtonDisabled redoBtn =! false
 
@@ -74,11 +63,11 @@ type Tests() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
         dragNodeTo node 10.0
 
-        let undoBtn = world |> findButton "Undo"
+        let undoBtn = world |> buttonWithLabel "Undo"
         click undoBtn
         isButtonDisabled undoBtn =! true
 
-        click (world |> findButton "Redo")
+        world |> buttonWithLabel "Redo" |> click
 
         isButtonDisabled undoBtn =! false
 
@@ -87,13 +76,13 @@ type Tests() =
         sortOrder =! 2
         let buttons = world.Query(With Button) |> Seq.toList
         buttons.Length =! 2
-        let labels = buttons |> List.map getButtonLabel |> List.sort
+        let labels = buttons |> List.map buttonLabel |> List.sort
         labels =! [ "Redo"; "Undo" ]
 
     [<Fact>]
     member _.``undo and redo buttons start disabled``() =
-        let undoBtn = world |> findButton "Undo"
-        let redoBtn = world |> findButton "Redo"
+        let undoBtn = world |> buttonWithLabel "Undo"
+        let redoBtn = world |> buttonWithLabel "Redo"
 
         isButtonDisabled undoBtn =! true
         isButtonDisabled redoBtn =! true
@@ -102,8 +91,8 @@ type Tests() =
     /// `MoveModeOnly` and leave hiding to the ViewMode system rather than reading the mode.
     [<Fact>]
     member _.``undo and redo buttons are marked Move-mode only``() =
-        (world |> findButton "Undo") |> has MoveModeOnly =! true
-        (world |> findButton "Redo") |> has MoveModeOnly =! true
+        world |> buttonWithLabel "Undo" |> has MoveModeOnly =! true
+        world |> buttonWithLabel "Redo" |> has MoveModeOnly =! true
 
     /// A drag start snapshots only *static* positions, so a drag that begins while every selected
     /// node is still animating captures nothing by design. The snapshot entity is spawned before
@@ -126,7 +115,7 @@ type Tests() =
         world.Remove DragStartEvent
 
         // Nothing was captured, so nothing was pushed...
-        isButtonDisabled (world |> findButton "Undo") =! true
+        world |> buttonWithLabel "Undo" |> isButtonDisabled =! true
         // ...and no entity was left behind either.
         entityCount () =! before
 
@@ -150,7 +139,7 @@ type Tests() =
         world.Remove DragStartEvent
 
         world.Query(buttonWrites <=> [| Button |]) |> Seq.exactlyOne
-        =! (world |> findButton "Undo")
+        =! (world |> buttonWithLabel "Undo")
 
     [<Fact>]
     member _.``drag start captures positions and enables undo button``() =
@@ -159,7 +148,7 @@ type Tests() =
         world.Add DragStartEvent
         handleUndoRedo world |> ignore
 
-        let undoBtn = world |> findButton "Undo"
+        let undoBtn = world |> buttonWithLabel "Undo"
         isButtonDisabled undoBtn =! false
 
     [<Fact>]
@@ -167,7 +156,7 @@ type Tests() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
 
         dragNodeTo node 10.0
-        click (world |> findButton "Undo")
+        world |> buttonWithLabel "Undo" |> click
 
         (node |> get TargetPosition).Value =! Line3.pos 5.0 0.0 0.0
 
@@ -176,8 +165,8 @@ type Tests() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
 
         dragNodeTo node 10.0
-        click (world |> findButton "Undo")
-        click (world |> findButton "Redo")
+        world |> buttonWithLabel "Undo" |> click
+        world |> buttonWithLabel "Redo" |> click
 
         // Redo restores the position captured just before the undo.
         (node |> get TargetPosition).Value =! Line3.pos 10.0 0.0 0.0
@@ -186,8 +175,8 @@ type Tests() =
     member _.``buttons reflect stack state``() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 3.0; z = 1.0 |}, Selected.Tag())
 
-        let undoBtn = world |> findButton "Undo"
-        let redoBtn = world |> findButton "Redo"
+        let undoBtn = world |> buttonWithLabel "Undo"
+        let redoBtn = world |> buttonWithLabel "Redo"
         isButtonDisabled undoBtn =! true
         isButtonDisabled redoBtn =! true
 
@@ -203,9 +192,9 @@ type Tests() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
 
         dragNodeTo node 10.0
-        click (world |> findButton "Undo")
+        world |> buttonWithLabel "Undo" |> click
 
-        let redoBtn = world |> findButton "Redo"
+        let redoBtn = world |> buttonWithLabel "Redo"
         isButtonDisabled redoBtn =! false
 
         // New drag: should flush the redo stack.
@@ -224,8 +213,8 @@ type Tests() =
         dragNodeTo node 15.0
 
         // One undo moves an entry to the redo stack, so both stacks are non-empty.
-        let undoBtn = world |> findButton "Undo"
-        let redoBtn = world |> findButton "Redo"
+        let undoBtn = world |> buttonWithLabel "Undo"
+        let redoBtn = world |> buttonWithLabel "Redo"
         click undoBtn
 
         isButtonHidden undoBtn =! false
@@ -273,7 +262,7 @@ type Tests() =
         // View mode hides the button; a delayed click on it must be dropped at the source.
         world.Add InViewMode
         syncModalControls world |> ignore
-        let undoBtn = world |> findButton "Undo"
+        let undoBtn = world |> buttonWithLabel "Undo"
         undoBtn |> handleClick world
         undoBtn |> has ClickEvent =! false
         handleUndoRedo world |> ignore
