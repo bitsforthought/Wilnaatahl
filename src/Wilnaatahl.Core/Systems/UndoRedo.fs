@@ -145,21 +145,22 @@ let handleUndoRedo (world: IWorld) =
         world.QueryTrait(UndoRedoStack, With Button, With RedoButton).ToSequence()
         |> Seq.exactlyOne
 
-    // Multi-touch makes it possible to tap Undo and Redo together, and Undo wins. The `else` is
-    // what runs on an ordinary drag frame. Its role as a guard is now redundant, because a tap
-    // can no longer land in the same frame as a drag: Events refuses input once a drag start
-    // arrives and drops input that arrived just before it. It is kept because removing it would
-    // leave correctness resting on that guarantee alone.
+    // Multi-touch makes it possible to tap Undo and Redo together, and Undo wins.
     if undoButtonEntity |> has ClickEvent then
         undoStack |> handleButtonClicked world redoStack
     elif redoButtonEntity |> has ClickEvent then
         redoStack |> handleButtonClicked world undoStack
-    else
-        undoStack |> handleDragStart world
-        redoStack |> handleDragEnd world
 
-    // Every branch above can move an entry between the two stacks, so settle both buttons
-    // rather than only the one that was clicked.
+    // The handlers below need no guard against a click. Events refuses a click while a drag is
+    // in flight, and drops one raised just before a drag started, so a click cannot share a
+    // frame with a drag start or with a real drag end. The one case Events cannot see is a drag
+    // end with no drag behind it, because nothing is in flight to refuse against; Dragging
+    // removes that one before this system runs.
+    undoStack |> handleDragStart world
+    redoStack |> handleDragEnd world
+
+    // Anything above can move an entry between the two stacks, so settle both buttons rather
+    // than only the one that was clicked.
     undoStack |> updateButtonState undoButtonEntity
     redoStack |> updateButtonState redoButtonEntity
     world

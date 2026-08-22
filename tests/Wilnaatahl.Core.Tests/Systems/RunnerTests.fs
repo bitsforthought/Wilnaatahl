@@ -213,6 +213,31 @@ type Tests() =
 
         world.Has InViewMode =! true
 
+    /// The browser can raise a drag end with no drag behind it. Nothing is in flight at that
+    /// moment, so `Events` has nothing to refuse input against and the stray event reaches the
+    /// frame. Undo/redo would read it as a real release and throw away the redo history, so
+    /// `Dragging` removes it first — which is why `Dragging` runs before undo/redo.
+    [<Fact>]
+    member _.``runSystems keeps redo history when a stray drag end arrives``() =
+        enterMoveMode ()
+        let node = spawnSelectedNode ()
+
+        // Build a redo entry: drag, release, undo, then wait out the undo animation so the node
+        // is settled and would count as a dragged node.
+        dragNodeTo node 4.0
+        endDrag ()
+        world |> buttonWithLabel "Undo" |> handleClick world
+        runSystems world frameDelta
+        runUntilSettled ()
+
+        let redoButton = world |> buttonWithLabel "Redo"
+        isButtonDisabled redoButton =! false
+
+        handleDragEnd world
+        runSystems world frameDelta
+
+        isButtonDisabled redoButton =! false
+
     /// When a drag is released, undo works out which nodes were dragged by looking at which ones
     /// are selected. Anything that clears the selection in that frame hides the drag from it. All
     /// such clearing comes from input, and input is refused during a drag, so a release always
