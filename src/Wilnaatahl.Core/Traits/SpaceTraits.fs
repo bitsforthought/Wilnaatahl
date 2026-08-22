@@ -1,5 +1,6 @@
 module Wilnaatahl.Traits.SpaceTraits
 
+open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Trait
 open Wilnaatahl.ViewModel
 open Wilnaatahl.ViewModel.Vector
@@ -17,3 +18,10 @@ let TargetPosition = mutableTrait zeroPosition MutableVector3.Zero
 /// node's Position that determines its extent. For rectilinear nodes, it translates directly to the node
 /// shape's dimensions. For spherical nodes, the smallest component of this trait becomes the radius.
 let Size = valueTrait zeroPosition
+
+/// The position an entity has settled at: its `TargetPosition` while it is animating towards
+/// one, and its `Position` once it has stopped. Fails when it has neither.
+let internal settledPosition entity =
+    match entity |> getFirst TargetPosition Position with
+    | Some position -> position
+    | None -> failwith $"Entity {entity} has no TargetPosition or Position."

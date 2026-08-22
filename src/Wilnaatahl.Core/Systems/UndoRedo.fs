@@ -113,23 +113,18 @@ let private handleButtonClicked (world: IWorld) (toStack: Stack<EntityId>) (from
 
         // How Undo/Redo behaves depends on whether the node being manipulated is static or animating.
         // The invariants we want to maintain are:
-        // 1. Positions saved on either stack represent static positions, not intermediate positions on
-        //    an animated path.
+        // 1. Positions saved on either stack represent settled positions, not intermediate positions
+        //    on an animated path.
         // 2. When restoring an old position, the node should animate to that old position, so we're
-        //    using a static position from one of the stacks to set a new TargetPosition.
+        //    using a settled position from one of the stacks to set a new TargetPosition.
         // This should provide the most intuitive UX.
         for entity in snapshot |> getEntities do
-            let posToSave =
-                match entity |> getFirst TargetPosition Position with
-                | Some pos -> pos
-                | None -> failwith $"Entity {entity} from snapshot has no TargetPosition or Position."
-
             let newPos =
                 match snapshot |> getSavedPositionFor entity with
                 | Some p -> p
                 | None -> failwith $"Entity {entity} from snapshot has no saved position."
 
-            newSnapshot |> capture entity posToSave
+            newSnapshot |> capture entity (entity |> settledPosition)
             entity |> addWith TargetPosition newPos
 
         newSnapshot |> pushTo toStack
