@@ -21,6 +21,8 @@ export function HuwilpGroup() {
   const world = useWorld();
   const inViewMode = useHas(world, InViewMode);
   const staticNodes = useQuery(Size, PersonRef, Not(Selected, Hidden));
+  // The selection is what <DragControls> wraps, so selecting a node is what makes it draggable.
+  // The drag itself doesn't read this: it fixes its participants when it starts.
   const draggableNodes = useQuery(Size, PersonRef, Selected, Not(Hidden));
   // In View mode nothing is draggable, so every visible node renders statically.
   const allNodes = useQuery(Size, PersonRef, Not(Hidden));

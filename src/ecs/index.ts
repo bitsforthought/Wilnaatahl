@@ -42,7 +42,6 @@ export const eventActions = createActions((world: World) => {
       Events.handleClick(wrappedWorld, entity as Entity & EntityId);
       e.stopPropagation();
     },
-    handlePointerDown: (entity: Entity & EntityId) => () => Events.handlePointerDown(entity),
     handlePointerMissed: () => Events.handlePointerMissed(wrappedWorld),
   };
 });
@@ -52,7 +51,7 @@ export { useMeshRef, useOverlayVisible } from "./customHooks";
 export {
   Button,
   CurrentLocale,
-  Dragging,
+  DragOrigin,
   Elbow,
   Hidden,
   InViewMode,

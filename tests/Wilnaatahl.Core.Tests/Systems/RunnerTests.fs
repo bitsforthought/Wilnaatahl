@@ -43,14 +43,12 @@ type Tests() =
         run 1000
         stillAnimating () =! false
 
-    /// Drags a node to the given x, giving each event its own frame. This is not quite how the
-    /// browser delivers a drag — use-gesture raises the start and the first movement together —
-    /// but it keeps frame boundaries explicit for the tests that care about them. Tests that turn
-    /// on the real ordering spell it out themselves. The caller raises the drag end, so it can
-    /// choose what else lands in that frame.
-    let dragNodeTo node x =
-        node |> handlePointerDown
-        runSystems world frameDelta
+    /// Drags the selection to the given x, giving each event its own frame. This is not quite how
+    /// the browser delivers a drag — use-gesture raises the start and the first movement together
+    /// — but it keeps frame boundaries explicit for the tests that care about them. Tests that
+    /// turn on the real ordering spell it out themselves. The caller raises the drag end, so it
+    /// can choose what else lands in that frame.
+    let dragTo x =
         handleDragStart world
         runSystems world frameDelta
         handleDrag world x 0.0 0.0
@@ -99,6 +97,32 @@ type Tests() =
         let posAfter = (entity |> get Position).Value.x
         posAfter >! posBefore
 
+    /// A node under the pointer is the drag's to place. Leaving it in the animation's hands as
+    /// well would let it creep toward its target on every frame the pointer holds still, then
+    /// snap back the moment the pointer moves again.
+    [<Fact>]
+    member _.``runSystems holds a dragged node still while its animation waits``() =
+        enterMoveMode ()
+        let node = spawnSelectedNode ()
+        node |> addWith TargetPosition {| x = 100.0; y = 0.0; z = 0.0 |}
+
+        dragTo 4.0
+
+        // Not 4.0: `animate` runs before `dragNodes`, so on the frame that starts the drag the
+        // node takes one more step toward its target before its origin is captured. It is
+        // captured at the position that frame renders, so the grab is still faithful.
+        let whereTheDragPutIt = (node |> get Position).Value.x
+
+        // A frame with no pointer movement: nothing should move the node.
+        runSystems world frameDelta
+        (node |> get Position).Value.x =! whereTheDragPutIt
+
+        // The animation is paused, not cancelled, so releasing the node resumes it.
+        node |> has TargetPosition =! true
+        endDrag ()
+        runUntilSettled ()
+        (node |> get Position).Value.x =! 100.0
+
     /// Which controls are available is derived from the mode, so toggling the mode must leave the
     /// modal controls consistent within that same frame rather than a frame later.
     [<Fact>]
@@ -145,7 +169,7 @@ type Tests() =
 
         // Build one undo entry by dragging a node from x = 0 to x = 4.
         let node = spawnSelectedNode ()
-        dragNodeTo node 4.0
+        dragTo 4.0
         endDrag ()
 
         let undoButton = world |> buttonWithLabel "Undo"
@@ -168,19 +192,46 @@ type Tests() =
     [<Fact>]
     member _.``runSystems ignores a toolbar tap while a drag is in flight``() =
         enterMoveMode ()
-        dragNodeTo (spawnSelectedNode ()) 4.0
+        spawnSelectedNode () |> ignore
+        dragTo 4.0
 
         world |> buttonWithLabel "View" |> handleClick world
         runSystems world frameDelta
 
         world.Has InViewMode =! false
 
-    /// A background miss during a drag would clear the selection, dropping the node being dragged.
+    /// The first start fixes the participants and their origins. A second one arriving while the
+    /// drag still runs would re-base the gesture, and the node would jump by the distance it had
+    /// already travelled — and undo/redo, which is still watching drag starts, would record a
+    /// second entry that undoes only part of the drag.
+    [<Fact>]
+    member _.``runSystems ignores a drag start that arrives mid-drag``() =
+        enterMoveMode ()
+        let node = spawnSelectedNode ()
+
+        dragTo 4.0
+
+        // A second start, then the gesture carries on to 5.
+        handleDragStart world
+        runSystems world frameDelta
+        handleDrag world 5.0 0.0 0.0
+        runSystems world frameDelta
+        endDrag ()
+
+        (node |> get Position).Value.x =! 5.0
+
+        // One undo takes the whole drag back, so only one entry was recorded.
+        world |> buttonWithLabel "Undo" |> handleClick world
+        runSystems world frameDelta
+        (node |> get TargetPosition).Value.x =! 0.0
+
+    /// The selection is what the view layer paints and makes draggable, so clearing it mid-drag
+    /// would leave the app dragging nodes it no longer shows as selected.
     [<Fact>]
     member _.``runSystems keeps the selection when a background click lands mid-drag``() =
         enterMoveMode ()
         let node = spawnSelectedNode ()
-        dragNodeTo node 4.0
+        dragTo 4.0
 
         handlePointerMissed world
         runSystems world frameDelta
@@ -188,12 +239,13 @@ type Tests() =
         node |> has Selected =! true
 
     /// A click can land on the dragged node during a drag — a drag short enough to also count as
-    /// a tap raises one. Acting on it would deselect the node the user is dragging.
+    /// a tap raises one. Acting on it would deselect the node the user is dragging, so the view
+    /// layer would stop painting it as selected mid-gesture.
     [<Fact>]
     member _.``runSystems keeps the selection when a node click lands mid-drag``() =
         enterMoveMode ()
         let node = spawnSelectedNode ()
-        dragNodeTo node 4.0
+        dragTo 4.0
 
         node |> handleClick world
         runSystems world frameDelta
@@ -205,7 +257,8 @@ type Tests() =
     [<Fact>]
     member _.``runSystems accepts a toolbar tap once a drag has ended``() =
         enterMoveMode ()
-        dragNodeTo (spawnSelectedNode ()) 4.0
+        spawnSelectedNode () |> ignore
+        dragTo 4.0
         endDrag ()
 
         world |> buttonWithLabel "View" |> handleClick world
@@ -224,7 +277,7 @@ type Tests() =
 
         // Build a redo entry: drag, release, undo, then wait out the undo animation so the node
         // is settled and would count as a dragged node.
-        dragNodeTo node 4.0
+        dragTo 4.0
         endDrag ()
         world |> buttonWithLabel "Undo" |> handleClick world
         runSystems world frameDelta
@@ -249,7 +302,7 @@ type Tests() =
 
         // Drag 0 -> 4 and release it cleanly, then undo. Wait out the undo animation, because
         // only a node that has stopped animating is eligible to be snapshotted again.
-        dragNodeTo node 4.0
+        dragTo 4.0
         endDrag ()
 
         world |> buttonWithLabel "Undo" |> handleClick world
@@ -258,7 +311,7 @@ type Tests() =
         world |> buttonWithLabel "Redo" |> isButtonDisabled =! false
 
         // Drag 0 -> 7, this time releasing in the same frame as a tap on the mode button.
-        dragNodeTo node 7.0
+        dragTo 7.0
         handleDragEnd world
         world |> buttonWithLabel "View" |> handleClick world
         runSystems world frameDelta
@@ -276,16 +329,15 @@ type Tests() =
         let node = spawnSelectedNode ()
 
         // Build a redo entry: drag 0 -> 4, release, undo, and wait out the undo animation.
-        dragNodeTo node 4.0
+        dragTo 4.0
         endDrag ()
         world |> buttonWithLabel "Undo" |> handleClick world
         runSystems world frameDelta
         runUntilSettled ()
         world |> buttonWithLabel "Redo" |> isButtonDisabled =! false
 
-        // Tap the mode button, then press, move and release the node — all before a frame runs.
+        // Tap the mode button, then move and release the node — all before a frame runs.
         world |> buttonWithLabel "View" |> handleClick world
-        node |> handlePointerDown
         handleDragStart world
         handleDrag world 7.0 0.0 0.0
         handleDragEnd world
@@ -320,8 +372,6 @@ type Tests() =
         let node = spawnSelectedNode ()
 
         // The start and the first movement arrive together, as use-gesture dispatches them.
-        node |> handlePointerDown
-        runSystems world frameDelta
         handleDragStart world
         handleDrag world 1.0 0.0 0.0
         runSystems world frameDelta
@@ -354,7 +404,6 @@ type Tests() =
 
         // Press, move and release the node without ever yielding a frame between them, as a
         // stalled host would deliver them.
-        node |> handlePointerDown
         handleDragStart world
         handleDrag world 4.0 0.0 0.0
         handleDragEnd world
@@ -392,7 +441,6 @@ type Tests() =
         let originalPos = (nodeEntity |> get Position).Value
         let origX = originalPos.x
 
-        handlePointerDown nodeEntity
         nodeEntity |> handleClick world
         runSystems world frameDelta
         (nodeEntity |> has Selected) =! true

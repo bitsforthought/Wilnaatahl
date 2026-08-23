@@ -1,11 +1,6 @@
 import { Mesh } from "three";
 import { trait } from "koota";
-import {
-  toKootaRelation,
-  toKootaTagTrait,
-  toKootaValueFactoryTrait,
-  toKootaValueTrait,
-} from "./koota/kootaWrapper";
+import { toKootaTagTrait, toKootaValueFactoryTrait, toKootaValueTrait } from "./koota/kootaWrapper";
 import * as Events from "../generated/Traits/Events";
 import * as FileCommands from "../generated/Systems/FileCommands";
 import * as ConnectorTraits from "../generated/Traits/ConnectorTraits";
@@ -39,6 +34,6 @@ export const Position = toKootaValueFactoryTrait(SpaceTraits.Position);
 export const Size = toKootaValueTrait(SpaceTraits.Size);
 
 export const Button = toKootaValueTrait(ViewTraits.Button);
-export const Dragging = toKootaRelation(ViewTraits.Dragging);
+export const DragOrigin = toKootaValueTrait(ViewTraits.DragOrigin);
 export const Hidden = toKootaTagTrait(ViewTraits.Hidden);
 export const Selected = toKootaTagTrait(ViewTraits.Selected);

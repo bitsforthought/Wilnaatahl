@@ -3,7 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { Box3, Vector3 } from "three";
 import { useQuery, useWorld } from "koota/react";
-import { Dragging, MeshRef, Selected, runSystems, useOverlayVisible } from "../ecs";
+import { DragOrigin, MeshRef, Selected, runSystems, useOverlayVisible } from "../ecs";
 import { HuwilpGroup } from "./HuwilpGroup";
 import type { OverlayAnchor } from "./DetailOverlay";
 
@@ -112,7 +112,9 @@ export default function TreeScene({
   onOverlayAnchor: (anchor: OverlayAnchor | null) => void;
 }) {
   const world = useWorld();
-  const isDragInProgress = useQuery(Dragging("*")).length > 0;
+  // Every node the drag is moving carries the position it started from, so any of them means a
+  // drag is running.
+  const isDragInProgress = useQuery(DragOrigin).length > 0;
   const overlayVisible = useOverlayVisible();
 
   useFrame((_state, delta) => {

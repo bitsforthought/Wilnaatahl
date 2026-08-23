@@ -13,20 +13,18 @@ let ClickEvent = tagTrait ()
 let DragEndEvent = tagTrait ()
 let DragEvent = valueTrait zeroPosition
 let DragStartEvent = tagTrait ()
-let PointerDownEvent = tagTrait ()
 let PointerMissedEvent = tagTrait ()
 
 /// Whether a drag is happening. True from the moment a drag start arrives until the frame that
 /// handles the release has run. Input arrives between frames, so a drag start is visible here
-/// before any frame has run to spawn the entity that represents the drag.
+/// before any frame has run to mark the nodes the drag moves.
 ///
-/// A drag start that finds no node to drag spawns no entity, and the frame clears the start
-/// event, so input is accepted again next frame. Once a drag entity does exist, only a drag end
-/// removes it, so the browser is relied on to raise one for every drag it starts — including when
-/// the pointer is cancelled or capture is lost.
+/// A drag start that finds nothing selected marks no node, and the frame clears the start event,
+/// so input is accepted again next frame. Once participants are marked, only a drag end clears
+/// them, so the browser is relied on to raise one for every drag it starts — including when the
+/// pointer is cancelled or capture is lost.
 let private dragInFlight (world: IWorld) =
-    world.Has DragStartEvent
-    || (world.QueryFirst(RelatedToAny Dragging) |> Option.isSome)
+    world.Has DragStartEvent || world |> anyDragParticipants
 
 /// Raises a click on the entity, unless the entity is `Hidden` or a drag is happening.
 ///
@@ -51,26 +49,29 @@ let handleDragEnd (world: IWorld) = world.Add DragEndEvent
 /// frame and would still take effect. A tap by another finger can arrive just before a drag
 /// starts without the browser having stalled. The drag wins, because carrying out a tap and a
 /// drag in the same frame has no coherent meaning.
+///
+/// A start reaching a drag that is already running is refused like any other input, so every
+/// system downstream can take a drag start to mean a drag that is genuinely beginning.
 let handleDragStart (world: IWorld) =
     world.RemoveAll ClickEvent
     world.Remove PointerMissedEvent
-    world.Add DragStartEvent
 
-let handlePointerDown entity = entity |> add PointerDownEvent
+    if not (dragInFlight world) then
+        world.Add DragStartEvent
 
-/// Raises a background miss, unless a drag is happening. A miss during a drag would clear the
-/// selection, dropping the node being dragged.
+/// Raises a background miss, unless a drag is happening. The selection is what the view layer
+/// paints and makes draggable, so clearing it mid-drag would leave the app dragging nodes it no
+/// longer shows as selected.
 let handlePointerMissed (world: IWorld) =
     if not (dragInFlight world) then
         world.Add PointerMissedEvent
 
 let cleanupEvents (world: IWorld) =
     // Remove event traits from all entities at the end of the frame.
-    world.RemoveAll PointerDownEvent
     world.RemoveAll ClickEvent
 
     // Global events are world traits, so we have to delete them one by one.
-    // See eventActions.ts to see how events get created.
+    // The view layer raises them through the handlers above.
     world.Remove PointerMissedEvent
     world.Remove DragStartEvent
     world.Remove DragEvent

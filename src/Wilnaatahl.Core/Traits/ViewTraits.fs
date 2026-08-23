@@ -1,7 +1,6 @@
 module Wilnaatahl.Traits.ViewTraits
 
 open Wilnaatahl.ECS
-open Wilnaatahl.ECS.Relation
 open Wilnaatahl.ECS.Trait
 open Wilnaatahl.ViewModel
 open Wilnaatahl.ViewModel.Vector
@@ -26,9 +25,15 @@ let internal MoveModeOnly = tagTrait ()
 /// the mode, and exactly one system writes it.
 let InViewMode = tagTrait ()
 
-/// Represents an ongoing drag operation as a relation to the node being dragged.
-let Dragging =
-    mutableRelationWith zeroPosition MutableVector3.Zero { IsExclusive = true }
+/// Marks a node taking part in the drag in flight, holding the position it had when that drag
+/// started. The participants are fixed when the drag starts, so selecting or deselecting a node
+/// while it runs cannot change what the drag moves.
+let DragOrigin = valueTrait zeroPosition
+
+/// Whether any node is taking part in a drag: true from the frame that starts one until the frame
+/// that handles the release.
+let internal anyDragParticipants (world: IWorld) =
+    world.QueryFirst(With DragOrigin) |> Option.isSome
 
 /// World-singleton trait holding the active UI Locale. It is written by the TS view
 /// layer (from the browser locale) and read by both F#-side and TS-side consumers to

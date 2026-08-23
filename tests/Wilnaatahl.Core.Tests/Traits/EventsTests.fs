@@ -17,11 +17,10 @@ type Tests() =
 
     /// Starts a drag on an anonymous node, the way processing a drag start does.
     let beginDrag () =
-        world.Spawn(Dragging.ToTargetWith(world.Spawn(), zeroPosition)) |> ignore
+        world.Spawn(DragOrigin.Val zeroPosition) |> ignore
 
     /// Ends the synthetic drag started by `beginDrag`.
-    let endDrag () =
-        world.Query(RelatedToAny Dragging) |> Seq.iter destroy
+    let endDrag () = world.RemoveAll DragOrigin
 
     interface IDisposable with
         member _.Dispose() = (ecs :> IDisposable).Dispose()
@@ -71,12 +70,6 @@ type Tests() =
         entity |> has ClickEvent =! true
 
     [<Fact>]
-    member _.``handlePointerDown adds PointerDownEvent to entity``() =
-        let entity = world.Spawn()
-        handlePointerDown entity
-        entity |> has PointerDownEvent =! true
-
-    [<Fact>]
     member _.``handleDrag sets DragEvent on world with coordinates``() =
         handleDrag world 1.0 2.0 3.0
         world.Has DragEvent =! true
@@ -112,7 +105,16 @@ type Tests() =
         handlePointerMissed world
         world.Has PointerMissedEvent =! true
 
-    /// A background miss during a drag would clear the selection, dropping the node being dragged.
+    /// The first start fixes the participants and their origins. `Events` refuses a start while a
+    /// drag is running, so the system never has to consider a second one.
+    [<Fact>]
+    member _.``handleDragStart raises no DragStartEvent while a drag is in flight``() =
+        beginDrag ()
+        handleDragStart world
+        world.Has DragStartEvent =! false
+
+    /// The selection is what the view layer paints and makes draggable, so clearing it mid-drag
+    /// would leave the app dragging nodes it no longer shows as selected.
     [<Fact>]
     member _.``handlePointerMissed raises no PointerMissedEvent while a drag is in flight``() =
         beginDrag ()
@@ -124,16 +126,13 @@ type Tests() =
         // The traits are added directly instead of through the handlers, because the handlers
         // refuse and discard input around a drag and so can never leave every event standing.
         let entity1 = world.Spawn()
-        let entity2 = world.Spawn()
         entity1 |> add ClickEvent
-        entity2 |> add PointerDownEvent
         world.Add DragStartEvent
         world.AddWith DragEvent {| x = 1.0; y = 2.0; z = 3.0 |}
         world.Add DragEndEvent
         world.Add PointerMissedEvent
 
         entity1 |> has ClickEvent =! true
-        entity2 |> has PointerDownEvent =! true
         world.Has DragStartEvent =! true
         world.Has DragEvent =! true
         world.Has DragEndEvent =! true
@@ -143,7 +142,6 @@ type Tests() =
 
         // Entity events should be removed.
         entity1 |> has ClickEvent =! false
-        entity2 |> has PointerDownEvent =! false
 
         // World events should be removed.
         world.Has DragStartEvent =! false

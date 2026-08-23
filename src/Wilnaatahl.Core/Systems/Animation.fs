@@ -6,9 +6,13 @@ open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ViewModel.SceneConstants
 open Wilnaatahl.ViewModel.Vector
 open Wilnaatahl.Traits.SpaceTraits
+open Wilnaatahl.Traits.ViewTraits
 
 let animate delta (world: IWorld) =
-    world.QueryTraits(Position, TargetPosition).UpdateEachWith AlwaysTrack
+    // A node the user is dragging is the drag's to place. Animating it too would let it creep
+    // toward its target on every frame the pointer doesn't move, so it stays where it was
+    // dropped and resumes its journey once the drag lets go.
+    world.QueryTraits(Position, TargetPosition, Not [| DragOrigin |]).UpdateEachWith AlwaysTrack
     <| fun ((pos, targetPos), entity) ->
         let targetV, posV = targetPos.ToVector3(), pos.ToVector3()
         let lambda = animationDampRate

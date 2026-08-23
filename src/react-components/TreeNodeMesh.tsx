@@ -25,17 +25,11 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
   const label = labelView ? composeNodeLabel(labelView, locale) : "";
   const ref = useMeshRef(entity);
 
-  const { handlePointerDown, handleMeshClick } = useActions(eventActions);
+  const { handleMeshClick } = useActions(eventActions);
 
   return (
     <>
-      <mesh
-        onClick={handleMeshClick(entity)}
-        onPointerDown={handlePointerDown(entity)}
-        castShadow
-        receiveShadow
-        ref={ref}
-      >
+      <mesh onClick={handleMeshClick(entity)} castShadow receiveShadow ref={ref}>
         {person.Shape === "cube" ? (
           <boxGeometry args={[size.x, size.y, size.z]} />
         ) : (
