@@ -37,30 +37,20 @@ let spawnUndoRedoControls (sortOrder, world: IWorld) =
 
     sortOrder + 2, world
 
-let private handleDragStart (world: IWorld) (undoStack: Stack<Command>) =
-    // Before allowing nodes to move as part of a drag operation, we need to capture their
-    // starting positions for posterity. We use Selected and the presence of the DragStartEvent
-    // to identify the nodes to process.
-    if world.Has DragStartEvent then
-        // There are two distinct cases: Either the node about to be dragged was animating,
-        // or it was static. We only want to save static positions for Undo.
-        world.QueryTrait(Position, With Selected, Not [| TargetPosition |]).ToSequence()
-        |> Seq.map (fun (position, entity) -> { Entity = entity; Before = position })
-        |> List.ofSeq
-        |> Command.create
-        |> Option.iter undoStack.Push
-
-let private handleDragEnd (world: IWorld) (redoStack: Stack<Command>) =
-    if world.Has DragEndEvent then
-        // Drag is ending; Flush the redo history of all nodes to avoid massive time-travel
-        // confusion for the user, but only if at least one of the nodes being dragged does
-        // *not* have a TargetPosition. Otherwise, that means the user is dragging nodes that
-        // are already animating, which is not an "undoable/redoable" operation. We use Selected
-        // here as a proxy for being dragged.
-        let draggingButNotAnimating = world.Query(With Selected, Not [| TargetPosition |])
-
-        if not (Seq.isEmpty draggingButNotAnimating) then
-            redoStack.Clear()
+let private pushCommitted (world: IWorld) (undoStack: Stack<Command>) (redoStack: Stack<Command>) =
+    // A committed command is a change that has already happened, so it goes onto the undo stack.
+    // It also invalidates the redo history: the future those entries led to branched off a scene
+    // that no longer exists.
+    //
+    // This runs before a click is applied, so a click always acts on stacks that already reflect
+    // every change made this frame. Nothing can currently commit a command in the same frame as a
+    // click on these buttons — a drag commits at release, and a release refuses button clicks —
+    // so whoever adds the second committer should decide whether that precedence still reads right.
+    match world |> committedCommands with
+    | [] -> ()
+    | commands ->
+        commands |> List.iter undoStack.Push
+        redoStack.Clear()
 
 let private updateButtonState buttonEntity (stack: Stack<Command>) =
     // Enable the button when its stack has something to undo/redo.
@@ -93,19 +83,14 @@ let handleUndoRedo (world: IWorld) =
         world.QueryTrait(CommandStack, With Button, With RedoButton).ToSequence()
         |> Seq.exactlyOne
 
+    // Commands are pushed before a click is applied; see pushCommitted for why.
+    pushCommitted world undoStack redoStack
+
     // Multi-touch makes it possible to tap Undo and Redo together, and Undo wins.
     if undoButtonEntity |> has ClickEvent then
         undoStack |> handleButtonClicked redoStack
     elif redoButtonEntity |> has ClickEvent then
         redoStack |> handleButtonClicked undoStack
-
-    // The handlers below need no guard against a click. Events refuses a click while a drag is
-    // in flight, and drops one raised just before a drag started, so a click cannot share a
-    // frame with a drag start or with a real drag end. The one case Events cannot see is a drag
-    // end with no drag behind it, because nothing is in flight to refuse against; Dragging
-    // removes that one before this system runs.
-    undoStack |> handleDragStart world
-    redoStack |> handleDragEnd world
 
     // Anything above can move an entry between the two stacks, so settle both buttons rather
     // than only the one that was clicked.

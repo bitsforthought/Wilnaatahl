@@ -35,14 +35,16 @@ let private movementTracker = createChanged ()
 /// Runs all systems in the correct order for a single frame.
 let runSystems (world: IWorld) delta =
     // The order is behavioural, not incidental:
-    //   - dragNodes runs before the systems that read input, because it drops a drag-end event
-    //     that arrived with no drag in progress. A genuine one survives for undo/redo.
-    //   - updateViewMode next, so every later system sees one settled mode and no click left over
-    //     from the mode just left.
+    //   - updateViewMode runs before the systems that read input, so every later system sees one
+    //     settled mode and no click left over from the mode just left.
+    //   - dragNodes before handleUndoRedo, because a completed drag records the command that
+    //     takes it back and the undo/redo controls pick it up in the same frame. Any future
+    //     feature that records commands belongs before handleUndoRedo for the same reason, or its
+    //     buttons would lag a frame behind the change.
     world
     |> animate delta
-    |> dragNodes
     |> updateViewMode
+    |> dragNodes
     |> selectNodes
     |> handleUndoRedo
     |> handleFileCommands

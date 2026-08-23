@@ -10,6 +10,7 @@ open Wilnaatahl.Model
 open Wilnaatahl.ViewModel.Vector
 open Wilnaatahl.Entities
 open Wilnaatahl.Traits.Events
+open Wilnaatahl.Traits.History
 open Wilnaatahl.Traits.PeopleTraits
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Traits.ViewTraits
@@ -37,6 +38,12 @@ type Tests() =
         dragNodes world |> ignore
         cleanupEvents world |> ignore
 
+    /// Runs the frame that releases the drag. The frame's events are left standing so a caller
+    /// can inspect what the release recorded.
+    let endDrag () =
+        world.Add DragEndEvent
+        dragNodes world |> ignore
+
     let xOf node = (node |> get Position).Value.x
 
     [<Fact>]
@@ -48,7 +55,7 @@ type Tests() =
         xOf entity =! 5.0
 
     [<Fact>]
-    member _.``full drag flow moves selected entity position``() =
+    member _.``Full drag flow moves selected entity position``() =
         let node = spawnSelectedNode 5.0
 
         startDrag ()
@@ -57,7 +64,7 @@ type Tests() =
         (node |> get Position).Value =! Line3.pos 12.0 0.0 0.0
 
     [<Fact>]
-    member _.``sequential drag events accumulate correctly``() =
+    member _.``Sequential drag events accumulate correctly``() =
         let node = spawnSelectedNode 5.0
 
         startDrag ()
@@ -73,31 +80,18 @@ type Tests() =
     /// go), and that still ends the drag. Treating it as spurious would leave the participants
     /// marked forever, which the view layer reads as "a drag is still in progress".
     [<Fact>]
-    member _.``drag end without movement in the same frame still ends the drag``() =
+    member _.``Drag end without movement in the same frame still ends the drag``() =
         spawnSelectedNode 0.0 |> ignore
 
         startDrag ()
         world.Query(With DragOrigin) |> Seq.length =! 1
 
-        // The release frame carries no DragEvent, and startDrag already swept the frame before it.
-        world.Add DragEndEvent
-        dragNodes world |> ignore
+        endDrag ()
 
         world.Query(With DragOrigin) |> Seq.length =! 0
-        // The event is left in place so Undo/Redo can still finalize the drag.
-        world.Has DragEndEvent =! true
 
     [<Fact>]
-    member _.``spurious drag end without active drag removes DragEndEvent``() =
-        world.Add DragEndEvent
-        world.Has DragEndEvent =! true
-
-        dragNodes world |> ignore
-
-        world.Has DragEndEvent =! false
-
-    [<Fact>]
-    member _.``drag moves multiple selected entities``() =
+    member _.``Drag moves multiple selected entities``() =
         let node1 = spawnSelectedNode 0.0
         let node2 = spawnSelectedNode 10.0
 
@@ -110,7 +104,7 @@ type Tests() =
     /// The gesture takes its participants from the selection once, when it starts. A node
     /// selected while the drag is running was never grabbed, so it must not start moving.
     [<Fact>]
-    member _.``a node selected after the drag started does not move with it``() =
+    member _.``A node selected after the drag started does not move with it``() =
         let node1 = spawnSelectedNode 0.0
         let node2 = world.Spawn(Position.Val {| x = 10.0; y = 0.0; z = 0.0 |})
 
@@ -125,7 +119,7 @@ type Tests() =
     /// The mirror case: losing the selection cannot take a node out of a drag it is already part
     /// of, so nothing can strand a moving node partway.
     [<Fact>]
-    member _.``a node deselected after the drag started keeps moving with it``() =
+    member _.``A node deselected after the drag started keeps moving with it``() =
         let node1 = spawnSelectedNode 0.0
         let node2 = spawnSelectedNode 10.0
 
@@ -141,7 +135,7 @@ type Tests() =
     /// rather than nudged by the change since the last frame, so it lands where the gesture says
     /// even if something else moved it in the meantime.
     [<Fact>]
-    member _.``a participant moved by something else is put back where the gesture says``() =
+    member _.``A participant moved by something else is put back where the gesture says``() =
         let node = spawnSelectedNode 0.0
 
         startDrag ()
@@ -150,6 +144,97 @@ type Tests() =
         dragBy 3.0
 
         xOf node =! 3.0
+
+    /// A drag is the change; the history entry it leaves behind is what takes that change back.
+    /// The origin is what the node had when it was grabbed, so undo returns it to where the drag
+    /// began rather than to anywhere it passed through on the way.
+    [<Fact>]
+    member _.``A drag that moved a node records where the node started``() =
+        let node = spawnSelectedNode 5.0
+
+        startDrag ()
+        dragBy 7.0
+        endDrag ()
+
+        world |> committedCommands |> List.map _.Moves
+        =! [ [ { Entity = node; Before = Line3.pos 5.0 0.0 0.0 } ] ]
+
+    /// A grab with no movement changes nothing, and neither does one that wanders and comes back.
+    /// Recording either would put an entry on the undo stack that undoes nothing and, worse,
+    /// throw away the redo history in exchange.
+    [<Fact>]
+    member _.``A drag that ended where it began records nothing``() =
+        spawnSelectedNode 5.0 |> ignore
+
+        startDrag ()
+        dragBy 7.0
+        dragBy 0.0
+        endDrag ()
+
+        world |> committedCommands =! []
+
+    /// Grabbing with nothing selected takes hold of nothing, so the release has nothing to
+    /// record. The gesture still runs to completion; it simply moves and commits nothing.
+    [<Fact>]
+    member _.``A drag with nothing selected records nothing``() =
+        world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}) |> ignore
+
+        startDrag ()
+        dragBy 7.0
+        endDrag ()
+
+        world |> committedCommands =! []
+
+    /// Dragging a node that is still animating commits nothing: the drag does not change where the
+    /// node is headed, so there is nothing to take back. Its position is only borrowed for the
+    /// gesture. The line is drawn where the system can see it — whether the node still carries a
+    /// TargetPosition when its origin is captured.
+    [<Fact>]
+    member _.``A drag of a node still animating when its origin is captured records nothing``() =
+        let node = spawnSelectedNode 5.0
+        node |> addWith TargetPosition {| x = 100.0; y = 0.0; z = 0.0 |}
+
+        startDrag ()
+        dragBy 7.0
+        endDrag ()
+
+        world |> committedCommands =! []
+
+    /// A multi-select can hold both a settled node and an animating one. The gesture moves both,
+    /// but only the settled one has a change worth taking back.
+    [<Fact>]
+    member _.``A drag records only the participants that had a change to take back``() =
+        let settled = spawnSelectedNode 5.0
+        let animating = spawnSelectedNode 20.0
+        animating |> addWith TargetPosition {| x = 100.0; y = 0.0; z = 0.0 |}
+
+        startDrag ()
+        dragBy 7.0
+        endDrag ()
+
+        world |> committedCommands |> List.map _.Moves
+        =! [ [ { Entity = settled; Before = Line3.pos 5.0 0.0 0.0 } ] ]
+
+    /// A multi-select drag is one change covering every node it moved, so undo takes the whole
+    /// thing back at once. Recording only the first participant would leave the rest stranded.
+    /// The moves are compared as a set: a command's moves are applied independently, so the order
+    /// the query happened to yield them in carries no meaning.
+    [<Fact>]
+    member _.``A drag of several nodes records them all in one command``() =
+        let left = spawnSelectedNode 5.0
+        let right = spawnSelectedNode 20.0
+
+        startDrag ()
+        dragBy 7.0
+        endDrag ()
+
+        let committed = world |> committedCommands |> List.exactlyOne
+
+        committed.Moves |> Set.ofList
+        =! Set.ofList [
+            { Entity = left; Before = Line3.pos 5.0 0.0 0.0 }
+            { Entity = right; Before = Line3.pos 20.0 0.0 0.0 }
+        ]
 
     interface IDisposable with
         member _.Dispose() = (ecs :> IDisposable).Dispose()

@@ -5,6 +5,7 @@ open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Trait
 open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.ViewModel.Vector
+open Wilnaatahl.Traits.History
 open Wilnaatahl.Traits.ViewTraits
 
 // The following traits are used to flag input events, some global, some on entities.
@@ -76,4 +77,8 @@ let cleanupEvents (world: IWorld) =
     world.Remove DragStartEvent
     world.Remove DragEvent
     world.Remove DragEndEvent
+
+    // A command belongs to the frame its change happened in. Left standing, the next frame would
+    // see the previous frame's changes as its own, once per frame, for a change that happened once.
+    world |> clearCommittedCommands
     world

@@ -230,6 +230,20 @@ runSystems world 0.1` asserts nothing and silently under-runs if the tuning
 
 ## Naming
 
+- **Capitalize the first word of a test name, unless it is an identifier.** Test
+  names read as sentences, so they start like one. The exception is a name that
+  opens by naming the thing under test: leave a camelCase identifier exactly as it
+  is spelled in the code, because changing its case makes it a different (and
+  non-existent) identifier.
+  - ✅ `` `A drag that ended where it began records nothing` ``
+  - ✅ `` `runSystems keeps redo history when a stray drag end arrives` `` — the
+    subject is the function `runSystems`.
+  - ✅ `` `Command.create rejects an empty list of moves` `` — already capitalized,
+    because the identifier is.
+  - ❌ `` `a drag that ended where it began records nothing` ``
+  - ❌ `` `RunSystems keeps redo history when a stray drag end arrives` ``
+  - Older files predate this rule and are inconsistent; fix names in a file you are
+    already changing, rather than in a sweep of its own.
 - **Tests assert behaviour, not provenance.** Test names and comments should
   describe the behaviour being checked — not where the expected values came from,
   what the code used to look like, or what other implementation it matches.

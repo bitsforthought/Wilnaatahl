@@ -1,6 +1,8 @@
 module Wilnaatahl.Traits.History
 
 open Wilnaatahl.ECS
+open Wilnaatahl.ECS.Extensions
+open Wilnaatahl.ECS.Trait
 
 /// One node's part in a change: the node, and the position to restore when the change is
 /// reversed.
@@ -29,3 +31,33 @@ module internal Command =
     let mapPositions mapping command = {
         Moves_ = command.Moves_ |> List.map (fun move -> { move with Before = mapping move })
     }
+
+// The commands committed so far this frame. A feature that changes the scene commits the command
+// that takes its change back, without knowing or caring who acts on it.
+//
+// Held newest-first, because that is how a list grows; `committedCommands` hands out the
+// chronological order that consumers actually need. The trait is private so that split cannot
+// leak: nothing outside this module can see the stored order, or replace the list with a shorter
+// one.
+//
+// A list rather than a queue because no consumer ever takes a single command — the frame's
+// commands are read all at once — so a queue's cheap single dequeue would never be used. It also
+// has to be immutable: a mutable collection handed to the first reader could be drained before
+// the second one sees it. Fable ships no immutable queue (its library implements only mutable
+// Stack and Queue), so a list is as close as the platform gets.
+let private CommittedCommands = refTrait (fun () -> List.empty<Command>)
+
+/// The commands committed so far this frame, oldest first — the order the changes happened in,
+/// and so the order they have to be replayed in. Reading them leaves them in place.
+let internal committedCommands (world: IWorld) =
+    world.Get CommittedCommands |> Option.defaultValue [] |> List.rev
+
+/// Commits a command as part of this frame's changes.
+let internal commitCommand command (world: IWorld) =
+    let committed = world.Get CommittedCommands |> Option.defaultValue []
+    // The value is always supplied, never left to the trait's factory.
+    world.AddWith CommittedCommands (command :: committed)
+
+/// Discards the commands committed this frame. A command belongs to the frame its change
+/// happened in.
+let internal clearCommittedCommands (world: IWorld) = world.Remove CommittedCommands

@@ -24,9 +24,9 @@
     <Compile Include="ViewModel/NodeContent.fs" />
     <Compile Include="ViewModel/Localization.fs" />
     <Compile Include="Traits/ViewTraits.fs" />
+    <Compile Include="Traits/History.fs" />
     <Compile Include="Traits/Events.fs" />
     <Compile Include="Traits/SpaceTraits.fs" />
-    <Compile Include="Traits/History.fs" />
     <Compile Include="Traits/ConnectorTraits.fs" />
     <Compile Include="Traits/PeopleTraits.fs" />
     <Compile Include="Entities/Line.fs" />

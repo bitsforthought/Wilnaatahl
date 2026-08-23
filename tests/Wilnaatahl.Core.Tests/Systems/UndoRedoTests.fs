@@ -10,6 +10,7 @@ open Wilnaatahl.ECS.Tracking
 open Wilnaatahl.ViewModel.Vector
 open Wilnaatahl.Entities
 open Wilnaatahl.Traits.Events
+open Wilnaatahl.Traits.History
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Traits.ViewTraits
 open Wilnaatahl.Systems.UndoRedo
@@ -23,16 +24,18 @@ type Tests() =
     let world = ecs.World
     let sortOrder, _ = spawnUndoRedoControls (0, world)
 
-    /// Drags a node to the given x: record on drag start, move, then release. Each phase is its
-    /// own frame, as the host dispatches them.
+    /// Records the given moves as one committed change and runs the frame that picks it up. This
+    /// is what a feature does when it commits: undo/redo never watches the feature itself.
+    let commit moves =
+        world |> commitCommand (Command.create moves).Value
+        handleUndoRedo world |> ignore
+        world |> clearCommittedCommands
+
+    /// Moves a node to the given x and records the change, the way a completed drag does.
     let dragNodeTo node x =
-        world.Add DragStartEvent
-        handleUndoRedo world |> ignore
-        world.Remove DragStartEvent
+        let before = (node |> get Position).Value
         node |> setValue Position {| x = x; y = 0.0; z = 0.0 |}
-        world.Add DragEndEvent
-        handleUndoRedo world |> ignore
-        world.Remove DragEndEvent
+        commit [ { Entity = node; Before = before } ]
 
     /// Clicks a button and runs the frame it lands on.
     let click button =
@@ -47,7 +50,7 @@ type Tests() =
     /// buttons should offer. Settling only the clicked one leaves the other disagreeing with its
     /// own stack until some later frame happens to run.
     [<Fact>]
-    member _.``an undo click settles the redo button in the same frame``() =
+    member _.``An undo click settles the redo button in the same frame``() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
         dragNodeTo node 10.0
 
@@ -59,7 +62,7 @@ type Tests() =
         isButtonDisabled redoBtn =! false
 
     [<Fact>]
-    member _.``a redo click settles the undo button in the same frame``() =
+    member _.``A redo click settles the undo button in the same frame``() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
         dragNodeTo node 10.0
 
@@ -80,7 +83,7 @@ type Tests() =
         labels =! [ "Redo"; "Undo" ]
 
     [<Fact>]
-    member _.``undo and redo buttons start disabled``() =
+    member _.``Undo and redo buttons start disabled``() =
         let undoBtn = world |> buttonWithLabel "Undo"
         let redoBtn = world |> buttonWithLabel "Redo"
 
@@ -90,26 +93,9 @@ type Tests() =
     /// Undo and redo are meaningless while inspecting, so the buttons declare themselves
     /// `MoveModeOnly` and leave hiding to the ViewMode system rather than reading the mode.
     [<Fact>]
-    member _.``undo and redo buttons are marked Move-mode only``() =
+    member _.``Undo and redo buttons are marked Move-mode only``() =
         world |> buttonWithLabel "Undo" |> has MoveModeOnly =! true
         world |> buttonWithLabel "Redo" |> has MoveModeOnly =! true
-
-    /// Only a node that has stopped moving can be put back where it started, so a drag that
-    /// begins while every selected node is still animating records nothing.
-    [<Fact>]
-    member _.``a drag start that captures nothing records no undo entry``() =
-        let _ =
-            world.Spawn(
-                Position.Val {| x = 5.0; y = 0.0; z = 0.0 |},
-                TargetPosition.Val {| x = 9.0; y = 0.0; z = 0.0 |},
-                Selected.Tag()
-            )
-
-        world.Add DragStartEvent
-        handleUndoRedo world |> ignore
-        world.Remove DragStartEvent
-
-        world |> buttonWithLabel "Undo" |> isButtonDisabled =! true
 
     /// `handleUndoRedo` recomputes both buttons' `disabled` every frame. A trait write
     /// notifies change subscribers whether or not the value moved, so writing
@@ -124,27 +110,35 @@ type Tests() =
         handleUndoRedo world |> ignore
         (world.Query(buttonWrites <=> [| Button |]) |> Seq.length) =! 0
 
-        // A drag start records an undo entry, so only the Undo button changes.
-        let _ = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
-        world.Add DragStartEvent
-        handleUndoRedo world |> ignore
-        world.Remove DragStartEvent
+        // A committed command fills the undo stack, so only the Undo button changes.
+        let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |})
+        dragNodeTo node 10.0
 
         world.Query(buttonWrites <=> [| Button |]) |> Seq.exactlyOne
         =! (world |> buttonWithLabel "Undo")
 
+    /// Undo/redo no longer watches for drags: it offers whatever has been committed, whoever
+    /// committed it.
     [<Fact>]
-    member _.``drag start captures positions and enables undo button``() =
-        let _ = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
+    member _.``A committed command enables the undo button``() =
+        let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |})
 
-        world.Add DragStartEvent
+        dragNodeTo node 10.0
+
+        world |> buttonWithLabel "Undo" |> isButtonDisabled =! false
+
+    /// A frame in which nothing was committed leaves the stacks exactly as they were, so an idle
+    /// frame cannot quietly grow the history.
+    [<Fact>]
+    member _.``A frame that records nothing leaves the undo button alone``() =
+        world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}) |> ignore
+
         handleUndoRedo world |> ignore
 
-        let undoBtn = world |> buttonWithLabel "Undo"
-        isButtonDisabled undoBtn =! false
+        world |> buttonWithLabel "Undo" |> isButtonDisabled =! true
 
     [<Fact>]
-    member _.``undo restores original position via TargetPosition``() =
+    member _.``Undo restores original position via TargetPosition``() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
 
         dragNodeTo node 10.0
@@ -153,7 +147,7 @@ type Tests() =
         (node |> get TargetPosition).Value =! Line3.pos 5.0 0.0 0.0
 
     [<Fact>]
-    member _.``undo then redo re-applies moved position``() =
+    member _.``Undo then redo re-applies moved position``() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
 
         dragNodeTo node 10.0
@@ -163,24 +157,42 @@ type Tests() =
         // Redo restores the position captured just before the undo.
         (node |> get TargetPosition).Value =! Line3.pos 10.0 0.0 0.0
 
+    /// Two features can commit in the same frame, and undo takes them back newest first. Pushing
+    /// the frame's commands in the wrong order would undo them out of sequence.
+    [<Fact>]
+    member _.``Two commands committed in one frame are undone newest first``() =
+        let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |})
+
+        world
+        |> commitCommand (Command.create [ { Entity = node; Before = Line3.pos 1.0 0.0 0.0 } ]).Value
+
+        world
+        |> commitCommand (Command.create [ { Entity = node; Before = Line3.pos 2.0 0.0 0.0 } ]).Value
+
+        handleUndoRedo world |> ignore
+        world |> clearCommittedCommands
+
+        world |> buttonWithLabel "Undo" |> click
+        (node |> get TargetPosition).Value.x =! 2.0
+
+        world |> buttonWithLabel "Undo" |> click
+        (node |> get TargetPosition).Value.x =! 1.0
+
     /// Every other application test drags one node, which a loop that applied only its first or
     /// last move would still satisfy. Two nodes moving together pin that the whole command is
     /// applied, in both directions.
     [<Fact>]
-    member _.``undo and redo restore every node a drag moved``() =
-        let left = world.Spawn(Position.Val {| x = 1.0; y = 0.0; z = 0.0 |}, Selected.Tag())
+    member _.``Undo and redo restore every node a drag moved``() =
+        let left = world.Spawn(Position.Val {| x = 1.0; y = 0.0; z = 0.0 |})
+        let right = world.Spawn(Position.Val {| x = 2.0; y = 0.0; z = 0.0 |})
 
-        let right =
-            world.Spawn(Position.Val {| x = 2.0; y = 0.0; z = 0.0 |}, Selected.Tag())
-
-        world.Add DragStartEvent
-        handleUndoRedo world |> ignore
-        world.Remove DragStartEvent
         left |> setValue Position {| x = 11.0; y = 0.0; z = 0.0 |}
         right |> setValue Position {| x = 12.0; y = 0.0; z = 0.0 |}
-        world.Add DragEndEvent
-        handleUndoRedo world |> ignore
-        world.Remove DragEndEvent
+
+        commit [
+            { Entity = left; Before = Line3.pos 1.0 0.0 0.0 }
+            { Entity = right; Before = Line3.pos 2.0 0.0 0.0 }
+        ]
 
         world |> buttonWithLabel "Undo" |> click
 
@@ -195,7 +207,7 @@ type Tests() =
     /// Multi-touch can deliver a tap on both buttons in one frame. Undo wins, and the redo tap is
     /// dropped rather than applied after it.
     [<Fact>]
-    member _.``an undo and a redo click in the same frame apply only the undo``() =
+    member _.``An undo and a redo click in the same frame apply only the undo``() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
 
         // Two drags and one undo, so both stacks hold an entry.
@@ -217,7 +229,7 @@ type Tests() =
     /// drawing it, so a click can still reach a button with nothing to pop. Clicking Undo
     /// afterwards proves the spurious click neither moved the node nor spent the undo entry.
     [<Fact>]
-    member _.``a click on a button with an empty stack does nothing``() =
+    member _.``A click on a button with an empty stack does nothing``() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
         dragNodeTo node 10.0
 
@@ -234,7 +246,7 @@ type Tests() =
         isButtonDisabled redoBtn =! false
 
     [<Fact>]
-    member _.``buttons reflect stack state``() =
+    member _.``Buttons reflect stack state``() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 3.0; z = 1.0 |}, Selected.Tag())
 
         let undoBtn = world |> buttonWithLabel "Undo"
@@ -250,7 +262,7 @@ type Tests() =
         isButtonDisabled redoBtn =! false
 
     [<Fact>]
-    member _.``new drag after undo flushes redo stack``() =
+    member _.``New drag after undo flushes redo stack``() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
 
         dragNodeTo node 10.0
@@ -267,7 +279,7 @@ type Tests() =
         isButtonDisabled redoBtn =! true
 
     [<Fact>]
-    member _.``view mode hides undo and redo without mutating the stacks``() =
+    member _.``View mode hides undo and redo without mutating the stacks``() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
 
         // Two drags, so the undo stack has two entries: 5 -> 10, then 10 -> 15.
@@ -316,7 +328,7 @@ type Tests() =
     /// so `handleUndoRedo` carries no mode guard. This pins that a delayed click delivered the way
     /// the view layer delivers it never arrives, and that the stack survives it untouched.
     [<Fact>]
-    member _.``a delayed undo click while the button is hidden never arrives and preserves the stack``() =
+    member _.``A delayed undo click while the button is hidden never arrives and preserves the stack``() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
 
         dragNodeTo node 10.0

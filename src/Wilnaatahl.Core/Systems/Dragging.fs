@@ -3,9 +3,8 @@ module Wilnaatahl.Systems.Dragging
 open Wilnaatahl.ECS
 open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Extensions
-open Wilnaatahl.ViewModel
-open Wilnaatahl.ViewModel.Vector
 open Wilnaatahl.Traits.Events
+open Wilnaatahl.Traits.History
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Traits.ViewTraits
 
@@ -37,16 +36,28 @@ let private handleDrag (world: IWorld) =
         world
 
 let private handleDragEnd (world: IWorld) =
-    if world.Has DragEndEvent then
-        // Whether a drag is in progress is world state, not something to thread down the pipeline:
-        // a release can arrive in a frame carrying no movement, and that still ends the drag.
-        if world |> anyDragParticipants then
-            world.RemoveAll DragOrigin
-        else
-            // No drag is in progress, so this is a spurious DragEndEvent. We need to prevent it
-            // from propagating or it could interfere with Undo/Redo.
-            // ASSUMPTION: The dragging system must run before the undo/redo system!
-            world.Remove DragEndEvent
+    // Whether a drag is in progress is world state, not something to thread down the pipeline: a
+    // release can arrive in a frame carrying no movement, and that still ends the drag. A release
+    // with no drag behind it is simply a release with nothing to end.
+    if world.Has DragEndEvent && world |> anyDragParticipants then
+        // History records changes to settled positions. A node with a TargetPosition is settled at
+        // that target, and a drag only ever writes Position, so dragging one leaves nothing to
+        // take back. Every other participant is settled where it now stands, so it changed unless
+        // the gesture put it back where it started.
+        //
+        // ToSequence materializes the results: the query itself enumerates entities alone, and
+        // this needs each entity's values with it.
+        world.QueryTraits(Position, DragOrigin, Not [| TargetPosition |]).ToSequence()
+        |> Seq.choose (fun ((position, origin), entity) ->
+            if position = origin then
+                None
+            else
+                Some { Entity = entity; Before = origin })
+        |> List.ofSeq
+        |> Command.create
+        |> Option.iter (fun command -> world |> commitCommand command)
+
+        world.RemoveAll DragOrigin
 
     world
 
