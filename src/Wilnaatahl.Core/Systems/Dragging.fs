@@ -52,7 +52,7 @@ let private handleDragEnd (world: IWorld) =
             if position = origin then
                 None
             else
-                Some { Entity = entity; Before = origin })
+                Some { Entity = entity; Before = origin; After = position })
         |> List.ofSeq
         |> Command.create
         |> Option.iter (fun command -> world |> commitCommand command)

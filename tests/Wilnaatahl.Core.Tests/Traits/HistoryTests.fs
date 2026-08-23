@@ -4,12 +4,12 @@ open System
 open Xunit
 open Swensen.Unquote
 open Wilnaatahl.ECS
-open Wilnaatahl.Entities
 open Wilnaatahl.Traits.Events
 open Wilnaatahl.Traits.History
 open Wilnaatahl.Tests.EcsTestSupport
 
-let private move id x = { Entity = EntityId id; Before = Line3.pos x 0.0 0.0 }
+/// A move whose two positions differ, so a test that read one where it meant the other would fail.
+let private move id x = moveAlongX (EntityId id) x -x
 
 let private command id x = (Command.create [ move id x ]).Value
 
@@ -26,17 +26,6 @@ let ``Command.create accepts a single move`` () =
 let ``Command.create keeps the moves it is given`` () =
     (Command.create [ move 1 5.0; move 2 7.0 ]).Value.Moves
     =! [ move 1 5.0; move 2 7.0 ]
-
-/// Mapping positions preserves the non-empty invariant that `create` establishes, and cannot
-/// change which nodes the command names.
-[<Fact>]
-let ``Command.mapPositions replaces each position and keeps the nodes`` () =
-    let command = (Command.create [ move 1 5.0; move 2 7.0 ]).Value
-
-    let doubled =
-        command |> Command.mapPositions (fun m -> Line3.pos (m.Before.x * 2.0) 0.0 0.0)
-
-    doubled.Moves =! [ move 1 10.0; move 2 14.0 ]
 
 type CommittingTests() =
     let ecs = new EcsWorld()

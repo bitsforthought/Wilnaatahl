@@ -3,6 +3,8 @@ module Wilnaatahl.Tests.EcsTestSupport
 open Wilnaatahl.ECS
 open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Mocks
+open Wilnaatahl.Entities
+open Wilnaatahl.Traits.History
 open Wilnaatahl.Traits.ViewTraits
 
 /// A disposable wrapper around TestWorld that installs the TestECS mock
@@ -29,3 +31,10 @@ let buttonWithLabel label (world: IWorld) =
     world.Query(With Button)
     |> Seq.tryFind (fun entity -> buttonLabel entity = label)
     |> Option.defaultWith (fun () -> failwith $"No button labelled {label}.")
+
+/// One node's part in a change that carried it from one x to another, leaving y and z at zero.
+let internal moveAlongX node fromX toX = {
+    Entity = node
+    Before = Line3.pos fromX 0.0 0.0
+    After = Line3.pos toX 0.0 0.0
+}

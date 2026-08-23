@@ -56,22 +56,22 @@ let private updateButtonState buttonEntity (stack: Stack<Command>) =
     // Enable the button when its stack has something to undo/redo.
     buttonEntity |> setButtonDisabled (stack.Count = 0)
 
-let private handleButtonClicked (toStack: Stack<Command>) (fromStack: Stack<Command>) =
+/// Applies one direction of the command on top of `fromStack`: every node it names is sent to the
+/// position `destination` picks out of its move, and the command moves to `toStack` so the
+/// opposite button can replay it the other way.
+let private handleButtonClicked destination (toStack: Stack<Command>) (fromStack: Stack<Command>) =
     // Disabling the Undo/Redo buttons isn't instantaneous due to delays in React rendering the button.
     // We have to protect against spurious clicks here or Pop() will fail.
     if fromStack.Count > 0 then
         let command = fromStack.Pop()
 
-        // Work out the reverse before moving anything, or it would record where the nodes are
-        // going rather than where they are. Nodes are moved by giving them a TargetPosition, so
-        // they animate to it instead of jumping.
-        let reverse =
-            command |> Command.mapPositions (fun move -> move.Entity |> settledPosition)
-
+        // Nodes are moved by giving them a TargetPosition, so they animate to it instead of
+        // jumping.
         for move in command.Moves do
-            move.Entity |> addWith TargetPosition move.Before
+            move.Entity |> addWith TargetPosition (destination move)
 
-        toStack.Push reverse
+        // The same command serves both directions, so the other button can replay it back.
+        toStack.Push command
 
 let handleUndoRedo (world: IWorld) =
     // Buttons must exist and have the right traits or we have an app setup issue.
@@ -86,11 +86,13 @@ let handleUndoRedo (world: IWorld) =
     // Commands are pushed before a click is applied; see pushCommitted for why.
     pushCommitted world undoStack redoStack
 
-    // Multi-touch makes it possible to tap Undo and Redo together, and Undo wins.
+    // Multi-touch makes it possible to tap Undo and Redo together, and Undo wins. Which of a
+    // move's two positions a click sends the node to is the only thing that separates the two
+    // directions.
     if undoButtonEntity |> has ClickEvent then
-        undoStack |> handleButtonClicked redoStack
+        undoStack |> handleButtonClicked _.Before redoStack
     elif redoButtonEntity |> has ClickEvent then
-        redoStack |> handleButtonClicked undoStack
+        redoStack |> handleButtonClicked _.After undoStack
 
     // Anything above can move an entry between the two stacks, so settle both buttons rather
     // than only the one that was clicked.

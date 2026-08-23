@@ -145,11 +145,11 @@ type Tests() =
 
         xOf node =! 3.0
 
-    /// A drag is the change; the history entry it leaves behind is what takes that change back.
-    /// The origin is what the node had when it was grabbed, so undo returns it to where the drag
+    /// A drag is the change; the history entry it leaves behind is what replays that change. The
+    /// origin is what the node had when it was grabbed, so undo returns it to where the drag
     /// began rather than to anywhere it passed through on the way.
     [<Fact>]
-    member _.``A drag that moved a node records where the node started``() =
+    member _.``A drag that moved a node records where it started and where it ended``() =
         let node = spawnSelectedNode 5.0
 
         startDrag ()
@@ -157,7 +157,7 @@ type Tests() =
         endDrag ()
 
         world |> committedCommands |> List.map _.Moves
-        =! [ [ { Entity = node; Before = Line3.pos 5.0 0.0 0.0 } ] ]
+        =! [ [ moveAlongX node 5.0 12.0 ] ]
 
     /// A grab with no movement changes nothing, and neither does one that wanders and comes back.
     /// Recording either would put an entry on the undo stack that undoes nothing and, worse,
@@ -213,7 +213,7 @@ type Tests() =
         endDrag ()
 
         world |> committedCommands |> List.map _.Moves
-        =! [ [ { Entity = settled; Before = Line3.pos 5.0 0.0 0.0 } ] ]
+        =! [ [ moveAlongX settled 5.0 12.0 ] ]
 
     /// A multi-select drag is one change covering every node it moved, so undo takes the whole
     /// thing back at once. Recording only the first participant would leave the rest stranded.
@@ -231,10 +231,7 @@ type Tests() =
         let committed = world |> committedCommands |> List.exactlyOne
 
         committed.Moves |> Set.ofList
-        =! Set.ofList [
-            { Entity = left; Before = Line3.pos 5.0 0.0 0.0 }
-            { Entity = right; Before = Line3.pos 20.0 0.0 0.0 }
-        ]
+        =! Set.ofList [ moveAlongX left 5.0 12.0; moveAlongX right 20.0 27.0 ]
 
     interface IDisposable with
         member _.Dispose() = (ecs :> IDisposable).Dispose()

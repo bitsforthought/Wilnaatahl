@@ -35,7 +35,8 @@ type Tests() =
     let dragNodeTo node x =
         let before = (node |> get Position).Value
         node |> setValue Position {| x = x; y = 0.0; z = 0.0 |}
-        commit [ { Entity = node; Before = before } ]
+
+        commit [ { Entity = node; Before = before; After = Line3.pos x 0.0 0.0 } ]
 
     /// Clicks a button and runs the frame it lands on.
     let click button =
@@ -154,7 +155,26 @@ type Tests() =
         world |> buttonWithLabel "Undo" |> click
         world |> buttonWithLabel "Redo" |> click
 
-        // Redo restores the position captured just before the undo.
+        // Redo restores the position the change moved the node to.
+        (node |> get TargetPosition).Value =! Line3.pos 10.0 0.0 0.0
+
+    /// Undo and redo replay the change that was recorded, both of the positions it holds. Working
+    /// the other one out from where the node happens to be at click time instead would fold in
+    /// whatever else moved it since, so redo would carry the node somewhere the change never
+    /// took it.
+    [<Fact>]
+    member _.``Redo re-applies the recorded change even after something else moved the node``() =
+        let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
+
+        dragNodeTo node 10.0
+
+        // Some other feature moves the node before the undo click.
+        node |> setValue Position {| x = 99.0; y = 0.0; z = 0.0 |}
+
+        world |> buttonWithLabel "Undo" |> click
+        (node |> get TargetPosition).Value =! Line3.pos 5.0 0.0 0.0
+
+        world |> buttonWithLabel "Redo" |> click
         (node |> get TargetPosition).Value =! Line3.pos 10.0 0.0 0.0
 
     /// Two features can commit in the same frame, and undo takes them back newest first. Pushing
@@ -163,11 +183,9 @@ type Tests() =
     member _.``Two commands committed in one frame are undone newest first``() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |})
 
-        world
-        |> commitCommand (Command.create [ { Entity = node; Before = Line3.pos 1.0 0.0 0.0 } ]).Value
-
-        world
-        |> commitCommand (Command.create [ { Entity = node; Before = Line3.pos 2.0 0.0 0.0 } ]).Value
+        // Two changes in one frame: the node went 1 -> 2, then 2 -> 5.
+        world |> commitCommand (Command.create [ moveAlongX node 1.0 2.0 ]).Value
+        world |> commitCommand (Command.create [ moveAlongX node 2.0 5.0 ]).Value
 
         handleUndoRedo world |> ignore
         world |> clearCommittedCommands
@@ -189,10 +207,7 @@ type Tests() =
         left |> setValue Position {| x = 11.0; y = 0.0; z = 0.0 |}
         right |> setValue Position {| x = 12.0; y = 0.0; z = 0.0 |}
 
-        commit [
-            { Entity = left; Before = Line3.pos 1.0 0.0 0.0 }
-            { Entity = right; Before = Line3.pos 2.0 0.0 0.0 }
-        ]
+        commit [ moveAlongX left 1.0 11.0; moveAlongX right 2.0 12.0 ]
 
         world |> buttonWithLabel "Undo" |> click
 
@@ -314,9 +329,9 @@ type Tests() =
         isButtonDisabled redoBtn =! false
 
         // Exercise both preserved stacks after returning to Move mode to prove they kept their
-        // exact contents, not merely nonzero counts. Redo restores the entry captured just before
-        // the earlier undo (15); the first undo then reverses that redo (back to 10); the second
-        // undo pops the surviving original undo entry (5).
+        // exact contents, not merely nonzero counts. Redo reapplies the second drag (to 15); the
+        // first undo then reverses that drag again (back to 10); the second undo pops the
+        // surviving original undo entry (5).
         click redoBtn
         (node |> get TargetPosition).Value.x =! 15.0
         click undoBtn

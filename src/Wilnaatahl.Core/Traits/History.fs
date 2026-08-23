@@ -4,15 +4,21 @@ open Wilnaatahl.ECS
 open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.ECS.Trait
 
-/// One node's part in a change: the node, and the position to restore when the change is
-/// reversed.
+/// One node's part in a change: the node, the position it moved from, and the position it moved
+/// to. Both are recorded when the change happens, which is the only moment they are both known to
+/// be its own; anything derived later could have been moved by someone else since.
 ///
 /// An entity id held outside the ECS is not maintained by it, so a move must not outlive the
 /// node it names.
-type internal Move = { Entity: EntityId; Before: {| x: float; y: float; z: float |} }
+type internal Move = {
+    Entity: EntityId
+    Before: {| x: float; y: float; z: float |}
+    After: {| x: float; y: float; z: float |}
+}
 
-/// A change to the scene, recorded so it can be reversed. Reversing it restores the recorded
-/// position of every node the change names. Holds at least one move.
+/// A change to the scene, recorded so it can be replayed in either direction: reversing it
+/// restores the `Before` of every node it names, and reapplying it restores their `After`. Holds
+/// at least one move.
 type internal Command = private {
     Moves_: Move list
 } with
@@ -26,11 +32,6 @@ module internal Command =
         match moves with
         | [] -> None
         | _ -> Some { Moves_ = moves }
-
-    /// Derives a command over the same nodes, giving each move the position the mapping returns.
-    let mapPositions mapping command = {
-        Moves_ = command.Moves_ |> List.map (fun move -> { move with Before = mapping move })
-    }
 
 // The commands committed so far this frame. A feature that changes the scene commits the command
 // that takes its change back, without knowing or caring who acts on it.
