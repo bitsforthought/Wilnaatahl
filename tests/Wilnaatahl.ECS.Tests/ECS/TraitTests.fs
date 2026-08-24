@@ -56,3 +56,22 @@ type TraitTests() =
         let entity = world.Spawn [||]
         entity |> add Ref
         entity |> has Ref =! true
+
+    [<Fact>]
+    member _.``Adding a refTrait without a value calls the factory to build one``() =
+        let Ref = refTrait (fun () -> ResizeArray [ 7 ])
+        let entity = world.Spawn [||]
+        entity |> add Ref
+        entity |> get Ref |> Option.map List.ofSeq =! Some [ 7 ]
+
+    [<Fact>]
+    member _.``Each entity adding a refTrait without a value gets its own value``() =
+        let Ref = refTrait (fun () -> ResizeArray<int>())
+        let first = world.Spawn [||]
+        let second = world.Spawn [||]
+        first |> add Ref
+        second |> add Ref
+
+        first |> get Ref |> Option.iter (fun list -> list.Add 7)
+
+        second |> get Ref |> Option.map List.ofSeq =! Some []

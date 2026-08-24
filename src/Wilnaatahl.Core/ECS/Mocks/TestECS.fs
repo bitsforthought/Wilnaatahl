@@ -30,7 +30,9 @@ type private TestTagTrait() =
 
 type private ITestUntypedValueTrait =
     abstract UnfreezeUntypedValue: value: obj -> obj
-    abstract DefaultMutableValue: obj option
+    /// Builds a value for an entity that is given this trait without one. Calls the trait's value
+    /// factory on every call.
+    abstract BuildDefaultMutableValue: unit -> obj
 
 type private ITestValueTrait<'T> =
     inherit IValueTrait<'T>
@@ -38,8 +40,8 @@ type private ITestValueTrait<'T> =
     abstract FreezeValue: mutableValue: obj -> 'T
     abstract UnfreezeValue: value: 'T -> obj
 
-type private TestValueTrait<'T, 'TMutable>(freeze: 'TMutable -> 'T, unfreeze: 'T -> 'TMutable, defaultValue: 'T option)
-    =
+type private TestValueTrait<'T, 'TMutable>
+    (freeze: 'TMutable -> 'T, unfreeze: 'T -> 'TMutable, defaultValueFactory: unit -> 'T) =
     inherit TestTrait(false)
     interface IMutableValueTrait<'T, 'TMutable>
 
@@ -47,7 +49,9 @@ type private TestValueTrait<'T, 'TMutable>(freeze: 'TMutable -> 'T, unfreeze: 'T
         member _.UnfreezeUntypedValue value = unfreeze (value :?> 'T) :> obj
         member _.FreezeValue mutableValue = freeze (mutableValue :?> 'TMutable)
         member _.UnfreezeValue value = unfreeze value
-        member _.DefaultMutableValue = defaultValue |> Option.map (fun v -> unfreeze v :> obj)
+
+        member _.BuildDefaultMutableValue() =
+            unfreeze (defaultValueFactory ()) :> obj
 
 type private TestRelation<'T, 'TMutable>
     (config: RelationConfig, freeze: 'TMutable -> 'T, unfreeze: 'T -> 'TMutable, defaultValue: 'T option) =
@@ -79,8 +83,6 @@ type private QueryResult<'T, 'TMutable>
 
     interface IQueryResult<'T, 'TMutable> with
         member _.ForEach callback =
-            // ForEach reads each value with get (getRead), which is correct even for entities that
-            // lost the trait between query and read time (getRead falls back to the schema default).
             for entity in entities do
                 callback (getRead entity, entity)
 
@@ -257,9 +259,10 @@ type private TestTraitFactory() =
             let freezeUntyped, unfreezeUntyped = findConversionMethods value mutableValue
             let freeze (m: 'TMutable) = freezeUntyped m :?> 'T
             let unfreeze (v: 'T) = unfreezeUntyped v :?> 'TMutable
-            TestValueTrait<'T, 'TMutable>(freeze, unfreeze, Some value)
+            TestValueTrait<'T, 'TMutable>(freeze, unfreeze, (fun () -> value))
 
-        member _.TraitWithRef _ = TestValueTrait<'T, 'T>(id, id, None)
+        member _.TraitWithRef valueFactory =
+            TestValueTrait<'T, 'T>(id, id, valueFactory)
 
 [<AutoOpen>]
 module private World =
@@ -371,10 +374,7 @@ module private World =
         if store.TryAdd(entityId, None) then
             // Value traits initialize with their schema default (matching Koota's behavior).
             match someTrait with
-            | :? ITestUntypedValueTrait as valueTrait ->
-                match valueTrait.DefaultMutableValue with
-                | Some defaultVal -> store[entityId] <- Some defaultVal
-                | None -> ()
+            | :? ITestUntypedValueTrait as valueTrait -> store[entityId] <- Some(valueTrait.BuildDefaultMutableValue())
             | _ -> ()
 
             TrackerRegistry.notifyAdded someTrait entity (lazy (world |> entityTraitSnapshot entity))
@@ -856,10 +856,11 @@ type TestWorld() =
                 match world |> getTraitValue someTrait entity with
                 | Some v -> v
                 | None ->
-                    // Entity lost the trait between query time and read time.
-                    // Return the schema default to match Koota's snapshot behavior.
+                    // The trait was removed after the query ran. IQueryResult's contract forbids
+                    // that, so the value read here is arbitrary — but Koota keeps iterating in
+                    // that case, so build a default rather than throw.
                     let testUntypedTrait = someTrait :?> ITestUntypedValueTrait
-                    testUntypedTrait.DefaultMutableValue.Value |> testTrait.FreezeValue
+                    testUntypedTrait.BuildDefaultMutableValue() |> testTrait.FreezeValue
 
             let hasChanged =
                 where
