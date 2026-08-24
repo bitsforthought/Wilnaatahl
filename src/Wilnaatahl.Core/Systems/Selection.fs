@@ -35,7 +35,7 @@ let private handleSelectModeButtonClick buttonEntity multiSelect (world: IWorld)
         true
 
 let private handleBackgroundClick (world: IWorld) =
-    if world.Has PointerMissedEvent then
+    if world |> inputEvents |> Seq.contains PointerMissed then
         world.RemoveAll Selected
         true
     else

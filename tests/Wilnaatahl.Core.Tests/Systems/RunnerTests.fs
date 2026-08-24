@@ -76,15 +76,11 @@ type Tests() =
 
     [<Fact>]
     member _.``runSystems cleans up events at end of frame``() =
-        // The traits are set directly rather than through the handlers, which refuse and discard
-        // input around a drag and so cannot leave both events standing at once.
-        world.Add PointerMissedEvent
-        world.Add DragStartEvent
-        world.Has PointerMissedEvent =! true
-        world.Has DragStartEvent =! true
+        world |> handlePointerMissed
+        world |> handleDragEnd
+        world |> inputEvents |> Seq.isEmpty =! false
         runSystems world frameDelta
-        world.Has PointerMissedEvent =! false
-        world.Has DragStartEvent =! false
+        world |> inputEvents |> Seq.isEmpty =! true
 
     [<Fact>]
     member _.``runSystems animates entities toward target``() =

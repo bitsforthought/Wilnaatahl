@@ -76,7 +76,7 @@ type Tests() =
     member _.``background click deselects all``() =
         let node = spawnNode world
         node |> add Selected
-        world.Add PointerMissedEvent
+        world |> handlePointerMissed
 
         selectNodes world |> ignore
 

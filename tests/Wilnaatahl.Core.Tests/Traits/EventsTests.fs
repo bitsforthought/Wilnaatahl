@@ -6,6 +6,7 @@ open Swensen.Unquote
 open Wilnaatahl.ECS
 open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Extensions
+open Wilnaatahl.Entities
 open Wilnaatahl.Traits.Events
 open Wilnaatahl.Traits.ViewTraits
 open Wilnaatahl.Tests.EcsTestSupport
@@ -69,15 +70,14 @@ type Tests() =
         entity |> has ClickEvent =! true
 
     [<Fact>]
-    member _.``handleDrag sets DragEvent on world with coordinates``() =
+    member _.``handleDrag queues the distance travelled``() =
         handleDrag world 1.0 2.0 3.0
-        world.Has DragEvent =! true
-        world.Get DragEvent =! Some {| x = 1.0; y = 2.0; z = 3.0 |}
+        world |> inputEvents |> List.ofSeq =! [ Dragged(Line3.pos 1.0 2.0 3.0) ]
 
     [<Fact>]
-    member _.``handleDragStart adds DragStartEvent to world``() =
+    member _.``handleDragStart queues a drag start``() =
         handleDragStart world
-        world.Has DragStartEvent =! true
+        world |> inputEvents |> List.ofSeq =! [ DragStarted ]
 
     /// Input is refused from the moment a drag start arrives, but a tap accepted just before that
     /// lands in the same frame. Dropping it stops one frame from applying both a tap and a drag.
@@ -87,63 +87,108 @@ type Tests() =
         entity |> handleClick world
         handlePointerMissed world
         entity |> has ClickEvent =! true
-        world.Has PointerMissedEvent =! true
+        world |> inputEvents |> List.ofSeq =! [ PointerMissed ]
 
         handleDragStart world
 
         entity |> has ClickEvent =! false
-        world.Has PointerMissedEvent =! false
+        world |> inputEvents |> List.ofSeq =! [ DragStarted ]
 
+    /// Only clicks and background misses are discarded. A queued release belongs to the drag that
+    /// is already running, and dropping it would leave that drag running with no release left to
+    /// end it.
     [<Fact>]
-    member _.``handleDragEnd adds DragEndEvent to world``() =
+    member _.``handleDragStart keeps queued drag input``() =
+        beginDrag ()
+        handleDrag world 1.0 0.0 0.0
         handleDragEnd world
-        world.Has DragEndEvent =! true
+
+        handleDragStart world
+
+        world |> inputEvents |> List.ofSeq
+        =! [ Dragged(Line3.pos 1.0 0.0 0.0); DragEnded ]
+
+    /// Every background miss is discarded, not just the first. One left in the queue would clear
+    /// the selection on the frame the drag starts, leaving the drag moving nodes the view layer
+    /// no longer paints as selected.
+    [<Fact>]
+    member _.``handleDragStart discards every background miss``() =
+        handlePointerMissed world
+        handleDrag world 1.0 0.0 0.0
+        handlePointerMissed world
+
+        handleDragStart world
+
+        world |> inputEvents |> List.ofSeq
+        =! [ Dragged(Line3.pos 1.0 0.0 0.0); DragStarted ]
+
+    /// The first drag start decides which nodes the drag moves and where each of them began. A
+    /// second start queued before any system has run would record those positions again, after
+    /// the drag had already moved the nodes.
+    [<Fact>]
+    member _.``handleDragStart queues no second drag start before a frame runs``() =
+        handleDragStart world
+        handleDrag world 1.0 0.0 0.0
+
+        handleDragStart world
+
+        world |> inputEvents |> List.ofSeq
+        =! [ DragStarted; Dragged(Line3.pos 1.0 0.0 0.0) ]
 
     [<Fact>]
-    member _.``handlePointerMissed adds PointerMissedEvent to world``() =
+    member _.``handleDragEnd queues a drag end``() =
+        handleDragEnd world
+        world |> inputEvents |> List.ofSeq =! [ DragEnded ]
+
+    [<Fact>]
+    member _.``handlePointerMissed queues a background miss``() =
         handlePointerMissed world
-        world.Has PointerMissedEvent =! true
+        world |> inputEvents |> List.ofSeq =! [ PointerMissed ]
+
+    /// Systems apply a frame's input in the order it was raised, so reading the queue back has to
+    /// return that same order.
+    [<Fact>]
+    member _.``inputEvents returns input in the order it was raised``() =
+        handleDragStart world
+        handleDrag world 1.0 0.0 0.0
+        handleDrag world 2.0 0.0 0.0
+        handleDragEnd world
+
+        world |> inputEvents |> List.ofSeq
+        =! [
+            DragStarted
+            Dragged(Line3.pos 1.0 0.0 0.0)
+            Dragged(Line3.pos 2.0 0.0 0.0)
+            DragEnded
+        ]
 
     /// The first drag start decides which nodes the drag moves and where each of them began.
     /// `Events` refuses a start while a drag is running, so the system never sees a second one.
     [<Fact>]
-    member _.``handleDragStart raises no DragStartEvent while a drag is in flight``() =
+    member _.``handleDragStart queues no drag start while a drag is in flight``() =
         beginDrag ()
         handleDragStart world
-        world.Has DragStartEvent =! false
+        world |> inputEvents |> Seq.isEmpty =! true
 
     /// The selection is what the view layer paints and makes draggable, so clearing it mid-drag
     /// would leave the app dragging nodes it no longer shows as selected.
     [<Fact>]
-    member _.``handlePointerMissed raises no PointerMissedEvent while a drag is in flight``() =
+    member _.``handlePointerMissed queues no background miss while a drag is in flight``() =
         beginDrag ()
         handlePointerMissed world
-        world.Has PointerMissedEvent =! false
+        world |> inputEvents |> Seq.isEmpty =! true
 
     [<Fact>]
-    member _.``cleanupEvents removes all event traits``() =
-        // The traits are added directly instead of through the handlers, because the handlers
-        // refuse and discard input around a drag and so can never leave every event standing.
-        let entity1 = world.Spawn()
-        entity1 |> add ClickEvent
-        world.Add DragStartEvent
-        world.AddWith DragEvent {| x = 1.0; y = 2.0; z = 3.0 |}
-        world.Add DragEndEvent
-        world.Add PointerMissedEvent
+    member _.``cleanupEvents discards the frame's input``() =
+        let entity = world.Spawn()
+        entity |> handleClick world
+        handleDrag world 1.0 0.0 0.0
+        handleDragEnd world
 
-        entity1 |> has ClickEvent =! true
-        world.Has DragStartEvent =! true
-        world.Has DragEvent =! true
-        world.Has DragEndEvent =! true
-        world.Has PointerMissedEvent =! true
+        entity |> has ClickEvent =! true
+        world |> inputEvents |> Seq.isEmpty =! false
 
         cleanupEvents world |> ignore
 
-        // Entity events should be removed.
-        entity1 |> has ClickEvent =! false
-
-        // World events should be removed.
-        world.Has DragStartEvent =! false
-        world.Has DragEvent =! false
-        world.Has DragEndEvent =! false
-        world.Has PointerMissedEvent =! false
+        entity |> has ClickEvent =! false
+        world |> inputEvents |> Seq.isEmpty =! true

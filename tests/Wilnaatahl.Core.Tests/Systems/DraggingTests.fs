@@ -28,20 +28,20 @@ type Tests() =
     /// Runs the frame that starts a drag. The frame's events are cleared afterwards, as the real
     /// pipeline does, so the start event is gone before the next frame runs.
     let startDrag () =
-        world.Add DragStartEvent
+        handleDragStart world
         dragNodes world |> ignore
         cleanupEvents world |> ignore
 
     /// Runs a frame carrying a drag that has travelled the given distance along x since it began.
     let dragBy x =
-        world.AddWith DragEvent {| x = x; y = 0.0; z = 0.0 |}
+        handleDrag world x 0.0 0.0
         dragNodes world |> ignore
         cleanupEvents world |> ignore
 
-    /// Runs the frame that releases the drag. The frame's events are left in place so that a
+    /// Runs the frame that releases the drag. The frame's commands are left in place so that a
     /// caller can check what the release committed.
     let endDrag () =
-        world.Add DragEndEvent
+        handleDragEnd world
         dragNodes world |> ignore
 
     let xOf node = (node |> get Position).Value.x
@@ -69,12 +69,66 @@ type Tests() =
 
         startDrag ()
 
-        // DragEvent holds the distance travelled since the drag began, not since the last frame.
+        // A Dragged event carries the distance travelled since the drag began, not since the
+        // last frame.
         dragBy 3.0
         (node |> get Position).Value =! Line3.pos 8.0 0.0 0.0
 
         dragBy 7.0
         (node |> get Position).Value =! Line3.pos 12.0 0.0 0.0
+
+    /// A drag moves a node on all three axes at once, and the positions it records keep all three.
+    /// Every other drag test here moves along x only, with the node at y = 0 and z = 0, so a
+    /// mistake that lost y or z would pass them.
+    [<Fact>]
+    member _.``A drag moves and records a node on all three axes``() =
+        let start = Line3.pos 5.0 -2.0 7.0
+
+        let node =
+            world.Spawn(PersonRef.Val Person.Empty, Position.Val start, Selected.Tag())
+
+        startDrag ()
+
+        handleDrag world 3.0 11.0 -4.0
+        dragNodes world |> ignore
+        cleanupEvents world |> ignore
+
+        endDrag ()
+
+        let finish = Line3.pos 8.0 9.0 3.0
+        (node |> get Position).Value =! finish
+
+        world |> committedCommands |> List.map _.Moves
+        =! [ [ { Entity = node; Before = start; After = finish } ] ]
+
+    /// A whole drag can arrive in one frame, when the pointer is pressed and released between two
+    /// frames. Each event is applied in turn, so the node ends up at the position the drag moved
+    /// it to.
+    [<Fact>]
+    member _.``dragNodes applies a whole drag delivered in one frame``() =
+        let node = spawnSelectedNode 5.0
+
+        handleDragStart world
+        handleDrag world 3.0 0.0 0.0
+        handleDragEnd world
+        dragNodes world |> ignore
+
+        xOf node =! 8.0
+        world.Has DragInFlight =! false
+        world |> committedCommands |> List.length =! 1
+
+    /// Input is applied in the order it arrived. A release raised before a drag started belongs
+    /// to no drag, so it must not end the drag that starts after it.
+    [<Fact>]
+    member _.``dragNodes leaves a drag running when a release arrived before it``() =
+        let node = spawnSelectedNode 5.0
+
+        handleDragEnd world
+        handleDragStart world
+        dragNodes world |> ignore
+
+        world.Has DragInFlight =! true
+        node |> has DragOrigin =! true
 
     /// A release can arrive in a frame that carries no movement (the pointer paused before letting
     /// go), and it still ends the drag. Ignoring it would leave DragOrigin on the nodes forever,
@@ -260,6 +314,27 @@ type Tests() =
 
         committed.Moves |> Set.ofList
         =! Set.ofList [ moveAlongX left 5.0 12.0; moveAlongX right 20.0 27.0 ]
+
+    /// A second gesture can be pressed and moved in the frame that the running drag is released.
+    /// Its start is refused, so its movement belongs to no drag. Applied in order, that movement
+    /// arrives after the release has already committed, so it moves nothing and the drag that was
+    /// released records the position it actually ended at.
+    [<Fact>]
+    member _.``A move that arrived after a release does not move or record anything``() =
+        let node = spawnSelectedNode 5.0
+
+        startDrag ()
+        dragBy 3.0
+
+        handleDragEnd world
+        handleDragStart world
+        handleDrag world 99.0 0.0 0.0
+        dragNodes world |> ignore
+
+        xOf node =! 8.0
+
+        world |> committedCommands |> List.map _.Moves
+        =! [ [ moveAlongX node 5.0 8.0 ] ]
 
     interface IDisposable with
         member _.Dispose() = (ecs :> IDisposable).Dispose()
