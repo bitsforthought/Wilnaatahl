@@ -51,7 +51,7 @@ export { useMeshRef, useOverlayVisible } from "./customHooks";
 export {
   Button,
   CurrentLocale,
-  DragOrigin,
+  DragInFlight,
   Elbow,
   Hidden,
   InViewMode,

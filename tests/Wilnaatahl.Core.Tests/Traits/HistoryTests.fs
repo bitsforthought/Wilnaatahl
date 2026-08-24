@@ -10,7 +10,6 @@ open Wilnaatahl.Tests.EcsTestSupport
 
 /// A move whose two positions differ, so a test that read one where it meant the other would fail.
 let private move id x = moveAlongX (EntityId id) x -x
-
 let private command id x = (Command.create [ move id x ]).Value
 
 /// A command with no moves would put nothing back, so there is nothing for it to undo.
@@ -34,8 +33,8 @@ type CommittingTests() =
     interface IDisposable with
         member _.Dispose() = (ecs :> IDisposable).Dispose()
 
-    /// A frame in which nothing changed the scene has nothing to offer, and reading that must not
-    /// require the caller to know whether anyone has committed anything yet.
+    /// A frame in which nothing changed the scene has no commands to return, and callers must be
+    /// able to read that without knowing whether anything has been committed yet.
     [<Fact>]
     member _.``No commands are committed until one is``() = world |> committedCommands =! []
 
@@ -45,8 +44,8 @@ type CommittingTests() =
 
         world |> committedCommands =! [ command 1 5.0 ]
 
-    /// Two features can commit in the same frame, and the order they did so is the order they
-    /// have to be replayed in.
+    /// Two systems can commit in the same frame, and the order they committed in is the order the
+    /// commands have to be applied in.
     [<Fact>]
     member _.``Commands committed in one frame come back in the order they arrived``() =
         world |> commitCommand (command 1 5.0)
@@ -55,7 +54,7 @@ type CommittingTests() =
         world |> committedCommands =! [ command 1 5.0; command 2 7.0 ]
 
     /// A frame that changed nothing must leave nothing behind for the next one, or the undo
-    /// history would grow an entry per frame for a change that happened once.
+    /// history would gain an entry every frame for a change that happened once.
     [<Fact>]
     member _.``cleanupEvents clears the commands committed this frame``() =
         world |> commitCommand (command 1 5.0)

@@ -11,11 +11,19 @@ open Wilnaatahl.Traits.ViewTraits
 let private handleDragStart (world: IWorld) =
     // Events refuses a start while a drag is running, so this can only be a drag beginning.
     if world.Has DragStartEvent then
-        // What a drag moves is what was selected when it was grabbed, because the view only makes
-        // the selection draggable. Recording each participant's starting position here is what
-        // fixes the set: from here on the drag reads its own participants, not the selection.
-        world.QueryTrait(Position, With Selected).ForEach
-        <| fun (origin, entity) -> entity |> addWith DragOrigin origin
+        // A drag moves the nodes that were selected when it started, because the view layer only
+        // makes selected nodes draggable. Storing each node's starting position now is what
+        // decides the set of nodes the drag moves: from here on it reads DragOrigin, not Selected.
+        let participants = world.QueryTrait(Position, With Selected)
+
+        // With nothing selected there is nothing to move, so DragInFlight is not added. Adding it
+        // would refuse every click until the user released the pointer, for a drag that cannot
+        // move anything.
+        if participants |> Seq.isEmpty |> not then
+            world.Add DragInFlight
+
+            participants.ForEach
+            <| fun (origin, entity) -> entity |> addWith DragOrigin origin
 
     world
 
@@ -23,10 +31,10 @@ let private handleDrag (world: IWorld) =
     match world.Get DragEvent with
     | None -> world // Nothing to do.
     | Some move ->
-        // The gesture reports how far it has travelled since it started, so a participant belongs
-        // at its own starting position plus that offset. Placing it there rather than nudging it
-        // by the change since last frame means a participant lands where the gesture says even if
-        // something else moved it, and that rounding cannot accumulate over a long drag.
+        // DragEvent holds the total distance travelled since the drag started, so each node's new
+        // position is its starting position plus that distance. Computing it that way, instead of
+        // adding the change since the last frame, keeps the position correct even if something
+        // else moved the node, and stops rounding errors accumulating over a long drag.
         world.QueryTraits(Position, DragOrigin).UpdateEachWith AlwaysTrack
         <| fun ((position, origin), _) ->
             position.x <- origin.x + move.x
@@ -36,17 +44,17 @@ let private handleDrag (world: IWorld) =
         world
 
 let private handleDragEnd (world: IWorld) =
-    // Whether a drag is in progress is world state, not something to thread down the pipeline: a
-    // release can arrive in a frame carrying no movement, and that still ends the drag. A release
-    // with no drag behind it is simply a release with nothing to end.
-    if world.Has DragEndEvent && world |> anyDragParticipants then
-        // History records changes to settled positions. A node with a TargetPosition is settled at
-        // that target, and a drag only ever writes Position, so dragging one leaves nothing to
-        // take back. Every other participant is settled where it now stands, so it changed unless
-        // the gesture put it back where it started.
+    // A DragEvent is not required here: a release can arrive in a frame that carries no movement,
+    // and it still ends the drag. DragInFlight is required because a release can also arrive when
+    // no drag is running, and then there is nothing to end.
+    if world.Has DragEndEvent && world.Has DragInFlight then
+        // Undo has to move a node back to the position it will come to rest at, which is its
+        // TargetPosition while it is animating and its Position otherwise. A drag only writes
+        // Position, so it does not change where an animating node comes to rest, and those nodes
+        // are excluded here. Every other node is committed, unless the drag ended where it began.
         //
-        // ToSequence materializes the results: the query itself enumerates entities alone, and
-        // this needs each entity's values with it.
+        // ToSequence is needed because iterating the query yields entities on their own, and this
+        // needs each entity's trait values as well.
         world.QueryTraits(Position, DragOrigin, Not [| TargetPosition |]).ToSequence()
         |> Seq.choose (fun ((position, origin), entity) ->
             if position = origin then
@@ -58,6 +66,7 @@ let private handleDragEnd (world: IWorld) =
         |> Option.iter (fun command -> world |> commitCommand command)
 
         world.RemoveAll DragOrigin
+        world.Remove DragInFlight
 
     world
 

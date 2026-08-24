@@ -37,10 +37,10 @@ let runSystems (world: IWorld) delta =
     // The order is behavioural, not incidental:
     //   - updateViewMode runs before the systems that read input, so every later system sees one
     //     settled mode and no click left over from the mode just left.
-    //   - dragNodes before handleUndoRedo, because a completed drag records the command that
-    //     takes it back and the undo/redo controls pick it up in the same frame. Any future
-    //     feature that records commands belongs before handleUndoRedo for the same reason, or its
-    //     buttons would lag a frame behind the change.
+    //   - dragNodes before handleUndoRedo, because a completed drag commits the command that
+    //     undoes it, and the undo/redo buttons pick that up in the same frame. Any future system
+    //     that commits commands belongs before handleUndoRedo for the same reason, or its buttons
+    //     would be a frame out of date.
     world
     |> animate delta
     |> updateViewMode

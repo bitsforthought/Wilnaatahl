@@ -34,6 +34,6 @@ export const Position = toKootaValueFactoryTrait(SpaceTraits.Position);
 export const Size = toKootaValueTrait(SpaceTraits.Size);
 
 export const Button = toKootaValueTrait(ViewTraits.Button);
-export const DragOrigin = toKootaValueTrait(ViewTraits.DragOrigin);
+export const DragInFlight = toKootaTagTrait(ViewTraits.DragInFlight);
 export const Hidden = toKootaTagTrait(ViewTraits.Hidden);
 export const Selected = toKootaTagTrait(ViewTraits.Selected);

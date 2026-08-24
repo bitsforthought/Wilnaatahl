@@ -194,6 +194,23 @@ type QueryTests() =
         (world.QueryTrait Age).ForEach(fun (a, e) -> results.Add((a, e)))
         set results =! set [ {| age = 41 |}, entity1; {| age = 32 |}, entity2 ]
 
+    /// A caller that asks whether a query matched anything and then iterates what it matched reads
+    /// the same result twice. A backend that returned a single-use iterator would give that caller
+    /// an empty second read, so a result has to survive being read once.
+    [<Fact>]
+    member _.``QueryResult can be enumerated more than once``() =
+        let entity1 = world.Spawn [| Age.Val {| age = 41 |} |]
+        let entity2 = world.Spawn [| Age.Val {| age = 32 |} |]
+        let results = world.QueryTrait Age
+
+        results |> Seq.isEmpty =! false
+
+        let visited = ResizeArray<_>()
+        results.ForEach(fun (_, e) -> visited.Add e)
+        set visited =! set [ entity1; entity2 ]
+
+        set results =! set [ entity1; entity2 ]
+
     [<Fact>]
     member _.``QueryResult ToSequence returns all results``() =
         let entity1 = world.Spawn [| Age.Val {| age = 41 |} |]

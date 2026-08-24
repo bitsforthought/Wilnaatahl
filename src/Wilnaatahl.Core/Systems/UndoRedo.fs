@@ -38,14 +38,15 @@ let spawnUndoRedoControls (sortOrder, world: IWorld) =
     sortOrder + 2, world
 
 let private pushCommitted (world: IWorld) (undoStack: Stack<Command>) (redoStack: Stack<Command>) =
-    // A committed command is a change that has already happened, so it goes onto the undo stack.
-    // It also invalidates the redo history: the future those entries led to branched off a scene
-    // that no longer exists.
+    // A committed command describes a change that has already happened, so it goes onto the undo
+    // stack. It also clears the redo stack, because those entries would re-apply changes made to
+    // a version of the scene that no longer exists.
     //
-    // This runs before a click is applied, so a click always acts on stacks that already reflect
+    // This runs before a click is handled, so a click always acts on stacks that already include
     // every change made this frame. Nothing can currently commit a command in the same frame as a
-    // click on these buttons — a drag commits at release, and a release refuses button clicks —
-    // so whoever adds the second committer should decide whether that precedence still reads right.
+    // click on these buttons — a drag commits when it is released, and a release refuses button
+    // clicks — so if a second system starts committing commands, check whether this order is
+    // still what you want.
     match world |> committedCommands with
     | [] -> ()
     | commands ->
@@ -56,9 +57,9 @@ let private updateButtonState buttonEntity (stack: Stack<Command>) =
     // Enable the button when its stack has something to undo/redo.
     buttonEntity |> setButtonDisabled (stack.Count = 0)
 
-/// Applies one direction of the command on top of `fromStack`: every node it names is sent to the
-/// position `destination` picks out of its move, and the command moves to `toStack` so the
-/// opposite button can replay it the other way.
+/// Pops a command off `fromStack` and applies it in one direction: every node it lists is moved to
+/// the position `destination` selects from that node's move. The command is then pushed onto
+/// `toStack`, so the opposite button can apply it in the other direction.
 let private handleButtonClicked destination (toStack: Stack<Command>) (fromStack: Stack<Command>) =
     // Disabling the Undo/Redo buttons isn't instantaneous due to delays in React rendering the button.
     // We have to protect against spurious clicks here or Pop() will fail.
@@ -70,7 +71,7 @@ let private handleButtonClicked destination (toStack: Stack<Command>) (fromStack
         for move in command.Moves do
             move.Entity |> addWith TargetPosition (destination move)
 
-        // The same command serves both directions, so the other button can replay it back.
+        // The same command is used in both directions, so the other button can apply it back.
         toStack.Push command
 
 let handleUndoRedo (world: IWorld) =
@@ -86,9 +87,8 @@ let handleUndoRedo (world: IWorld) =
     // Commands are pushed before a click is applied; see pushCommitted for why.
     pushCommitted world undoStack redoStack
 
-    // Multi-touch makes it possible to tap Undo and Redo together, and Undo wins. Which of a
-    // move's two positions a click sends the node to is the only thing that separates the two
-    // directions.
+    // Multi-touch makes it possible to tap Undo and Redo in the same frame, and Undo wins. The
+    // only difference between the two is which of a move's two positions the node is moved to.
     if undoButtonEntity |> has ClickEvent then
         undoStack |> handleButtonClicked _.Before redoStack
     elif redoButtonEntity |> has ClickEvent then

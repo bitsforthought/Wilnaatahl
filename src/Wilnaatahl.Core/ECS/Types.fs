@@ -210,7 +210,9 @@ type ChangeDetectionOption =
     /// Change tracking is enabled.
     | AlwaysTrack
 
-/// Represents the result of a query.
+/// Represents the result of a query. It holds the entities the query matched when it ran, so it
+/// can be enumerated more than once. Trait values are not held with them: each one is read when
+/// it is handed to a callback, so an entity must still carry the traits the query asked for.
 type IQueryResult<'T, 'TMutable> =
     inherit IEnumerable<EntityId>
 

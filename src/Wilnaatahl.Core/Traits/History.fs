@@ -4,9 +4,10 @@ open Wilnaatahl.ECS
 open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.ECS.Trait
 
-/// One node's part in a change: the node, the position it moved from, and the position it moved
-/// to. Both are recorded when the change happens, which is the only moment they are both known to
-/// be its own; anything derived later could have been moved by someone else since.
+/// How one node was moved by a change: the node, the position it moved from, and the position it
+/// moved to. Both positions are recorded when the change happens, because that is the only time
+/// they are both known to belong to this change. Reading one back from the world later could pick
+/// up a move made by something else in the meantime.
 ///
 /// An entity id held outside the ECS is not maintained by it, so a move must not outlive the
 /// node it names.
@@ -16,9 +17,9 @@ type internal Move = {
     After: {| x: float; y: float; z: float |}
 }
 
-/// A change to the scene, recorded so it can be replayed in either direction: reversing it
-/// restores the `Before` of every node it names, and reapplying it restores their `After`. Holds
-/// at least one move.
+/// A change to the scene, recorded so it can be applied again in either direction. Undoing it
+/// moves every node it lists to that move's `Before`; redoing it moves them to their `After`.
+/// Always holds at least one move.
 type internal Command = private {
     Moves_: Move list
 } with
@@ -33,23 +34,22 @@ module internal Command =
         | [] -> None
         | _ -> Some { Moves_ = moves }
 
-// The commands committed so far this frame. A feature that changes the scene commits the command
-// that takes its change back, without knowing or caring who acts on it.
+// The commands committed so far this frame. A system that changes the scene commits a command
+// describing that change, and does not need to know which system consumes it.
 //
-// Held newest-first, because that is how a list grows; `committedCommands` hands out the
-// chronological order that consumers actually need. The trait is private so that split cannot
-// leak: nothing outside this module can see the stored order, or replace the list with a shorter
-// one.
+// Stored newest-first, because prepending is how an F# list grows. `committedCommands` reverses
+// it so that callers get them oldest-first. The trait is private so that no caller can see the
+// stored order or replace the list with a different one.
 //
-// A list rather than a queue because no consumer ever takes a single command — the frame's
-// commands are read all at once — so a queue's cheap single dequeue would never be used. It also
-// has to be immutable: a mutable collection handed to the first reader could be drained before
-// the second one sees it. Fable ships no immutable queue (its library implements only mutable
-// Stack and Queue), so a list is as close as the platform gets.
+// A list rather than a queue, because no caller ever takes a single command — the frame's
+// commands are always read together — so a queue's fast single dequeue would go unused. It also
+// has to be immutable: if it were mutable, the first caller to read it could empty it before the
+// next caller looked. Fable provides no immutable queue, only mutable Stack and Queue, so a list
+// is the closest fit available.
 let private CommittedCommands = refTrait (fun () -> List.empty<Command>)
 
-/// The commands committed so far this frame, oldest first — the order the changes happened in,
-/// and so the order they have to be replayed in. Reading them leaves them in place.
+/// The commands committed so far this frame, oldest first. That is the order the changes happened
+/// in, and so the order they have to be applied in. Reading them does not remove them.
 let internal committedCommands (world: IWorld) =
     world.Get CommittedCommands |> Option.defaultValue [] |> List.rev
 

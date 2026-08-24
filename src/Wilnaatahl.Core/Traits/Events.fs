@@ -16,16 +16,16 @@ let DragEvent = valueTrait zeroPosition
 let DragStartEvent = tagTrait ()
 let PointerMissedEvent = tagTrait ()
 
-/// Whether a drag is happening. True from the moment a drag start arrives until the frame that
-/// handles the release has run. Input arrives between frames, so a drag start is visible here
-/// before any frame has run to mark the nodes the drag moves.
+/// Whether a drag is happening. The two traits cover different parts of one drag: input arrives
+/// between frames, so `DragStartEvent` covers the window before any system has run, and
+/// `DragInFlight` covers the rest, up to and including the frame that handles the release.
 ///
-/// A drag start that finds nothing selected marks no node, and the frame clears the start event,
-/// so input is accepted again next frame. Once participants are marked, only a drag end clears
-/// them, so the browser is relied on to raise one for every drag it starts — including when the
-/// pointer is cancelled or capture is lost.
+/// A drag with nothing to move never raises `DragInFlight`, and an event trait lasts a single
+/// frame, so input is accepted again from the next frame. Otherwise `DragInFlight` is present
+/// until a drag end arrives, so this relies on the browser raising one for every drag it starts —
+/// including when the pointer is cancelled or capture is lost.
 let private dragInFlight (world: IWorld) =
-    world.Has DragStartEvent || world |> anyDragParticipants
+    world.Has DragStartEvent || world.Has DragInFlight
 
 /// Raises a click on the entity, unless the entity is `Hidden` or a drag is happening.
 ///
@@ -44,15 +44,15 @@ let handleDrag (world: IWorld) x y z =
 
 let handleDragEnd (world: IWorld) = world.Add DragEndEvent
 
-/// Raises a drag start, dropping any click or background miss that arrived since the last frame.
+/// Raises a drag start, discarding any click or background miss that arrived since the last frame.
 ///
-/// Input is refused from this point on, but input accepted moments earlier lands in the same
-/// frame and would still take effect. A tap by another finger can arrive just before a drag
-/// starts without the browser having stalled. The drag wins, because carrying out a tap and a
-/// drag in the same frame has no coherent meaning.
+/// From this point on input is refused, but input accepted moments earlier is still standing and
+/// would be handled in the same frame. A second finger can tap a control just before a drag
+/// starts. The drag takes precedence, because handling a tap and a drag in the same frame has no
+/// sensible meaning.
 ///
-/// A start reaching a drag that is already running is refused like any other input, so every
-/// system downstream can take a drag start to mean a drag that is genuinely beginning.
+/// A drag start arriving while a drag is already running is refused like any other input, so
+/// every system that reads `DragStartEvent` can assume it means a new drag.
 let handleDragStart (world: IWorld) =
     world.RemoveAll ClickEvent
     world.Remove PointerMissedEvent

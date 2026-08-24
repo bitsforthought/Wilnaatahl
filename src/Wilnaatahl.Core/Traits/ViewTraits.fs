@@ -25,15 +25,17 @@ let internal MoveModeOnly = tagTrait ()
 /// the mode, and exactly one system writes it.
 let InViewMode = tagTrait ()
 
-/// Marks a node taking part in the drag in flight, holding the position it had when that drag
-/// started. The participants are fixed when the drag starts, so selecting or deselecting a node
-/// while it runs cannot change what the drag moves.
-let DragOrigin = valueTrait zeroPosition
+/// Added to every node that a running drag is moving, and holds the position that node had when
+/// the drag started. The set of nodes is decided when the drag starts, so selecting or deselecting
+/// a node while the drag runs does not change which nodes it moves.
+let internal DragOrigin = valueTrait zeroPosition
 
-/// Whether any node is taking part in a drag: true from the frame that starts one until the frame
-/// that handles the release.
-let internal anyDragParticipants (world: IWorld) =
-    world.QueryFirst(With DragOrigin) |> Option.isSome
+/// Present while a drag is running. The Dragging system adds it when a drag starts with at least
+/// one node selected, and removes it when the drag ends. A drag that starts with nothing selected
+/// has no nodes to move, so it never adds this.
+///
+/// This records only that a drag is running; `DragOrigin` records which nodes it moves.
+let DragInFlight = tagTrait ()
 
 /// World-singleton trait holding the active UI Locale. It is written by the TS view
 /// layer (from the browser locale) and read by both F#-side and TS-side consumers to

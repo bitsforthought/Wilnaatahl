@@ -24,14 +24,14 @@ type Tests() =
     let world = ecs.World
     let sortOrder, _ = spawnUndoRedoControls (0, world)
 
-    /// Records the given moves as one committed change and runs the frame that picks it up. This
-    /// is what a feature does when it commits: undo/redo never watches the feature itself.
+    /// Commits the given moves as one change and runs the frame that picks it up. This is what a
+    /// system does when it commits a command; undo/redo never watches that system directly.
     let commit moves =
         world |> commitCommand (Command.create moves).Value
         handleUndoRedo world |> ignore
         world |> clearCommittedCommands
 
-    /// Moves a node to the given x and records the change, the way a completed drag does.
+    /// Moves a node to the given x and commits the change, the way a completed drag does.
     let dragNodeTo node x =
         let before = (node |> get Position).Value
         node |> setValue Position {| x = x; y = 0.0; z = 0.0 |}
@@ -118,8 +118,8 @@ type Tests() =
         world.Query(buttonWrites <=> [| Button |]) |> Seq.exactlyOne
         =! (world |> buttonWithLabel "Undo")
 
-    /// Undo/redo no longer watches for drags: it offers whatever has been committed, whoever
-    /// committed it.
+    /// Undo/redo no longer watches for drags. It applies whatever has been committed, whichever
+    /// system committed it.
     [<Fact>]
     member _.``A committed command enables the undo button``() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |})
@@ -129,7 +129,7 @@ type Tests() =
         world |> buttonWithLabel "Undo" |> isButtonDisabled =! false
 
     /// A frame in which nothing was committed leaves the stacks exactly as they were, so an idle
-    /// frame cannot quietly grow the history.
+    /// frame cannot add entries to the history.
     [<Fact>]
     member _.``A frame that records nothing leaves the undo button alone``() =
         world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}) |> ignore
@@ -158,17 +158,16 @@ type Tests() =
         // Redo restores the position the change moved the node to.
         (node |> get TargetPosition).Value =! Line3.pos 10.0 0.0 0.0
 
-    /// Undo and redo replay the change that was recorded, both of the positions it holds. Working
-    /// the other one out from where the node happens to be at click time instead would fold in
-    /// whatever else moved it since, so redo would carry the node somewhere the change never
-    /// took it.
+    /// Undo and redo apply the two positions stored in the command. Working the other position out
+    /// from where the node happens to be when the button is clicked would include whatever else
+    /// moved it since, so redo would move the node somewhere the change never put it.
     [<Fact>]
     member _.``Redo re-applies the recorded change even after something else moved the node``() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
 
         dragNodeTo node 10.0
 
-        // Some other feature moves the node before the undo click.
+        // Another system moves the node before the undo click.
         node |> setValue Position {| x = 99.0; y = 0.0; z = 0.0 |}
 
         world |> buttonWithLabel "Undo" |> click
@@ -177,8 +176,8 @@ type Tests() =
         world |> buttonWithLabel "Redo" |> click
         (node |> get TargetPosition).Value =! Line3.pos 10.0 0.0 0.0
 
-    /// Two features can commit in the same frame, and undo takes them back newest first. Pushing
-    /// the frame's commands in the wrong order would undo them out of sequence.
+    /// Two systems can commit in the same frame, and undo reverses them newest first. Pushing the
+    /// frame's commands in the wrong order would undo them out of sequence.
     [<Fact>]
     member _.``Two commands committed in one frame are undone newest first``() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |})

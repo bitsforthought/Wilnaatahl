@@ -45,9 +45,9 @@ type Tests() =
 
     /// Drags the selection to the given x, giving each event its own frame. This is not quite how
     /// the browser delivers a drag — use-gesture raises the start and the first movement together
-    /// — but it keeps frame boundaries explicit for the tests that care about them. Tests that
-    /// turn on the real ordering spell it out themselves. The caller raises the drag end, so it
-    /// can choose what else lands in that frame.
+    /// — but it keeps the frame boundaries explicit for the tests that care about them. Tests
+    /// about the real ordering set it up themselves. The caller raises the drag end, so it can
+    /// choose what else happens in that frame.
     let dragTo x =
         handleDragStart world
         runSystems world frameDelta
@@ -97,9 +97,9 @@ type Tests() =
         let posAfter = (entity |> get Position).Value.x
         posAfter >! posBefore
 
-    /// A node under the pointer is the drag's to place. Leaving it in the animation's hands as
-    /// well would let it creep toward its target on every frame the pointer holds still, then
-    /// snap back the moment the pointer moves again.
+    /// While a drag is running, only the drag positions the node it is moving. If `animate` also
+    /// moved it, the node would drift toward its target on every frame the pointer held still,
+    /// then jump back as soon as the pointer moved again.
     [<Fact>]
     member _.``runSystems holds a dragged node still while its animation waits``() =
         enterMoveMode ()
@@ -108,9 +108,9 @@ type Tests() =
 
         dragTo 4.0
 
-        // Not 4.0: `animate` runs before `dragNodes`, so on the frame that starts the drag the
-        // node takes one more step toward its target before its origin is captured. It is
-        // captured at the position that frame renders, so the grab is still faithful.
+        // Not 4.0: `animate` runs before `dragNodes`, so on the frame the drag starts, the node
+        // takes one more step toward its target before the drag stores its starting position.
+        // That position is the one the frame renders, so it is the right one to store.
         let whereTheDragPutIt = (node |> get Position).Value.x
 
         // A frame with no pointer movement: nothing should move the node.
@@ -200,10 +200,10 @@ type Tests() =
 
         world.Has InViewMode =! false
 
-    /// The first start fixes the participants and their origins. A second one arriving while the
-    /// drag still runs would re-base the gesture, and the node would jump by the distance it had
-    /// already travelled — and the release would record that shortened drag, so undo would take
-    /// back only part of it.
+    /// The first drag start decides which nodes the drag moves and where each of them began. A
+    /// second start arriving while the drag still runs would store those positions again, so the
+    /// node would jump by the distance it had already travelled, and the release would commit only
+    /// that shortened move — leaving undo able to reverse only part of the drag.
     [<Fact>]
     member _.``runSystems ignores a drag start that arrives mid-drag``() =
         enterMoveMode ()
@@ -211,7 +211,7 @@ type Tests() =
 
         dragTo 4.0
 
-        // A second start, then the gesture carries on to 5.
+        // A second start, then the drag carries on to 5.
         handleDragStart world
         runSystems world frameDelta
         handleDrag world 5.0 0.0 0.0
@@ -240,7 +240,7 @@ type Tests() =
 
     /// A click can land on the dragged node during a drag — a drag short enough to also count as
     /// a tap raises one. Acting on it would deselect the node the user is dragging, so the view
-    /// layer would stop painting it as selected mid-gesture.
+    /// layer would stop drawing it as selected part-way through the drag.
     [<Fact>]
     member _.``runSystems keeps the selection when a node click lands mid-drag``() =
         enterMoveMode ()
@@ -266,16 +266,16 @@ type Tests() =
 
         world.Has InViewMode =! true
 
-    /// The browser can raise a drag end with no drag behind it, and `Events.handleDragEnd` passes
-    /// every one of them straight through. It must not be mistaken for a completed change: no
-    /// drag ran, so nothing was recorded, and the redo history stands.
+    /// The browser can raise a drag end when no drag is running, and `Events.handleDragEnd` passes
+    /// every one of them through. It must not be treated as a completed drag: no drag ran, so
+    /// nothing is committed and the redo stack is left alone.
     [<Fact>]
     member _.``runSystems keeps redo history when a stray drag end arrives``() =
         enterMoveMode ()
         let node = spawnSelectedNode ()
 
-        // Build a redo entry: drag, release, undo, then wait out the undo animation so the node
-        // is settled and a later drag of it would record something.
+        // Build a redo entry: drag, release, undo, then let the undo animation finish so the node
+        // has stopped and a later drag of it would commit something.
         dragTo 4.0
         endDrag ()
         world |> buttonWithLabel "Undo" |> handleClick world
@@ -290,15 +290,16 @@ type Tests() =
 
         isButtonDisabled redoButton =! false
 
-    /// A mode tap coincident with a release is refused at the door, so the release is processed
-    /// as an ordinary one: the drag records what it moved, and that discards the redo history.
+    /// A tap on the mode button in the same frame as a release is refused by `Events.handleClick`,
+    /// so the release is handled as an ordinary one: the drag commits what it moved, and that
+    /// clears the redo stack.
     [<Fact>]
     member _.``runSystems discards redo history for a drag released as the mode is tapped``() =
         enterMoveMode ()
         let node = spawnSelectedNode ()
 
-        // Drag 0 -> 4 and release it cleanly, then undo. Wait out the undo animation, because a
-        // node that is still animating when it is grabbed records nothing.
+        // Drag 0 -> 4 and release it cleanly, then undo. Let the undo animation finish, because a
+        // node that is still animating when a drag starts on it commits nothing.
         dragTo 4.0
         endDrag ()
 
@@ -313,8 +314,8 @@ type Tests() =
         world |> buttonWithLabel "View" |> handleClick world
         runSystems world frameDelta
 
-        // The tap belonged to the drag, so the mode is unchanged, and the completed drag
-        // invalidated the redo entry it superseded.
+        // The tap was refused because a drag was running, so the mode is unchanged, and the
+        // completed drag cleared the redo entry it replaced.
         world.Has InViewMode =! false
         world |> buttonWithLabel "Redo" |> isButtonDisabled =! true
 
@@ -349,9 +350,9 @@ type Tests() =
 
     /// use-gesture calls `onDragStart` and then `onDrag` one after the other, in the same call, as
     /// soon as the pointer moves far enough to count as a drag (see `parser.ts` in
-    /// `@use-gesture/core`). So a drag start and its first movement always reach the app together,
-    /// and undo used to be off by that first movement on every single drag. The drag now captures
-    /// each origin itself, before it moves anything, so the coalescing cannot be seen.
+    /// `@use-gesture/core`). So a drag start and its first movement always reach the app in the
+    /// same frame, and undo used to be wrong by that first movement on every drag. The drag now
+    /// stores each starting position itself, before it moves anything, so this no longer matters.
     [<Fact>]
     member _.``runSystems undoes a drag whose start and first movement share a frame``() =
         enterMoveMode ()
@@ -369,16 +370,16 @@ type Tests() =
 
         (node |> get Position).Value.x =! 6.0
 
-        // Undo sends the node back to x = 0, where the drag began — not to x = 1, where it stood
+        // Undo moves the node back to x = 0, where the drag began — not to x = 1, where it was
         // after the first movement.
         world |> buttonWithLabel "Undo" |> handleClick world
         runSystems world frameDelta
         (node |> get TargetPosition).Value.x =! 0.0
 
-    /// The worst case of the same coalescing: a browser that stalls can deliver the press, every
-    /// movement and the release together, so the node completes its whole journey in one frame.
-    /// Undo used to record the place the drag ended, leaving an entry that moved the node to
-    /// where it already was — a drag that could not be taken back at all.
+    /// The worst case of the same problem: a browser that stalls can deliver the press, every
+    /// movement and the release in one frame, so the node makes its whole move at once. Undo used
+    /// to store the position the drag ended at, giving an entry that moved the node to where it
+    /// already was, so the drag could not be undone at all.
     [<Fact>]
     member _.``runSystems undoes a drag delivered entirely in one frame``() =
         enterMoveMode ()
@@ -391,21 +392,21 @@ type Tests() =
         handleDragEnd world
         runSystems world frameDelta
 
-        // The drag itself worked: the node moved, and an undo entry was recorded for it.
+        // The drag itself worked: the node moved, and an undo entry was committed for it.
         (node |> get Position).Value.x =! 4.0
         let undoButton = world |> buttonWithLabel "Undo"
         isButtonDisabled undoButton =! false
 
-        // The whole drag is one change, taken back in one click: the node returns to the x = 0 it
-        // was dragged from, not to the x = 4 it already sits at.
+        // The whole drag is one change, undone by one click: the node goes back to the x = 0 it
+        // was dragged from, not to the x = 4 it is already at.
         undoButton |> handleClick world
         runSystems world frameDelta
         (node |> get TargetPosition).Value.x =! 0.0
 
-    /// The boundary of "still animating": `animate` runs before the drag captures its origins, so
-    /// a node close enough to its target finishes the journey on the very frame the grab lands. It
-    /// has genuinely arrived, and the drag then moves it away from a position it had settled at,
-    /// so that is a real change and is recorded.
+    /// The boundary case for "still animating": `animate` runs before the drag stores its starting
+    /// positions, so a node close enough to its target finishes animating on the very frame the
+    /// drag starts. It has genuinely arrived, so when the drag then moves it away, that is a real
+    /// change and is committed.
     [<Fact>]
     member _.``runSystems records a drag of a node whose animation lands on the grab frame``() =
         enterMoveMode ()
@@ -422,7 +423,7 @@ type Tests() =
 
         endDrag ()
 
-        // Undo returns it to the target it settled on, not to where it was mid-flight.
+        // Undo moves it back to the target it stopped at, not to where it was part-way there.
         world |> buttonWithLabel "Undo" |> handleClick world
         runSystems world frameDelta
         (node |> get TargetPosition).Value.x =! 0.001

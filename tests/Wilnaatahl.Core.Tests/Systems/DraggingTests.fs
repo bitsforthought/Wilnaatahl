@@ -25,8 +25,8 @@ type Tests() =
     let spawnSelectedNode x =
         world.Spawn(PersonRef.Val Person.Empty, Position.Val {| x = x; y = 0.0; z = 0.0 |}, Selected.Tag())
 
-    /// Runs the frame that starts a drag. The frame's events are swept afterwards, as the real
-    /// pipeline does, so the start is not still standing when the next frame runs.
+    /// Runs the frame that starts a drag. The frame's events are cleared afterwards, as the real
+    /// pipeline does, so the start event is gone before the next frame runs.
     let startDrag () =
         world.Add DragStartEvent
         dragNodes world |> ignore
@@ -38,8 +38,8 @@ type Tests() =
         dragNodes world |> ignore
         cleanupEvents world |> ignore
 
-    /// Runs the frame that releases the drag. The frame's events are left standing so a caller
-    /// can inspect what the release recorded.
+    /// Runs the frame that releases the drag. The frame's events are left in place so that a
+    /// caller can check what the release committed.
     let endDrag () =
         world.Add DragEndEvent
         dragNodes world |> ignore
@@ -69,16 +69,16 @@ type Tests() =
 
         startDrag ()
 
-        // The gesture reports the distance travelled since it began, not since the last frame.
+        // DragEvent holds the distance travelled since the drag began, not since the last frame.
         dragBy 3.0
         (node |> get Position).Value =! Line3.pos 8.0 0.0 0.0
 
         dragBy 7.0
         (node |> get Position).Value =! Line3.pos 12.0 0.0 0.0
 
-    /// A release can arrive in a frame carrying no movement (the pointer paused before letting
-    /// go), and that still ends the drag. Treating it as spurious would leave the participants
-    /// marked forever, which the view layer reads as "a drag is still in progress".
+    /// A release can arrive in a frame that carries no movement (the pointer paused before letting
+    /// go), and it still ends the drag. Ignoring it would leave DragOrigin on the nodes forever,
+    /// which the view layer reads as "a drag is still in progress".
     [<Fact>]
     member _.``Drag end without movement in the same frame still ends the drag``() =
         spawnSelectedNode 0.0 |> ignore
@@ -89,6 +89,34 @@ type Tests() =
         endDrag ()
 
         world.Query(With DragOrigin) |> Seq.length =! 0
+
+    /// Callers ask whether a drag is running far more often than they ask which nodes it moves,
+    /// so the Dragging system records that once as a world tag instead of making every caller
+    /// search for a node carrying DragOrigin.
+    [<Fact>]
+    member _.``A drag signals that it is in flight for as long as it holds its participants``() =
+        spawnSelectedNode 0.0 |> ignore
+        world.Has DragInFlight =! false
+
+        startDrag ()
+        world.Has DragInFlight =! true
+
+        dragBy 3.0
+        world.Has DragInFlight =! true
+
+        endDrag ()
+        world.Has DragInFlight =! false
+
+    /// A drag that starts with nothing selected has no nodes to move and commits nothing. Adding
+    /// DragInFlight for it would refuse every click until the user released the pointer, and no
+    /// node could move in return.
+    [<Fact>]
+    member _.``A drag that grabbed nothing signals no drag in flight``() =
+        world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}) |> ignore
+
+        startDrag ()
+
+        world.Has DragInFlight =! false
 
     [<Fact>]
     member _.``Drag moves multiple selected entities``() =
@@ -101,8 +129,8 @@ type Tests() =
         xOf node1 =! 3.0
         xOf node2 =! 13.0
 
-    /// The gesture takes its participants from the selection once, when it starts. A node
-    /// selected while the drag is running was never grabbed, so it must not start moving.
+    /// A drag decides which nodes it moves once, when it starts. A node selected after that was
+    /// not part of the drag, so it must not start moving.
     [<Fact>]
     member _.``A node selected after the drag started does not move with it``() =
         let node1 = spawnSelectedNode 0.0
@@ -116,8 +144,8 @@ type Tests() =
         xOf node1 =! 3.0
         xOf node2 =! 10.0
 
-    /// The mirror case: losing the selection cannot take a node out of a drag it is already part
-    /// of, so nothing can strand a moving node partway.
+    /// The opposite case: deselecting a node cannot remove it from a drag that is already moving
+    /// it, so a node can never stop part-way through a drag.
     [<Fact>]
     member _.``A node deselected after the drag started keeps moving with it``() =
         let node1 = spawnSelectedNode 0.0
@@ -131,8 +159,8 @@ type Tests() =
         xOf node1 =! 3.0
         xOf node2 =! 13.0
 
-    /// Each participant is placed at where it started plus how far the gesture has travelled,
-    /// rather than nudged by the change since the last frame, so it lands where the gesture says
+    /// Each node is placed at its starting position plus the distance the drag has travelled,
+    /// rather than moved by the change since the last frame, so it ends up in the right place
     /// even if something else moved it in the meantime.
     [<Fact>]
     member _.``A participant moved by something else is put back where the gesture says``() =
@@ -145,9 +173,9 @@ type Tests() =
 
         xOf node =! 3.0
 
-    /// A drag is the change; the history entry it leaves behind is what replays that change. The
-    /// origin is what the node had when it was grabbed, so undo returns it to where the drag
-    /// began rather than to anywhere it passed through on the way.
+    /// The command a drag commits is what undo and redo later apply. `Before` is the position the
+    /// node had when the drag started, so undo returns it to where the drag began rather than to
+    /// somewhere it passed through on the way.
     [<Fact>]
     member _.``A drag that moved a node records where it started and where it ended``() =
         let node = spawnSelectedNode 5.0
@@ -159,9 +187,9 @@ type Tests() =
         world |> committedCommands |> List.map _.Moves
         =! [ [ moveAlongX node 5.0 12.0 ] ]
 
-    /// A grab with no movement changes nothing, and neither does one that wanders and comes back.
-    /// Recording either would put an entry on the undo stack that undoes nothing and, worse,
-    /// throw away the redo history in exchange.
+    /// A drag that never moved changes nothing, and neither does one that moves away and returns.
+    /// Committing either would add an undo entry that does nothing when applied, and would also
+    /// clear the redo stack.
     [<Fact>]
     member _.``A drag that ended where it began records nothing``() =
         spawnSelectedNode 5.0 |> ignore
@@ -173,8 +201,8 @@ type Tests() =
 
         world |> committedCommands =! []
 
-    /// Grabbing with nothing selected takes hold of nothing, so the release has nothing to
-    /// record. The gesture still runs to completion; it simply moves and commits nothing.
+    /// A drag that starts with nothing selected has no nodes to move, so the release has nothing
+    /// to commit. The drag still runs to completion; it just moves and commits nothing.
     [<Fact>]
     member _.``A drag with nothing selected records nothing``() =
         world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}) |> ignore
@@ -185,10 +213,10 @@ type Tests() =
 
         world |> committedCommands =! []
 
-    /// Dragging a node that is still animating commits nothing: the drag does not change where the
-    /// node is headed, so there is nothing to take back. Its position is only borrowed for the
-    /// gesture. The line is drawn where the system can see it — whether the node still carries a
-    /// TargetPosition when its origin is captured.
+    /// Dragging a node that is still animating commits nothing. Undo would move the node back to
+    /// where it will come to rest, and a drag doesn't change that: it only writes Position, while
+    /// the node is still headed for its TargetPosition. The test for "still animating" is whether
+    /// the node has a TargetPosition at the moment the drag stores its starting position.
     [<Fact>]
     member _.``A drag of a node still animating when its origin is captured records nothing``() =
         let node = spawnSelectedNode 5.0
@@ -200,8 +228,8 @@ type Tests() =
 
         world |> committedCommands =! []
 
-    /// A multi-select can hold both a settled node and an animating one. The gesture moves both,
-    /// but only the settled one has a change worth taking back.
+    /// A selection can contain both a node that has stopped and one that is still animating. The
+    /// drag moves both, but only the stopped one has a change that undo can reverse.
     [<Fact>]
     member _.``A drag records only the participants that had a change to take back``() =
         let settled = spawnSelectedNode 5.0
@@ -215,10 +243,10 @@ type Tests() =
         world |> committedCommands |> List.map _.Moves
         =! [ [ moveAlongX settled 5.0 12.0 ] ]
 
-    /// A multi-select drag is one change covering every node it moved, so undo takes the whole
-    /// thing back at once. Recording only the first participant would leave the rest stranded.
-    /// The moves are compared as a set: a command's moves are applied independently, so the order
-    /// the query happened to yield them in carries no meaning.
+    /// A drag of several nodes is one change covering every node it moved, so a single undo
+    /// reverses all of them. Committing only the first node would leave the others where they
+    /// were dropped. The moves are compared as a set because a command's moves are applied
+    /// independently, so the order the query returned them in doesn't matter.
     [<Fact>]
     member _.``A drag of several nodes records them all in one command``() =
         let left = spawnSelectedNode 5.0

@@ -6,7 +6,6 @@ open Swensen.Unquote
 open Wilnaatahl.ECS
 open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Extensions
-open Wilnaatahl.ViewModel.Vector
 open Wilnaatahl.Traits.Events
 open Wilnaatahl.Traits.ViewTraits
 open Wilnaatahl.Tests.EcsTestSupport
@@ -15,12 +14,12 @@ type Tests() =
     let ecs = new EcsWorld()
     let world = ecs.World
 
-    /// Starts a drag on an anonymous node, the way processing a drag start does.
-    let beginDrag () =
-        world.Spawn(DragOrigin.Val zeroPosition) |> ignore
+    /// Raises the signal that a drag is running, marking nothing as taking part in it. These
+    /// handlers only ever ask whether a drag is running, never what it moves.
+    let beginDrag () = world.Add DragInFlight
 
     /// Ends the synthetic drag started by `beginDrag`.
-    let endDrag () = world.RemoveAll DragOrigin
+    let endDrag () = world.Remove DragInFlight
 
     interface IDisposable with
         member _.Dispose() = (ecs :> IDisposable).Dispose()
@@ -50,8 +49,8 @@ type Tests() =
         entity |> handleClick world
         entity |> has ClickEvent =! false
 
-    /// Input arrives between frames, so a drag start is visible here before any frame has run to
-    /// spawn the entity that represents the drag. The frame a drag starts in is part of the drag.
+    /// Input arrives between frames, so a drag start is visible here before the Dragging system
+    /// has run and added `DragInFlight`. The frame a drag starts in is part of the drag.
     [<Fact>]
     member _.``handleClick raises no ClickEvent in the frame a drag starts``() =
         let entity = world.Spawn()
@@ -105,8 +104,8 @@ type Tests() =
         handlePointerMissed world
         world.Has PointerMissedEvent =! true
 
-    /// The first start fixes the participants and their origins. `Events` refuses a start while a
-    /// drag is running, so the system never has to consider a second one.
+    /// The first drag start decides which nodes the drag moves and where each of them began.
+    /// `Events` refuses a start while a drag is running, so the system never sees a second one.
     [<Fact>]
     member _.``handleDragStart raises no DragStartEvent while a drag is in flight``() =
         beginDrag ()
