@@ -47,7 +47,7 @@ let syncModalControls (world: IWorld) =
 let updateViewMode (world: IWorld) =
     let buttonEntity = world.Query(With ViewModeButton, With Button) |> Seq.exactlyOne
 
-    if buttonEntity |> has ClickEvent then
+    if buttonEntity |> wasClicked world then
         let inViewMode = world.Has InViewMode
 
         // The label reflects the mode a click switches into, so it shows the mode entered *next*:
@@ -61,6 +61,6 @@ let updateViewMode (world: IWorld) =
 
         buttonEntity |> setWith Button (fun data -> {| data with label = label |})
         world.RemoveAll Selected
-        world.RemoveAll ClickEvent
+        world |> discardClicks
 
     world |> syncModalControls

@@ -1,7 +1,6 @@
 import { Mesh } from "three";
 import { trait } from "koota";
 import { toKootaTagTrait, toKootaValueFactoryTrait, toKootaValueTrait } from "./koota/kootaWrapper";
-import * as Events from "../generated/Traits/Events";
 import * as FileCommands from "../generated/Systems/FileCommands";
 import * as ConnectorTraits from "../generated/Traits/ConnectorTraits";
 import * as PeopleTraits from "../generated/Traits/PeopleTraits";
@@ -10,8 +9,6 @@ import * as ViewTraits from "../generated/Traits/ViewTraits";
 
 // Used to connect entities that represent visible components to Three.js meshes.
 export const MeshRef = trait(() => new Mesh());
-
-export const ClickEvent = toKootaTagTrait(Events.ClickEvent);
 
 // Unlike other events, these are not cleared by frame cleanup: they persist until
 // the view layer consumes and removes them.

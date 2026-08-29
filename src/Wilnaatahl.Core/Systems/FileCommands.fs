@@ -36,10 +36,10 @@ let spawnFileControls (sortOrder, world: IWorld) =
 /// signal. Each button is checked independently, so raising one request never depends
 /// on the state of the other.
 let handleFileCommands (world: IWorld) =
-    if world.QueryFirst(With OpenFileButton, With ClickEvent) |> Option.isSome then
+    if world |> clickedEntities |> Seq.exists (has OpenFileButton) then
         world.Add OpenFileRequested
 
-    if world.QueryFirst(With SaveButton, With ClickEvent) |> Option.isSome then
+    if world |> clickedEntities |> Seq.exists (has SaveButton) then
         world.Add SaveRequested
 
     world

@@ -89,9 +89,9 @@ let handleUndoRedo (world: IWorld) =
 
     // Multi-touch makes it possible to tap Undo and Redo in the same frame, and Undo wins. The
     // only difference between the two is which of a move's two positions the node is moved to.
-    if undoButtonEntity |> has ClickEvent then
+    if undoButtonEntity |> wasClicked world then
         undoStack |> handleButtonClicked _.Before redoStack
-    elif redoButtonEntity |> has ClickEvent then
+    elif redoButtonEntity |> wasClicked world then
         redoStack |> handleButtonClicked _.After undoStack
 
     // Anything above can move an entry between the two stacks, so settle both buttons rather

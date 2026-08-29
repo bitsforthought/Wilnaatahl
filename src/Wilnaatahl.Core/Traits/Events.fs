@@ -10,15 +10,11 @@ open Wilnaatahl.Traits.ViewTraits
 /// One piece of input from the view layer. A drag's distance is measured from the position where
 /// the drag started, not from the position on the previous frame.
 type internal InputEvent =
+    | Clicked of target: EntityId
     | DragStarted
     | Dragged of distance: {| x: float; y: float; z: float |}
     | DragEnded
     | PointerMissed
-
-// A click is flagged with a trait rather than queued, because it belongs to the entity it landed
-// on. Like the input queue below, clicks are discarded at the end of every frame so that no frame
-// acts on the previous frame's input.
-let ClickEvent = tagTrait ()
 
 // The input raised since the last frame, in the order the view layer raised it. It is held in one
 // ResizeArray that is emptied at the end of each frame rather than replaced, so the queue itself
@@ -41,6 +37,21 @@ let private raiseInput event (world: IWorld) = (world |> queue).Add event
 /// The input raised since the last frame, in the order it was raised.
 let internal inputEvents (world: IWorld) = (world |> queue) :> seq<InputEvent>
 
+/// The entities clicked since the last frame, in the order the clicks were raised.
+///
+/// An entity id held outside the ECS is not maintained by it, so a click must not outlive the
+/// entity it names.
+let internal clickedEntities world =
+    world
+    |> inputEvents
+    |> Seq.choose (function
+        | Clicked target -> Some target
+        | _ -> None)
+
+/// Whether the entity was clicked since the last frame.
+let internal wasClicked (world: IWorld) entity =
+    world |> clickedEntities |> Seq.contains entity
+
 /// Whether a drag is happening. The two checks cover different parts of one drag: input arrives
 /// between frames, so a queued `DragStarted` covers the window before any system has run, and
 /// `DragInFlight` covers the rest, up to and including the frame that handles the release.
@@ -56,6 +67,16 @@ let private dragInFlight (world: IWorld) =
 let private discardPointerMisses (world: IWorld) =
     (world |> queue).RemoveAll(fun event -> event = PointerMissed) |> ignore
 
+/// Removes every click from the queue, leaving the rest of it in order.
+let internal discardClicks (world: IWorld) =
+    (world |> queue)
+        .RemoveAll(
+            function
+            | Clicked _ -> true
+            | _ -> false
+        )
+    |> ignore
+
 /// Raises a click on the entity, unless the entity is `Hidden` or a drag is happening.
 ///
 /// The app hides a control one frame before the view layer stops drawing it, so a click can still
@@ -66,7 +87,7 @@ let private discardPointerMisses (world: IWorld) =
 /// systems that read them.
 let handleClick world entity =
     if not (dragInFlight world) && not (entity |> has Hidden) then
-        entity |> add ClickEvent
+        world |> raiseInput (Clicked entity)
 
 let handleDrag (world: IWorld) x y z =
     world |> raiseInput (Dragged {| x = x; y = y; z = z |})
@@ -85,7 +106,7 @@ let handleDragEnd (world: IWorld) = world |> raiseInput DragEnded
 /// background misses are discarded — a queued release may belong to a drag that is still running,
 /// and dropping it would leave that drag running with no release left to end it.
 let handleDragStart (world: IWorld) =
-    world.RemoveAll ClickEvent
+    world |> discardClicks
     world |> discardPointerMisses
 
     if not (dragInFlight world) then
@@ -101,7 +122,6 @@ let handlePointerMissed (world: IWorld) =
 let cleanupEvents (world: IWorld) =
     // Input belongs to the frame it arrived in. Left standing, the next frame would act on it a
     // second time.
-    world.RemoveAll ClickEvent
     (world |> queue).Clear()
 
     // A command belongs to the frame its change happened in. Left standing, the next frame would

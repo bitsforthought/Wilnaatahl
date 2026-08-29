@@ -22,7 +22,7 @@ let spawnSelectControls (sortOrder, world: IWorld) =
     sortOrder + 1, world
 
 let private handleSelectModeButtonClick buttonEntity multiSelect (world: IWorld) =
-    if not (buttonEntity |> has ClickEvent) then
+    if not (buttonEntity |> wasClicked world) then
         false
     else
         // The label names the mode a click switches into, not the current one.
@@ -45,7 +45,7 @@ let private handleNodeClick multiSelect (world: IWorld) =
     let inViewMode = world.Has InViewMode
 
     // PersonRef stands in for tree nodes here, since only nodes mapping to people are selectable.
-    match world.QueryFirst(With ClickEvent, With PersonRef) with
+    match world |> clickedEntities |> Seq.tryFind (has PersonRef) with
     | Some nodeEntity when nodeEntity |> has Selected ->
         nodeEntity |> remove Selected
         world

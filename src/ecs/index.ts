@@ -37,8 +37,6 @@ export const eventActions = createActions((world: World) => {
       Events.handleDragStart(wrappedWorld);
     },
     handleMeshClick: (entity: Entity) => (e: ThreeEvent<MouseEvent>) => {
-      // Route through the F# handler rather than adding ClickEvent directly, so every click in
-      // the app passes the same hidden-control check.
       Events.handleClick(wrappedWorld, entity as Entity & EntityId);
       e.stopPropagation();
     },

@@ -40,9 +40,9 @@ type Tests() =
 
     /// Clicks a button and runs the frame it lands on.
     let click button =
-        button |> add ClickEvent
+        button |> handleClick world
         handleUndoRedo world |> ignore
-        button |> remove ClickEvent
+        world |> discardClicks
 
     interface IDisposable with
         member _.Dispose() = (ecs :> IDisposable).Dispose()
@@ -231,8 +231,8 @@ type Tests() =
 
         let undoBtn = world |> buttonWithLabel "Undo"
         let redoBtn = world |> buttonWithLabel "Redo"
-        undoBtn |> add ClickEvent
-        redoBtn |> add ClickEvent
+        undoBtn |> handleClick world
+        redoBtn |> handleClick world
         handleUndoRedo world |> ignore
 
         // Undoing again heads back to where the first drag began. Redo would have gone to 15,
@@ -352,7 +352,7 @@ type Tests() =
         syncModalControls world |> ignore
         let undoBtn = world |> buttonWithLabel "Undo"
         undoBtn |> handleClick world
-        undoBtn |> has ClickEvent =! false
+        undoBtn |> wasClicked world =! false
         handleUndoRedo world |> ignore
         node |> has TargetPosition =! false
 

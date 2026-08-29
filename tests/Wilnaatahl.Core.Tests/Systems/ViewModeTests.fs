@@ -56,7 +56,7 @@ type Tests() =
         updateViewMode world |> ignore
         world.Has InViewMode =! true
 
-        modeButton world |> add ClickEvent
+        modeButton world |> handleClick world
         updateViewMode world |> ignore
 
         modeButtonLabel world =! "View"
@@ -65,14 +65,14 @@ type Tests() =
     [<Fact>]
     member _.``clicking the mode button twice returns to View mode``() =
         // View -> Move
-        modeButton world |> add ClickEvent
+        modeButton world |> handleClick world
         updateViewMode world |> ignore
         cleanupEvents world |> ignore
         modeButtonLabel world =! "View"
         world.Has InViewMode =! false
 
         // Move -> View
-        modeButton world |> add ClickEvent
+        modeButton world |> handleClick world
         updateViewMode world |> ignore
         modeButtonLabel world =! "Move"
         world.Has InViewMode =! true
@@ -83,7 +83,7 @@ type Tests() =
         updateViewMode world |> ignore
 
         // Switch to Move mode.
-        modeButton world |> add ClickEvent
+        modeButton world |> handleClick world
         updateViewMode world |> ignore
 
         node |> has Selected =! false
@@ -131,21 +131,21 @@ type Tests() =
         let otherButton =
             world.Spawn(Button.Val {| sortOrder = 9; label = "Other"; disabled = false |})
 
-        node |> add ClickEvent
-        otherButton |> add ClickEvent
-        modeBtn |> add ClickEvent
+        node |> handleClick world
+        otherButton |> handleClick world
+        modeBtn |> handleClick world
 
         updateViewMode world |> ignore
 
         world.Has InViewMode =! false
-        node |> has ClickEvent =! false
-        otherButton |> has ClickEvent =! false
+        node |> wasClicked world =! false
+        otherButton |> wasClicked world =! false
 
     [<Fact>]
     member _.``a frame without a mode switch leaves other clicks untouched``() =
         let node = spawnSelectedNode world
-        node |> add ClickEvent
+        node |> handleClick world
 
         updateViewMode world |> ignore
 
-        node |> has ClickEvent =! true
+        node |> wasClicked world =! true

@@ -26,48 +26,74 @@ type Tests() =
         member _.Dispose() = (ecs :> IDisposable).Dispose()
 
     [<Fact>]
-    member _.``handleClick adds ClickEvent to entity``() =
+    member _.``handleClick queues a click on the entity``() =
         let entity = world.Spawn()
         entity |> handleClick world
-        entity |> has ClickEvent =! true
+        world |> inputEvents |> List.ofSeq =! [ Clicked entity ]
 
     /// The app hides a control one frame before the view layer stops drawing it, so a click can
     /// still land on a control that is no longer available. Dropping it here means the systems
     /// that read clicks never have to check for it.
     [<Fact>]
-    member _.``handleClick raises no ClickEvent on a Hidden entity``() =
+    member _.``handleClick queues no click on a Hidden entity``() =
         let entity = world.Spawn()
         entity |> add Hidden
         entity |> handleClick world
-        entity |> has ClickEvent =! false
+        entity |> wasClicked world =! false
 
     /// A click can reach a control during a drag — from a second finger tapping it, for example.
     /// Acting on it would mean carrying out the click and the drag together, so it is refused.
     [<Fact>]
-    member _.``handleClick raises no ClickEvent while a drag is in flight``() =
+    member _.``handleClick queues no click while a drag is in flight``() =
         let entity = world.Spawn()
         beginDrag ()
         entity |> handleClick world
-        entity |> has ClickEvent =! false
+        entity |> wasClicked world =! false
 
     /// Input arrives between frames, so a drag start is visible here before the Dragging system
     /// has run and added `DragInFlight`. The frame a drag starts in is part of the drag.
     [<Fact>]
-    member _.``handleClick raises no ClickEvent in the frame a drag starts``() =
+    member _.``handleClick queues no click in the frame a drag starts``() =
         let entity = world.Spawn()
         handleDragStart world
         entity |> handleClick world
-        entity |> has ClickEvent =! false
+        entity |> wasClicked world =! false
 
     /// Refusing input must stop when the drag does, or the app would accept no input at all after
     /// the first drag.
     [<Fact>]
-    member _.``handleClick adds ClickEvent once a drag has ended``() =
+    member _.``handleClick queues a click once a drag has ended``() =
         let entity = world.Spawn()
         beginDrag ()
         endDrag ()
         entity |> handleClick world
-        entity |> has ClickEvent =! true
+        entity |> wasClicked world =! true
+
+    /// A click belongs to the entity it landed on, so two clicks in one frame stay apart.
+    [<Fact>]
+    member _.``wasClicked reports only the entities that were clicked``() =
+        let clicked = world.Spawn()
+        let other = world.Spawn()
+
+        clicked |> handleClick world
+
+        clicked |> wasClicked world =! true
+        other |> wasClicked world =! false
+
+    /// Selection acts on the first click of the frame, so the clicks have to come back in the
+    /// order they were raised, with the input raised between them left out. The entities are
+    /// clicked in the opposite order to the one they were spawned in, so returning them in
+    /// entity order rather than raise order would not pass.
+    [<Fact>]
+    member _.``clickedEntities returns the clicked entities in order``() =
+        let spawnedFirst = world.Spawn()
+        let spawnedSecond = world.Spawn()
+
+        spawnedSecond |> handleClick world
+        handleDrag world 1.0 0.0 0.0
+        spawnedFirst |> handleClick world
+
+        world |> clickedEntities |> List.ofSeq =! [ spawnedSecond; spawnedFirst ]
 
     [<Fact>]
     member _.``handleDrag queues the distance travelled``() =
@@ -86,12 +112,10 @@ type Tests() =
         let entity = world.Spawn()
         entity |> handleClick world
         handlePointerMissed world
-        entity |> has ClickEvent =! true
-        world |> inputEvents |> List.ofSeq =! [ PointerMissed ]
+        world |> inputEvents |> List.ofSeq =! [ Clicked entity; PointerMissed ]
 
         handleDragStart world
 
-        entity |> has ClickEvent =! false
         world |> inputEvents |> List.ofSeq =! [ DragStarted ]
 
     /// Only clicks and background misses are discarded. A queued release belongs to the drag that
@@ -185,10 +209,9 @@ type Tests() =
         handleDrag world 1.0 0.0 0.0
         handleDragEnd world
 
-        entity |> has ClickEvent =! true
         world |> inputEvents |> Seq.isEmpty =! false
 
         cleanupEvents world |> ignore
 
-        entity |> has ClickEvent =! false
         world |> inputEvents |> Seq.isEmpty =! true
+        entity |> wasClicked world =! false

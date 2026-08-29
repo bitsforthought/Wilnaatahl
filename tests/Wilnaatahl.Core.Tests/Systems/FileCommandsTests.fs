@@ -44,7 +44,7 @@ type Tests() =
 
     [<Fact>]
     member _.``clicking open button raises only the open request``() =
-        (world |> openButton) |> add ClickEvent
+        (world |> openButton) |> handleClick world
 
         handleFileCommands world |> ignore
 
@@ -53,7 +53,7 @@ type Tests() =
 
     [<Fact>]
     member _.``clicking save button raises only the save request``() =
-        (world |> saveButton) |> add ClickEvent
+        (world |> saveButton) |> handleClick world
 
         handleFileCommands world |> ignore
 
@@ -72,7 +72,7 @@ type Tests() =
         // The request signals are outward requests fulfilled asynchronously by the
         // host, so unlike per-frame input events they must outlive the frame that
         // raised them: cleanupEvents must not clear them.
-        (world |> openButton) |> add ClickEvent
+        (world |> openButton) |> handleClick world
         handleFileCommands world |> ignore
         cleanupEvents world |> ignore
 

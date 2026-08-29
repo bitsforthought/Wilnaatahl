@@ -70,6 +70,7 @@ let private applyInput world event =
     | DragStarted -> world |> startDrag
     | Dragged distance -> world |> moveParticipants distance
     | DragEnded -> world |> endDrag
+    | Clicked _
     | PointerMissed -> world
 
 let dragNodes (world: IWorld) =
