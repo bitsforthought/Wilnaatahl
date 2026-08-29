@@ -127,19 +127,19 @@ type Tests() =
         let selectModeButton = world |> buttonWithLabel "Multi-select"
 
         // Boot is View mode, where the select-mode button is meaningless and so hidden.
-        world.Has InViewMode =! true
+        world |> currentMode =! Viewing
         selectModeButton |> has Hidden =! true
 
         // View -> Move: the button becomes meaningful the moment the mode changes.
         modeButton |> handleClick world
         runSystems world frameDelta
-        world.Has InViewMode =! false
+        world |> currentMode =! Moving
         selectModeButton |> has Hidden =! false
 
         // Move -> View: and meaningless again, still within the toggling frame.
         modeButton |> handleClick world
         runSystems world frameDelta
-        world.Has InViewMode =! true
+        world |> currentMode =! Viewing
         selectModeButton |> has Hidden =! true
 
     /// Switching mode starts the new mode clean, so a node click landing in the same frame as the
@@ -153,7 +153,7 @@ type Tests() =
         modeButton |> handleClick world
         runSystems world frameDelta
 
-        world.Has InViewMode =! false
+        world |> currentMode =! Moving
         node |> has Selected =! false
 
     /// Checks the pipeline order, which the node-click test cannot. If undo ran first it would
@@ -176,7 +176,7 @@ type Tests() =
         world |> buttonWithLabel "View" |> handleClick world
         runSystems world frameDelta
 
-        world.Has InViewMode =! true
+        world |> currentMode =! Viewing
         node |> has TargetPosition =! false
         // The entry is still on the undo stack, so the click was intercepted rather than applied
         // and then discarded.
@@ -194,7 +194,7 @@ type Tests() =
         world |> buttonWithLabel "View" |> handleClick world
         runSystems world frameDelta
 
-        world.Has InViewMode =! false
+        world |> currentMode =! Moving
 
     /// The first drag start decides which nodes the drag moves and where each of them began. A
     /// second start arriving while the drag still runs would store those positions again, so the
@@ -260,7 +260,7 @@ type Tests() =
         world |> buttonWithLabel "View" |> handleClick world
         runSystems world frameDelta
 
-        world.Has InViewMode =! true
+        world |> currentMode =! Viewing
 
     /// The browser can raise a drag end when no drag is running, and `Events.handleDragEnd` passes
     /// every one of them through. It must not be treated as a completed drag: no drag ran, so
@@ -312,7 +312,7 @@ type Tests() =
 
         // The tap was refused because a drag was running, so the mode is unchanged, and the
         // completed drag cleared the redo entry it replaced.
-        world.Has InViewMode =! false
+        world |> currentMode =! Moving
         world |> buttonWithLabel "Redo" |> isButtonDisabled =! true
 
     /// Input is refused from the moment a drag start arrives, but a tap accepted just before that
@@ -338,7 +338,7 @@ type Tests() =
         runSystems world frameDelta
 
         // The drag superseded the tap, so the mode is unchanged and the node moved.
-        world.Has InViewMode =! false
+        world |> currentMode =! Moving
         (node |> get Position).Value.x =! 7.0
 
         // The completed drag invalidated the redo entry it superseded.
@@ -438,7 +438,7 @@ type Tests() =
 
         modeBtn |> handleClick world
         runSystems world frameDelta
-        world.Has InViewMode =! false
+        world |> currentMode =! Moving
 
         let nodeEntity = world.Query(With PersonRef) |> Seq.head
         let originalPos = (nodeEntity |> get Position).Value

@@ -45,7 +45,7 @@ type Tests() =
     member _.``spawnControls boots into View mode with the Move-mode-only controls hidden``() =
         spawnControls world
 
-        world.Has InViewMode =! true
+        world |> currentMode =! Viewing
 
         world.Query(With Button, With MoveModeOnly)
         |> Seq.forall (fun entity -> entity |> has Hidden)

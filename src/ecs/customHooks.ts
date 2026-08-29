@@ -1,8 +1,9 @@
 import { RefObject, useLayoutEffect, useRef } from "react";
 import { Mesh } from "three";
 import { Entity } from "koota";
-import { useHas, useQuery, useWorld } from "koota/react";
-import { InViewMode, MeshRef, Selected } from "./traits";
+import { useQuery, useTrait, useWorld } from "koota/react";
+import { isViewing } from "../generated/Traits/ViewTraits";
+import { CurrentMode, MeshRef, Selected } from "./traits";
 
 // Custom React hook to dynamically attach a Mesh to an Entity via the MeshRef trait.
 export function useMeshRef(entity: Entity): RefObject<Mesh | null> {
@@ -29,7 +30,7 @@ export function useMeshRef(entity: Entity): RefObject<Mesh | null> {
  */
 export function useOverlayVisible(): boolean {
   const world = useWorld();
-  const inViewMode = useHas(world, InViewMode);
+  const mode = useTrait(world, CurrentMode);
   const selectedCount = useQuery(Selected).length;
-  return inViewMode && selectedCount === 1;
+  return mode !== undefined && isViewing(mode) && selectedCount === 1;
 }

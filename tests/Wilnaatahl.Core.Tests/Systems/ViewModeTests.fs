@@ -42,25 +42,25 @@ type Tests() =
     member _.``spawnViewModeControls puts the world in View mode before any system runs``() =
         // Boot mode must be observable immediately after spawning, without waiting for the
         // first updateViewMode frame, so a consumer reading world state at startup sees View.
-        world.Has InViewMode =! true
+        world |> currentMode =! Viewing
 
     [<Fact>]
-    member _.``app boots in View mode: button reads Move and InViewMode is present``() =
+    member _.``app boots in View mode: button reads Move and the mode is Viewing``() =
         modeButtonLabel world =! "Move"
         updateViewMode world |> ignore
-        world.Has InViewMode =! true
+        world |> currentMode =! Viewing
 
     [<Fact>]
-    member _.``clicking the mode button switches View to Move: label becomes View, InViewMode cleared``() =
+    member _.``clicking the mode button switches View to Move: label becomes View, mode becomes Moving``() =
         // Establish the boot mode.
         updateViewMode world |> ignore
-        world.Has InViewMode =! true
+        world |> currentMode =! Viewing
 
         modeButton world |> handleClick world
         updateViewMode world |> ignore
 
         modeButtonLabel world =! "View"
-        world.Has InViewMode =! false
+        world |> currentMode =! Moving
 
     [<Fact>]
     member _.``clicking the mode button twice returns to View mode``() =
@@ -69,13 +69,13 @@ type Tests() =
         updateViewMode world |> ignore
         cleanupEvents world |> ignore
         modeButtonLabel world =! "View"
-        world.Has InViewMode =! false
+        world |> currentMode =! Moving
 
         // Move -> View
         modeButton world |> handleClick world
         updateViewMode world |> ignore
         modeButtonLabel world =! "Move"
-        world.Has InViewMode =! true
+        world |> currentMode =! Viewing
 
     [<Fact>]
     member _.``switching mode clears the selection``() =
@@ -94,7 +94,7 @@ type Tests() =
 
         updateViewMode world |> ignore
 
-        world.Has InViewMode =! true
+        world |> currentMode =! Viewing
         node |> has Selected =! true
         modeButtonLabel world =! "Move"
 
@@ -110,7 +110,7 @@ type Tests() =
         modal |> has Hidden =! true
 
         // Move mode reveals it.
-        world.Remove InViewMode
+        world |> enterMode Moving
         syncModalControls world |> ignore
         modal |> has Hidden =! false
 
@@ -137,7 +137,7 @@ type Tests() =
 
         updateViewMode world |> ignore
 
-        world.Has InViewMode =! false
+        world |> currentMode =! Moving
         node |> wasClicked world =! false
         otherButton |> wasClicked world =! false
 

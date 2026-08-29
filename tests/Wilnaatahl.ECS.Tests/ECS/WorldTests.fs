@@ -22,6 +22,7 @@ type WorldTests() =
     let world = wrapper.World
     let IsTagged = tagTrait ()
     let Age = valueTrait {| age = 0 |}
+    let Tally = refTrait (fun () -> ResizeArray [ 7 ])
 
     interface IDisposable with
         member _.Dispose() = (wrapper :> IDisposable).Dispose()
@@ -42,6 +43,23 @@ type WorldTests() =
         world.Get Age =! None
         world.AddWith Age {| age = 99 |}
         world.Get Age =! Some {| age = 99 |}
+
+    /// A refTrait uses Koota's whole-value (AoS) storage, and world-level operations enter each
+    /// backend through different API paths than entity operations, so this combination needs
+    /// direct conformance coverage.
+    [<Fact>]
+    member _.``Can add and set ref trait on world entity``() =
+        world.Add Tally
+        world.Get Tally |> Option.map List.ofSeq =! Some [ 7 ]
+
+        world.Set Tally (ResizeArray [ 1; 2 ])
+        world.Get Tally |> Option.map List.ofSeq =! Some [ 1; 2 ]
+
+        world.Remove Tally
+        world.Get Tally |> Option.map List.ofSeq =! None
+
+        world.AddWith Tally (ResizeArray [ 3 ])
+        world.Get Tally |> Option.map List.ofSeq =! Some [ 3 ]
 
     [<Fact>]
     member _.``Can remove all traits in the world``() =

@@ -2,6 +2,7 @@ module Wilnaatahl.Tests.EcsTestSupport
 
 open Wilnaatahl.ECS
 open Wilnaatahl.ECS.Entity
+open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.ECS.Mocks
 open Wilnaatahl.Entities
 open Wilnaatahl.Traits.History
@@ -22,6 +23,15 @@ type EcsWorld() =
 
 /// The label on a toolbar button. Fails when the entity carries no `Button`.
 let buttonLabel entity = (entity |> get Button).Value.label
+
+/// Puts the world in the given mode, establishing one if the view-mode controls were never
+/// spawned. Any test driving a system that reads the mode needs one, whether or not it spawns
+/// the mode button.
+let internal enterMode mode (world: IWorld) =
+    if world.Has CurrentMode then
+        world.Set CurrentMode mode
+    else
+        world.AddWith CurrentMode mode
 
 /// Whether a toolbar button is disabled. Fails when the entity carries no `Button`.
 let isButtonDisabled entity = (entity |> get Button).Value.disabled

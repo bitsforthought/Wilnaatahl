@@ -22,7 +22,7 @@ let spawnViewModeControls (sortOrder, world: IWorld) =
     |> ignore
 
     // Enter the boot mode immediately so consumers observe it before the first frame runs.
-    world.Add InViewMode
+    world.AddWith CurrentMode Viewing
 
     sortOrder + 1, world
 
@@ -30,7 +30,11 @@ let spawnViewModeControls (sortOrder, world: IWorld) =
 /// shown in Move mode. Callers spawning controls run this once so the toolbar never renders a
 /// modal button before the first frame.
 let syncModalControls (world: IWorld) =
-    let matchMode = if world.Has InViewMode then add Hidden else remove Hidden
+    let matchMode =
+        if world |> currentMode |> isViewing then
+            add Hidden
+        else
+            remove Hidden
 
     for buttonEntity in world.Query(With MoveModeOnly) do
         buttonEntity |> matchMode
@@ -48,17 +52,17 @@ let updateViewMode (world: IWorld) =
     let buttonEntity = world.Query(With ViewModeButton, With Button) |> Seq.exactlyOne
 
     if buttonEntity |> wasClicked world then
-        let inViewMode = world.Has InViewMode
+        let switchingTo =
+            if world |> currentMode |> isViewing then
+                Moving
+            else
+                Viewing
 
         // The label reflects the mode a click switches into, so it shows the mode entered *next*:
         // after switching to Move the label reads "View"; after switching to View it reads "Move".
-        let label = if inViewMode then "View" else "Move"
+        let label = if isViewing switchingTo then "Move" else "View"
 
-        if inViewMode then
-            world.Remove InViewMode
-        else
-            world.Add InViewMode
-
+        world.Set CurrentMode switchingTo
         buttonEntity |> setWith Button (fun data -> {| data with label = label |})
         world.RemoveAll Selected
         world |> discardClicks

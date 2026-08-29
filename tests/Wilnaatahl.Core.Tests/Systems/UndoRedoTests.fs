@@ -311,7 +311,7 @@ type Tests() =
         isButtonDisabled redoBtn =! false
 
         // In View mode, ViewMode hides both buttons.
-        world.Add InViewMode
+        world |> enterMode Viewing
         syncModalControls world |> ignore
         handleUndoRedo world |> ignore
         isButtonHidden undoBtn =! true
@@ -319,7 +319,7 @@ type Tests() =
 
         // Returning to Move mode reveals them in their stack-derived enabled state, proving
         // the hiding neither popped nor pushed either stack while View mode was active.
-        world.Remove InViewMode
+        world |> enterMode Moving
         syncModalControls world |> ignore
         handleUndoRedo world |> ignore
         isButtonHidden undoBtn =! false
@@ -348,7 +348,7 @@ type Tests() =
         dragNodeTo node 10.0
 
         // View mode hides the button; a delayed click on it must be dropped at the source.
-        world.Add InViewMode
+        world |> enterMode Viewing
         syncModalControls world |> ignore
         let undoBtn = world |> buttonWithLabel "Undo"
         undoBtn |> handleClick world
@@ -358,7 +358,7 @@ type Tests() =
 
         // The undo entry survived, so once back in Move mode the same click restores the
         // original position — proving the dropped click neither popped nor discarded the stack.
-        world.Remove InViewMode
+        world |> enterMode Moving
         syncModalControls world |> ignore
         handleUndoRedo world |> ignore
         isButtonDisabled undoBtn =! false

@@ -23,8 +23,9 @@ not reimplement domain logic.
   TypeScript.
 - **…but avoiding redundant state outranks that.** Koota is a bridge: the same
   world is queryable from both sides. When a value is a one-line derivation over
-  traits TypeScript can already query (e.g. `useOverlayVisible` = `InViewMode` AND
-  exactly one `Selected`), derive it in a hook here instead of having an F# system
+  traits TypeScript can already query (e.g. `useOverlayVisible` = `CurrentMode` is
+  `Viewing` AND exactly one `Selected`), derive it in a hook here instead of having
+  an F# system
   mirror it into an extra trait each frame. An extra trait is a cached second
   source of truth that can disagree with what it was derived from. Keep the
   derivation in F# when it is genuinely domain logic rather than a trivial

@@ -42,7 +42,7 @@ let private handleBackgroundClick (world: IWorld) =
         false
 
 let private handleNodeClick multiSelect (world: IWorld) =
-    let inViewMode = world.Has InViewMode
+    let inViewMode = world |> currentMode |> isViewing
 
     // PersonRef stands in for tree nodes here, since only nodes mapping to people are selectable.
     match world |> clickedEntities |> Seq.tryFind (has PersonRef) with

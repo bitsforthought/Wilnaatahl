@@ -58,7 +58,7 @@ partition or category.
   (`FileCommands.OpenFileRequested`). But once _another F# system_ reads a trait,
   put it in `Traits/` — otherwise every reader has to `open` the writing system's
   module, which reads as a dependency on that system's behaviour when it is only a
-  dependency on shared state (`ViewTraits.InViewMode`: written by
+  dependency on shared state (`ViewTraits.CurrentMode`: written by
   `Systems.ViewMode`, read by `Selection` and the view layer).
 - **Order systems in `Runner.fs` so derived values are recomputed after their
   inputs.** A system that derives state from another system's output must run

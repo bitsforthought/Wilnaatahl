@@ -23,6 +23,11 @@ type Tests() =
     let world = ecs.World
     let sortOrder, _ = spawnSelectControls (0, world)
 
+    // Selection reads the mode when it interprets a node click, and these tests spawn the select
+    // controls without the mode button, so establish the mode the button would have set. Move is
+    // the mode this button is available in; the View-mode tests below switch.
+    do world |> enterMode Moving
+
     interface IDisposable with
         member _.Dispose() = (ecs :> IDisposable).Dispose()
 
@@ -140,7 +145,7 @@ type Tests() =
 
     [<Fact>]
     member _.``View mode selects the clicked node when nothing is selected``() =
-        world.Add InViewMode
+        world |> enterMode Viewing
         let node = spawnNode world
         node |> handleClick world
 
@@ -150,7 +155,7 @@ type Tests() =
 
     [<Fact>]
     member _.``View mode dismisses by deselecting when the selected node is clicked``() =
-        world.Add InViewMode
+        world |> enterMode Viewing
         let node = spawnNode world
         node |> add Selected
         node |> handleClick world
@@ -161,7 +166,7 @@ type Tests() =
 
     [<Fact>]
     member _.``View mode dismisses without selecting when another node is clicked``() =
-        world.Add InViewMode
+        world |> enterMode Viewing
         let selected = spawnNode world
         let other = spawnNode world
         selected |> add Selected
@@ -182,7 +187,7 @@ type Tests() =
         cleanupEvents world |> ignore
 
         // Enter View mode and select the first node.
-        world.Add InViewMode
+        world |> enterMode Viewing
         let node1 = spawnNode world
         node1 |> handleClick world
         selectNodes world |> ignore

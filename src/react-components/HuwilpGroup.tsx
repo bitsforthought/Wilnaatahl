@@ -1,12 +1,13 @@
 import React from "react";
 import { DragControls } from "@react-three/drei";
 import { Not } from "koota";
-import { useActions, useHas, useQuery, useWorld } from "koota/react";
+import { useActions, useQuery, useTrait, useWorld } from "koota/react";
+import { isViewing } from "../generated/Traits/ViewTraits";
 import {
   eventActions,
+  CurrentMode,
   Elbow,
   Hidden,
-  InViewMode,
   Line,
   Size,
   PersonRef,
@@ -19,7 +20,8 @@ import { TreeNodeMesh } from "./TreeNodeMesh";
 
 export function HuwilpGroup() {
   const world = useWorld();
-  const inViewMode = useHas(world, InViewMode);
+  const mode = useTrait(world, CurrentMode);
+  const inViewMode = mode !== undefined && isViewing(mode);
   const staticNodes = useQuery(Size, PersonRef, Not(Selected, Hidden));
   // The selection is what <DragControls> wraps, so selecting a node is what makes it draggable.
   // The drag itself doesn't read this: it fixes its participants when it starts.

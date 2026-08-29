@@ -15,8 +15,8 @@ export const MeshRef = trait(() => new Mesh());
 export const OpenFileRequested = toKootaTagTrait(FileCommands.OpenFileRequested);
 export const SaveRequested = toKootaTagTrait(FileCommands.SaveRequested);
 
-// Present iff the app is in View mode.
-export const InViewMode = toKootaTagTrait(ViewTraits.InViewMode);
+// World-scoped, not per-entity: the mode the app is in.
+export const CurrentMode = toKootaValueFactoryTrait(ViewTraits.CurrentMode);
 
 export const Elbow = toKootaTagTrait(ConnectorTraits.Elbow);
 export const Line = toKootaTagTrait(ConnectorTraits.Line);

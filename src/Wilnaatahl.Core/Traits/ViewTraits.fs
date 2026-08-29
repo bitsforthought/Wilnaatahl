@@ -20,10 +20,26 @@ let Selected = tagTrait ()
 /// needs to read the mode or guard against clicks arriving in the wrong one.
 let internal MoveModeOnly = tagTrait ()
 
-/// World signal present exactly when the app is in View (inspection) mode, absent in Move
-/// (manipulation) mode. It *is* the app's mode rather than a mirror of one: nothing else stores
-/// the mode, and exactly one system writes it.
-let InViewMode = tagTrait ()
+/// The mode the app is in: `Viewing` inspects one node at a time, `Moving` manipulates the scene.
+// Deliberately not a [<StringEnum>]: Fable types a lambda returning one as `string` while still
+// typing its container by the union, so the emitted `CurrentMode` factory would fail to type-check.
+type AppMode =
+    | Viewing
+    | Moving
+
+/// World-singleton trait holding the app's mode. It *is* the app's mode rather than a mirror of
+/// one: nothing else stores the mode, and exactly one system writes it.
+let CurrentMode = refTrait (fun () -> Viewing)
+
+/// Whether the mode inspects nodes rather than manipulating them. This looks trivial, but it
+/// makes mode-testing in TypeScript substantially easier.
+let isViewing mode = mode = Viewing
+
+/// The app's current mode. Fails when no mode has been established.
+let internal currentMode (world: IWorld) =
+    match world.Get CurrentMode with
+    | Some mode -> mode
+    | None -> failwith "The world has no CurrentMode. Spawn the view-mode controls first."
 
 /// Added to every node that a running drag is moving, and holds the position that node had when
 /// the drag started. The set of nodes is decided when the drag starts, so selecting or deselecting
