@@ -5,6 +5,7 @@ description: >-
   thin UI and ECS-bridge layer that consumes the F#-generated view model. Use
   for tasks that modify `.ts`/`.tsx` under `src/` (react-components, ecs)
   without changing domain logic. (Stub — expand as the TS surface grows.)
+model: gpt-5.6-luna
 user-invocable: true
 ---
 
@@ -18,8 +19,9 @@ changes belong in F# (use the `fsharp-implementer` agent), after which
 
 Apply the `typescript-style` skill (named hot-path callbacks, imports at top, the
 React/Three.js and Koota `useTrait` rules). Validate with the gate from the
-`tdd-coverage-loop` skill, and finish with the mandatory `adversarial-reviewer`
-pass before declaring work done.
+`tdd-coverage-loop` skill, then run the mandatory `adversarial-reviewer` panel
+exactly as specified by the `adversarial-code-review` skill before declaring the
+change complete.
 
 > This agent is a stub. As project-specific TypeScript conventions accumulate,
 > grow the `typescript-style` skill and this prompt accordingly.

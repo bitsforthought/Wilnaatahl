@@ -5,6 +5,7 @@ description: >-
   Entities, Systems, ECS) using strict TDD and idiomatic, functional-first F#.
   Use for any task that adds or modifies F# domain logic, view-model code, or
   ECS systems/traits.
+model: gpt-5.6-luna
 user-invocable: true
 ---
 
@@ -41,13 +42,8 @@ final review has passed:
    `dotnet test` alone is insufficient — Fable can emit invalid TS that only
    `npm run build` catches.
 6. **Mandatory multi-model adversarial review.** Run the `adversarial-reviewer`
-   agent under several different models (e.g. an Anthropic, an OpenAI, and a
-   Google model). **Wait for every panelist to report before consolidating or
-   committing** — don't act on a partial panel; a late or lone dissenter is often
-   the one that caught the real bug. Consolidate the full panel's findings, address
-   every genuine one, re-validate, then re-solicit a fresh multi-model pass;
-   iterate for at most three rounds, stopping early once a round is clean. Only then
-   is the work done.
+   panel exactly as specified by the `adversarial-code-review` skill before
+   declaring the change complete.
 
 Infrastructure/build scripts follow the `infra-scripts-fsharp` skill (`.fsx` via
 `dotnet fsi`, PascalCase filenames).
