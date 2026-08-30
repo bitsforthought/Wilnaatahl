@@ -409,11 +409,13 @@ at the node's position as of the last projection. See
 The overlay is dismissed by any of:
 
 1. clicking its **"×"**;
-2. clicking anywhere in the scene outside the overlay, including on another node;
-3. switching app mode.
+2. clicking the empty scene/background outside any node or the overlay;
+3. clicking the already-selected node, deselecting it;
+4. switching app mode.
 
-Clicking another node while an overlay is open dismisses the overlay and does not
-select that other node. Clicking inside the overlay body (except the "×") does
+Clicking a _different_ node while an overlay is open does not dismiss it: the
+selection immediately replaces the current one, and the overlay follows to the
+newly selected node. Clicking inside the overlay body (except the "×") does
 nothing and does not propagate to the scene/background handler.
 
 ---

@@ -165,7 +165,7 @@ type Tests() =
         (node |> has Selected) =! false
 
     [<Fact>]
-    member _.``View mode dismisses without selecting when another node is clicked``() =
+    member _.``View mode selects a different node when another node is already selected``() =
         world |> enterMode Viewing
         let selected = spawnNode world
         let other = spawnNode world
@@ -174,9 +174,10 @@ type Tests() =
 
         selectNodes world |> ignore
 
-        // The open overlay is dismissed and the newly-clicked node is not selected.
+        // View mode behaves like single-select mode: the newly-clicked node replaces the
+        // previous selection instead of merely dismissing the overlay.
         (selected |> has Selected) =! false
-        (other |> has Selected) =! false
+        (other |> has Selected) =! true
 
     [<Fact>]
     member _.``View mode stays single-select even when the select-mode button is multi-select``() =
@@ -194,15 +195,26 @@ type Tests() =
         (node1 |> has Selected) =! true
         cleanupEvents world |> ignore
 
-        // Clicking a second node must not leave two nodes selected despite multi-select.
+        // Clicking a second node must replace the selection, not add to it, despite multi-select.
         let node2 = spawnNode world
         node2 |> handleClick world
         selectNodes world |> ignore
 
         let selectedCount = world.Query(With Selected) |> Seq.length
-        selectedCount =! 0
+        selectedCount =! 1
         (node1 |> has Selected) =! false
-        (node2 |> has Selected) =! false
+        (node2 |> has Selected) =! true
+        cleanupEvents world |> ignore
+
+        // Back in Move mode, the button's multi-select setting must still be in effect: it was
+        // only overridden for View mode, never reset.
+        world |> enterMode Moving
+        let node3 = spawnNode world
+        node3 |> handleClick world
+        selectNodes world |> ignore
+
+        (node2 |> has Selected) =! true
+        (node3 |> has Selected) =! true
 
     /// A click can no longer reach a hidden control — `Events.handleClick` refuses to raise one —
     /// so `selectNodes` carries no stale-click guard. This pins that the protection really is at

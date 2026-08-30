@@ -42,21 +42,12 @@ let private handleBackgroundClick (world: IWorld) =
         false
 
 let private handleNodeClick multiSelect (world: IWorld) =
-    let inViewMode = world |> currentMode |> isViewing
-
     // PersonRef stands in for tree nodes here, since only nodes mapping to people are selectable.
     match world |> clickedEntities |> Seq.tryFind (has PersonRef) with
     | Some nodeEntity when nodeEntity |> has Selected ->
         nodeEntity |> remove Selected
         world
-    | Some _ when inViewMode && not (world.Query(With Selected) |> Seq.isEmpty) ->
-        // View mode inspects one node at a time, so a click elsewhere clears the selection
-        // instead of selecting a different node.
-        world.RemoveAll Selected
-        world
     | Some nodeEntity ->
-        // Nothing can still be selected in View mode by this point, so only Move mode's
-        // multi-select setting decides whether to clear first.
         if not multiSelect then
             world.RemoveAll Selected
 
@@ -68,7 +59,10 @@ let selectNodes (world: IWorld) =
     let buttonData, buttonEntity =
         world.QueryTrait(SelectModeButton, With Button).ToSequence() |> Seq.exactlyOne
 
-    let multiSelect = buttonData.multiSelect
+    // Multi-select survives a mode switch (it's stored on the button, not reset by View mode),
+    // but View mode always inspects one node at a time, so it overrides the button's setting here.
+    let inViewMode = world |> currentMode |> isViewing
+    let multiSelect = buttonData.multiSelect && not inViewMode
 
     // Multi-touch makes every combination of these reachable in one frame, and no combination has
     // a coherent meaning, so precedence decides: the mode button beats the background, which
