@@ -35,12 +35,13 @@ let private movementTracker = createChanged ()
 /// Runs all systems in the correct order for a single frame.
 let runSystems (world: IWorld) delta =
     // The order is behavioural, not incidental:
-    //   - updateViewMode runs before the systems that read input, so every later system sees one
-    //     settled mode and no click left over from the mode just left.
-    //   - dragNodes before handleUndoRedo, because a completed drag commits the command that
-    //     undoes it, and the undo/redo buttons pick that up in the same frame. Any future system
-    //     that commits commands belongs before handleUndoRedo for the same reason, or its buttons
-    //     would be a frame out of date.
+    //   - updateViewMode runs before selectNodes. It clears Selected when the mode changes, and
+    //     Selection then applies the queued clicks. ViewMode and Selection both write Selected,
+    //     so fixed Runner order cannot preserve both node-then-mode and mode-then-node.
+    //     Deriving ordered intents before either system acts is the planned resolution.
+    //   - dragNodes runs before handleUndoRedo because a completed drag commits the command that
+    //     undo/redo must see in the same frame. Any future command-committing system belongs
+    //     before handleUndoRedo for the same reason.
     world
     |> animate delta
     |> updateViewMode

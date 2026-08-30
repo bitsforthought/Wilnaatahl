@@ -142,10 +142,9 @@ type Tests() =
         world |> currentMode =! Viewing
         selectModeButton |> has Hidden =! true
 
-    /// Switching mode starts the new mode clean, so a node click landing in the same frame as the
-    /// mode toggle must not survive into the mode being entered.
+    /// A node click raised before the mode toggle is still applied after the toggle.
     [<Fact>]
-    member _.``runSystems clears a same-frame node click when the mode toggles``() =
+    member _.``runSystems applies a same-frame node click after the mode toggles``() =
         let modeButton = world |> buttonWithLabel "Move"
         let node = world.Spawn(PersonRef.Val Person.Empty, Position.Val zeroPosition)
 
@@ -154,13 +153,12 @@ type Tests() =
         runSystems world frameDelta
 
         world |> currentMode =! Moving
-        node |> has Selected =! false
+        node |> has Selected =! true
 
-    /// Checks the pipeline order, which the node-click test cannot. If undo ran first it would
-    /// take an entry off the stack and move the node. Because the mode switch runs first and
-    /// drops the click, both the stack and the node are left alone.
+    /// Checks that a mode switch does not discard a command click raised while the command
+    /// button was still available.
     [<Fact>]
-    member _.``runSystems discards a same-frame undo click when the mode toggles``() =
+    member _.``runSystems applies a same-frame undo click when the mode toggles``() =
         enterMoveMode ()
 
         // Build one undo entry by dragging a node from x = 0 to x = 4.
@@ -171,16 +169,14 @@ type Tests() =
         let undoButton = world |> buttonWithLabel "Undo"
         undoButton |> has Hidden =! false
 
-        // Tap Undo and the mode button together: the switch wins, so no undo is applied.
+        // Tap Undo and the mode button together. Both clicks were raised in Move mode.
         undoButton |> handleClick world
         world |> buttonWithLabel "View" |> handleClick world
         runSystems world frameDelta
 
         world |> currentMode =! Viewing
-        node |> has TargetPosition =! false
-        // The entry is still on the undo stack, so the click was intercepted rather than applied
-        // and then discarded.
-        isButtonDisabled undoButton =! false
+        node |> get TargetPosition =! Some zeroPosition
+        isButtonDisabled undoButton =! true
 
     /// A second finger can tap a control while the first one drags. The tap is deliberate, but it
     /// has no coherent meaning: the app would have to carry out a toolbar command and a drag in

@@ -21,6 +21,7 @@ type Tests() =
     let ecs = new EcsWorld()
     let world = ecs.World
     let sortOrder, _ = spawnFileControls (0, world)
+    do world.AddWith CurrentMode Moving
 
     interface IDisposable with
         member _.Dispose() = (ecs :> IDisposable).Dispose()

@@ -120,11 +120,9 @@ type Tests() =
         syncModalControls world |> ignore
         modeButton world |> has Hidden =! false
 
-    /// A tap landing in the same frame as a mode switch cannot have been meant in both the mode
-    /// being left and the mode being entered, so the switch wins and the other click is dropped.
-    /// This is what lets every later system read one consistent mode with no stale input.
+    /// A mode switch leaves other input in the frame queue for the systems that own it.
     [<Fact>]
-    member _.``switching mode discards every other click raised that frame``() =
+    member _.``Switching mode leaves every other click raised that frame``() =
         let node = spawnSelectedNode world
         let modeBtn = modeButton world
 
@@ -138,8 +136,8 @@ type Tests() =
         updateViewMode world |> ignore
 
         world |> currentMode =! Moving
-        node |> wasClicked world =! false
-        otherButton |> wasClicked world =! false
+        node |> wasClicked world =! true
+        otherButton |> wasClicked world =! true
 
     [<Fact>]
     member _.``a frame without a mode switch leaves other clicks untouched``() =

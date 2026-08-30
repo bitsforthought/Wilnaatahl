@@ -7,10 +7,11 @@ open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.Traits.History
 open Wilnaatahl.Traits.ViewTraits
 
-/// One piece of input from the view layer. A drag's distance is measured from the position where
-/// the drag started, not from the position on the previous frame.
+/// One piece of input from the view layer. A click records the app mode that was active when it
+/// was raised; a drag's distance is measured from the position where the drag started, not from
+/// the position on the previous frame.
 type internal InputEvent =
-    | Clicked of target: EntityId
+    | Clicked of target: EntityId * mode: AppMode
     | DragStarted
     | Dragged of distance: {| x: float; y: float; z: float |}
     | DragEnded
@@ -45,7 +46,7 @@ let internal clickedEntities world =
     world
     |> inputEvents
     |> Seq.choose (function
-        | Clicked target -> Some target
+        | Clicked(target, _) -> Some target
         | _ -> None)
 
 /// Whether the entity was clicked since the last frame.
@@ -67,16 +68,6 @@ let private dragInFlight (world: IWorld) =
 let private discardPointerMisses (world: IWorld) =
     (world |> queue).RemoveAll(fun event -> event = PointerMissed) |> ignore
 
-/// Removes every click from the queue, leaving the rest of it in order.
-let internal discardClicks (world: IWorld) =
-    (world |> queue)
-        .RemoveAll(
-            function
-            | Clicked _ -> true
-            | _ -> false
-        )
-    |> ignore
-
 /// Raises a click on the entity, unless the entity is `Hidden` or a drag is happening.
 ///
 /// The app hides a control one frame before the view layer stops drawing it, so a click can still
@@ -87,7 +78,7 @@ let internal discardClicks (world: IWorld) =
 /// systems that read them.
 let handleClick world entity =
     if not (dragInFlight world) && not (entity |> has Hidden) then
-        world |> raiseInput (Clicked entity)
+        world |> raiseInput (Clicked(entity, currentMode world))
 
 let handleDrag (world: IWorld) x y z =
     world |> raiseInput (Dragged {| x = x; y = y; z = z |})
@@ -106,7 +97,14 @@ let handleDragEnd (world: IWorld) = world |> raiseInput DragEnded
 /// background misses are discarded — a queued release may belong to a drag that is still running,
 /// and dropping it would leave that drag running with no release left to end it.
 let handleDragStart (world: IWorld) =
-    world |> discardClicks
+    (world |> queue)
+        .RemoveAll(
+            function
+            | Clicked(_, _) -> true
+            | _ -> false
+        )
+    |> ignore
+
     world |> discardPointerMisses
 
     if not (dragInFlight world) then

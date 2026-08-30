@@ -69,12 +69,13 @@ partition or category.
   remain are real behaviour: state them in the `runSystems` comment and pin them
   with a test that drives whole frames through `runSystems`, not one that calls a
   single system.
-- **Resolve ambiguous same-frame input explicitly.** Events live for the whole
-  frame (`cleanupEvents` runs last), so two controls can be clicked in one frame.
-  Where that combination has no coherent meaning, state a policy and enforce it in
-  one place instead of letting pipeline order decide by accident: `updateViewMode`
-  discards every other click on the frame the mode switches, so no later system
-  can act on input belonging to the mode just left.
+- **Resolve same-frame input in the system that owns each behaviour.** Events live
+  for the whole frame (`cleanupEvents` runs last), so several inputs can be raised
+  before any system runs. Each click carries the `AppMode` that was live when the
+  view layer raised it. `Selection` and `UndoRedo` fold their `Clicked` events in
+  queue order; `Dragging` folds raw drag input in queue order according to its own
+  semantics. `handleDragStart` still discards queued clicks and background misses
+  because a drag and those inputs cannot be applied together.
 - **Never write a trait value that hasn't changed.** Koota's `set` notifies change
   subscribers unconditionally — it does not diff old against new — so a system
   that recomputes a value each frame and writes it unconditionally re-renders

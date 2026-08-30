@@ -42,12 +42,12 @@ type Tests() =
     /// leaves hiding it to the ViewMode system rather than reading the mode itself.
     [<Fact>]
     member _.``spawnSelectControls marks the button as Move-mode only``() =
-        let buttonEntity = world.Query(With Button) |> Seq.exactlyOne
+        let buttonEntity = world |> buttonWithLabel "Multi-select"
         buttonEntity |> has MoveModeOnly =! true
-        (buttonEntity |> get Button).Value.disabled =! false
+        isButtonDisabled buttonEntity =! false
 
     [<Fact>]
-    member _.``clicking node in single-select mode selects it``() =
+    member _.``Clicking node in single-select mode selects it``() =
         let node = spawnNode world
         node |> handleClick world
 
@@ -56,7 +56,7 @@ type Tests() =
         (node |> has Selected) =! true
 
     [<Fact>]
-    member _.``clicking selected node deselects it``() =
+    member _.``Clicking selected node deselects it``() =
         let node = spawnNode world
         node |> add Selected
         node |> handleClick world
@@ -66,7 +66,7 @@ type Tests() =
         (node |> has Selected) =! false
 
     [<Fact>]
-    member _.``single-select mode clears previous selection on new click``() =
+    member _.``Single-select mode clears previous selection on new click``() =
         let node1 = spawnNode world
         let node2 = spawnNode world
         node1 |> add Selected
@@ -77,13 +77,11 @@ type Tests() =
         (node1 |> has Selected) =! false
         (node2 |> has Selected) =! true
 
-    /// Two nodes can be tapped in one frame, and only one selection can follow in the default
-    /// single-select mode. The clicks are read in the order they were raised, so it is the
-    /// first one that counts; the second is dropped with the rest of the frame's input. The
-    /// nodes are clicked in the opposite order to the one they were spawned in, so selecting
-    /// by entity order would not pass.
+    /// Two nodes can be tapped in one frame, and only one selection can remain in the default
+    /// single-select mode. Each click is applied in the order it was raised, so the second click
+    /// replaces the first.
     [<Fact>]
-    member _.``clicking two nodes in one frame selects the first one clicked``() =
+    member _.``Clicking two nodes in one frame leaves the last one clicked selected``() =
         let spawnedFirst = spawnNode world
         let spawnedSecond = spawnNode world
 
@@ -92,11 +90,11 @@ type Tests() =
 
         selectNodes world |> ignore
 
-        (spawnedSecond |> has Selected) =! true
-        (spawnedFirst |> has Selected) =! false
+        (spawnedSecond |> has Selected) =! false
+        (spawnedFirst |> has Selected) =! true
 
     [<Fact>]
-    member _.``background click deselects all``() =
+    member _.``Background click deselects all``() =
         let node = spawnNode world
         node |> add Selected
         world |> handlePointerMissed
@@ -106,22 +104,95 @@ type Tests() =
         (node |> has Selected) =! false
 
     [<Fact>]
-    member _.``clicking select mode button toggles multi-select``() =
-        // Toggle to multi-select by clicking the button
-        let buttonEntity = world.Query(With Button) |> Seq.head
-        buttonEntity |> handleClick world
+    member _.``Background miss followed by node click leaves the node selected``() =
+        let node = spawnNode world
+        node |> add Selected
+
+        world |> handlePointerMissed
+        node |> handleClick world
+        selectNodes world |> ignore
+
+        node |> has Selected =! true
+
+    [<Fact>]
+    member _.``Node click followed by background miss leaves no node selected``() =
+        let node = spawnNode world
+
+        node |> handleClick world
+        world |> handlePointerMissed
+        selectNodes world |> ignore
+
+        node |> has Selected =! false
+
+    [<Fact>]
+    member _.``Select-mode button click followed by node click applies both in raise order``() =
+        let button = world |> buttonWithLabel "Multi-select"
+        let node = spawnNode world
+
+        button |> handleClick world
+        node |> handleClick world
+        selectNodes world |> ignore
+
+        node |> has Selected =! true
+        buttonLabel button =! "Single-select"
+
+    [<Fact>]
+    member _.``Node click followed by select-mode button click applies both in raise order``() =
+        let button = world |> buttonWithLabel "Multi-select"
+        let node = spawnNode world
+
+        node |> handleClick world
+        button |> handleClick world
+        selectNodes world |> ignore
+
+        node |> has Selected =! false
+        buttonLabel button =! "Single-select"
+
+    [<Fact>]
+    member _.``A View-stamped click replaces prior selection when processed in Move mode``() =
+        let first = spawnNode world
+        let second = spawnNode world
+
+        world |> buttonWithLabel "Multi-select" |> handleClick world
         selectNodes world |> ignore
         cleanupEvents world |> ignore
 
-        // Now in multi-select mode: select first node
+        first |> add Selected
+        world |> enterMode Viewing
+        second |> handleClick world
+        world |> enterMode Moving
+        world |> selectNodes |> ignore
+
+        first |> has Selected =! false
+        second |> has Selected =! true
+
+    [<Fact>]
+    member _.``A Move-stamped click preserves prior selection when processed in View mode``() =
+        let first = spawnNode world
+        let second = spawnNode world
+        let button = world |> buttonWithLabel "Multi-select"
+
+        button |> handleClick world
+        selectNodes world |> ignore
+        cleanupEvents world |> ignore
+
+        first |> add Selected
+        world |> enterMode Moving
+        second |> handleClick world
+        world |> enterMode Viewing
+        selectNodes world |> ignore
+
+        first |> has Selected =! true
+        second |> has Selected =! true
+
+    [<Fact>]
+    member _.``Clicking the select-mode button enables two selections in one frame``() =
+        let buttonEntity = world |> buttonWithLabel "Multi-select"
         let node1 = spawnNode world
-        node1 |> handleClick world
-        selectNodes world |> ignore
-        (node1 |> has Selected) =! true
-        cleanupEvents world |> ignore
-
-        // Click second node — first should remain selected
         let node2 = spawnNode world
+
+        buttonEntity |> handleClick world
+        node1 |> handleClick world
         node2 |> handleClick world
         selectNodes world |> ignore
 
@@ -129,19 +200,41 @@ type Tests() =
         (node2 |> has Selected) =! true
 
     [<Fact>]
-    member _.``clicking button clears selection and updates label``() =
+    member _.``After toggling back to single-select, the last same-frame node click is selected``() =
+        let buttonEntity = world |> buttonWithLabel "Multi-select"
+
+        buttonEntity |> handleClick world
+        selectNodes world |> ignore
+        cleanupEvents world |> ignore
+        buttonLabel buttonEntity =! "Single-select"
+
+        buttonEntity |> handleClick world
+        selectNodes world |> ignore
+        cleanupEvents world |> ignore
+        buttonLabel buttonEntity =! "Multi-select"
+
+        let first = spawnNode world
+        let second = spawnNode world
+        first |> handleClick world
+        second |> handleClick world
+        selectNodes world |> ignore
+
+        first |> has Selected =! false
+        second |> has Selected =! true
+
+    [<Fact>]
+    member _.``Clicking button clears selection and updates label``() =
         let node = spawnNode world
         node |> add Selected
 
-        let buttonEntity = world.Query(With Button) |> Seq.head
+        let buttonEntity = world |> buttonWithLabel "Multi-select"
         buttonEntity |> handleClick world
 
         selectNodes world |> ignore
 
         (node |> has Selected) =! false
 
-        let buttonData = (buttonEntity |> get Button).Value
-        buttonData.label =! "Single-select"
+        buttonLabel buttonEntity =! "Single-select"
 
     [<Fact>]
     member _.``View mode selects the clicked node when nothing is selected``() =
@@ -182,7 +275,7 @@ type Tests() =
     [<Fact>]
     member _.``View mode stays single-select even when the select-mode button is multi-select``() =
         // Toggle the select-mode button to multi-select (only meaningful while in Move mode).
-        let buttonEntity = world.Query(With Button) |> Seq.head
+        let buttonEntity = world |> buttonWithLabel "Multi-select"
         buttonEntity |> handleClick world
         selectNodes world |> ignore
         cleanupEvents world |> ignore
@@ -220,12 +313,12 @@ type Tests() =
     /// so `selectNodes` carries no stale-click guard. This pins that the protection really is at
     /// the source: a click raised the way the view layer raises it never arrives.
     [<Fact>]
-    member _.``a click on the hidden select-mode button never reaches selectNodes``() =
+    member _.``A click on the hidden select-mode button never reaches selectNodes``() =
         let node = spawnNode world
         node |> add Selected
 
-        let buttonEntity = world.Query(With Button) |> Seq.exactlyOne
-        let labelBefore = (buttonEntity |> get Button).Value.label
+        let buttonEntity = world |> buttonWithLabel "Multi-select"
+        let labelBefore = buttonLabel buttonEntity
         // View mode hides the button; the view layer may still deliver one delayed click.
         buttonEntity |> add Hidden
         buttonEntity |> handleClick world
@@ -233,4 +326,4 @@ type Tests() =
         selectNodes world |> ignore
 
         node |> has Selected =! true
-        (buttonEntity |> get Button).Value.label =! labelBefore
+        buttonLabel buttonEntity =! labelBefore

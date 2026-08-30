@@ -14,6 +14,7 @@ open Wilnaatahl.Tests.EcsTestSupport
 type Tests() =
     let ecs = new EcsWorld()
     let world = ecs.World
+    do world.AddWith CurrentMode Viewing
 
     /// Raises the signal that a drag is running, marking nothing as taking part in it. These
     /// handlers only ever ask whether a drag is running, never what it moves.
@@ -29,7 +30,16 @@ type Tests() =
     member _.``handleClick queues a click on the entity``() =
         let entity = world.Spawn()
         entity |> handleClick world
-        world |> inputEvents |> List.ofSeq =! [ Clicked entity ]
+        world |> inputEvents |> List.ofSeq =! [ Clicked(entity, Viewing) ]
+
+    [<Fact>]
+    member _.``handleClick stamps the mode that is live when the click is raised``() =
+        let entity = world.Spawn()
+        world.Set CurrentMode Moving
+
+        entity |> handleClick world
+
+        world |> inputEvents |> List.ofSeq =! [ Clicked(entity, Moving) ]
 
     /// The app hides a control one frame before the view layer stops drawing it, so a click can
     /// still land on a control that is no longer available. Dropping it here means the systems
@@ -80,10 +90,9 @@ type Tests() =
         clicked |> wasClicked world =! true
         other |> wasClicked world =! false
 
-    /// Selection acts on the first click of the frame, so the clicks have to come back in the
-    /// order they were raised, with the input raised between them left out. The entities are
-    /// clicked in the opposite order to the one they were spawned in, so returning them in
-    /// entity order rather than raise order would not pass.
+    /// Clicks have to come back in the order they were raised, with the input raised between them
+    /// left out. The entities are clicked in the opposite order to the one they were spawned in,
+    /// so returning them in entity order rather than raise order would not pass.
     [<Fact>]
     member _.``clickedEntities returns the clicked entities in order``() =
         let spawnedFirst = world.Spawn()
@@ -112,7 +121,9 @@ type Tests() =
         let entity = world.Spawn()
         entity |> handleClick world
         handlePointerMissed world
-        world |> inputEvents |> List.ofSeq =! [ Clicked entity; PointerMissed ]
+
+        world |> inputEvents |> List.ofSeq
+        =! [ Clicked(entity, Viewing); PointerMissed ]
 
         handleDragStart world
 

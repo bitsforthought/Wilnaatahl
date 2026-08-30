@@ -23,6 +23,9 @@ type Tests() =
     let ecs = new EcsWorld()
     let world = ecs.World
     let sortOrder, _ = spawnUndoRedoControls (0, world)
+    let originalX = 3.0
+    let movedX = 11.0
+    do world.AddWith CurrentMode Moving
 
     /// Commits the given moves as one change and runs the frame that picks it up. This is what a
     /// system does when it commits a command; undo/redo never watches that system directly.
@@ -42,7 +45,15 @@ type Tests() =
     let click button =
         button |> handleClick world
         handleUndoRedo world |> ignore
-        world |> discardClicks
+        cleanupEvents world |> ignore
+
+    // Leaves one command on Undo and an empty Redo stack.
+    let spawnNodeWithUndoableMove () =
+        let node =
+            world.Spawn(Position.Val {| x = originalX; y = 0.0; z = 0.0 |}, Selected.Tag())
+
+        dragNodeTo node movedX
+        node
 
     interface IDisposable with
         member _.Dispose() = (ecs :> IDisposable).Dispose()
@@ -55,25 +66,25 @@ type Tests() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
         dragNodeTo node 10.0
 
-        let redoBtn = world |> buttonWithLabel "Redo"
-        isButtonDisabled redoBtn =! true
+        let redoButton = world |> buttonWithLabel "Redo"
+        isButtonDisabled redoButton =! true
 
         world |> buttonWithLabel "Undo" |> click
 
-        isButtonDisabled redoBtn =! false
+        isButtonDisabled redoButton =! false
 
     [<Fact>]
     member _.``A redo click settles the undo button in the same frame``() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
         dragNodeTo node 10.0
 
-        let undoBtn = world |> buttonWithLabel "Undo"
-        click undoBtn
-        isButtonDisabled undoBtn =! true
+        let undoButton = world |> buttonWithLabel "Undo"
+        click undoButton
+        isButtonDisabled undoButton =! true
 
         world |> buttonWithLabel "Redo" |> click
 
-        isButtonDisabled undoBtn =! false
+        isButtonDisabled undoButton =! false
 
     [<Fact>]
     member _.``spawnUndoRedoControls creates undo and redo buttons``() =
@@ -85,11 +96,11 @@ type Tests() =
 
     [<Fact>]
     member _.``Undo and redo buttons start disabled``() =
-        let undoBtn = world |> buttonWithLabel "Undo"
-        let redoBtn = world |> buttonWithLabel "Redo"
+        let undoButton = world |> buttonWithLabel "Undo"
+        let redoButton = world |> buttonWithLabel "Redo"
 
-        isButtonDisabled undoBtn =! true
-        isButtonDisabled redoBtn =! true
+        isButtonDisabled undoButton =! true
+        isButtonDisabled redoButton =! true
 
     /// Undo and redo are meaningless while inspecting, so the buttons declare themselves
     /// `MoveModeOnly` and leave hiding to the ViewMode system rather than reading the mode.
@@ -218,26 +229,30 @@ type Tests() =
         (left |> get TargetPosition).Value =! Line3.pos 11.0 0.0 0.0
         (right |> get TargetPosition).Value =! Line3.pos 12.0 0.0 0.0
 
-    /// Multi-touch can deliver a tap on both buttons in one frame. Undo wins, and the redo tap is
-    /// dropped rather than applied after it.
+    /// Multi-touch can deliver a tap on both buttons in one frame. Both taps apply in raise order.
     [<Fact>]
-    member _.``An undo and a redo click in the same frame apply only the undo``() =
-        let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
+    member _.``An undo followed by redo click in one frame lands at the recorded after position``() =
+        let node = spawnNodeWithUndoableMove ()
 
-        // Two drags and one undo, so both stacks hold an entry.
-        dragNodeTo node 10.0
-        dragNodeTo node 15.0
-        world |> buttonWithLabel "Undo" |> click
-
-        let undoBtn = world |> buttonWithLabel "Undo"
-        let redoBtn = world |> buttonWithLabel "Redo"
-        undoBtn |> handleClick world
-        redoBtn |> handleClick world
+        let undoButton = world |> buttonWithLabel "Undo"
+        let redoButton = world |> buttonWithLabel "Redo"
+        undoButton |> handleClick world
+        redoButton |> handleClick world
         handleUndoRedo world |> ignore
 
-        // Undoing again heads back to where the first drag began. Redo would have gone to 15,
-        // and running both would have landed on 10.
-        (node |> get TargetPosition).Value =! Line3.pos 5.0 0.0 0.0
+        (node |> get TargetPosition).Value =! Line3.pos movedX 0.0 0.0
+
+    [<Fact>]
+    member _.``A redo followed by undo click in one frame lands at the recorded before position``() =
+        let node = spawnNodeWithUndoableMove ()
+
+        let undoButton = world |> buttonWithLabel "Undo"
+        let redoButton = world |> buttonWithLabel "Redo"
+        redoButton |> handleClick world
+        undoButton |> handleClick world
+        handleUndoRedo world |> ignore
+
+        (node |> get TargetPosition).Value =! Line3.pos originalX 0.0 0.0
 
     /// A button is disabled once its stack empties, but the view layer takes a frame to stop
     /// drawing it, so a click can still reach a button with nothing to pop. Clicking Undo
@@ -247,33 +262,33 @@ type Tests() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
         dragNodeTo node 10.0
 
-        let redoBtn = world |> buttonWithLabel "Redo"
-        isButtonDisabled redoBtn =! true
+        let redoButton = world |> buttonWithLabel "Redo"
+        isButtonDisabled redoButton =! true
 
-        redoBtn |> click
+        redoButton |> click
 
         node |> has TargetPosition =! false
 
         world |> buttonWithLabel "Undo" |> click
 
         (node |> get TargetPosition).Value =! Line3.pos 5.0 0.0 0.0
-        isButtonDisabled redoBtn =! false
+        isButtonDisabled redoButton =! false
 
     [<Fact>]
     member _.``Buttons reflect stack state``() =
         let node = world.Spawn(Position.Val {| x = 5.0; y = 3.0; z = 1.0 |}, Selected.Tag())
 
-        let undoBtn = world |> buttonWithLabel "Undo"
-        let redoBtn = world |> buttonWithLabel "Redo"
-        isButtonDisabled undoBtn =! true
-        isButtonDisabled redoBtn =! true
+        let undoButton = world |> buttonWithLabel "Undo"
+        let redoButton = world |> buttonWithLabel "Redo"
+        isButtonDisabled undoButton =! true
+        isButtonDisabled redoButton =! true
 
         dragNodeTo node 10.0
-        isButtonDisabled undoBtn =! false
-        isButtonDisabled redoBtn =! true
+        isButtonDisabled undoButton =! false
+        isButtonDisabled redoButton =! true
 
-        click undoBtn
-        isButtonDisabled redoBtn =! false
+        click undoButton
+        isButtonDisabled redoButton =! false
 
     [<Fact>]
     member _.``New drag after undo flushes redo stack``() =
@@ -282,15 +297,15 @@ type Tests() =
         dragNodeTo node 10.0
         world |> buttonWithLabel "Undo" |> click
 
-        let redoBtn = world |> buttonWithLabel "Redo"
-        isButtonDisabled redoBtn =! false
+        let redoButton = world |> buttonWithLabel "Redo"
+        isButtonDisabled redoButton =! false
 
         // New drag: should flush the redo stack.
         // First, simulate that the undo animation completed by removing TargetPosition.
         node |> remove TargetPosition
         dragNodeTo node 15.0
 
-        isButtonDisabled redoBtn =! true
+        isButtonDisabled redoButton =! true
 
     [<Fact>]
     member _.``View mode hides undo and redo without mutating the stacks``() =
@@ -301,41 +316,41 @@ type Tests() =
         dragNodeTo node 15.0
 
         // One undo moves an entry to the redo stack, so both stacks are non-empty.
-        let undoBtn = world |> buttonWithLabel "Undo"
-        let redoBtn = world |> buttonWithLabel "Redo"
-        click undoBtn
+        let undoButton = world |> buttonWithLabel "Undo"
+        let redoButton = world |> buttonWithLabel "Redo"
+        click undoButton
 
-        isButtonHidden undoBtn =! false
-        isButtonHidden redoBtn =! false
-        isButtonDisabled undoBtn =! false
-        isButtonDisabled redoBtn =! false
+        isButtonHidden undoButton =! false
+        isButtonHidden redoButton =! false
+        isButtonDisabled undoButton =! false
+        isButtonDisabled redoButton =! false
 
         // In View mode, ViewMode hides both buttons.
         world |> enterMode Viewing
         syncModalControls world |> ignore
         handleUndoRedo world |> ignore
-        isButtonHidden undoBtn =! true
-        isButtonHidden redoBtn =! true
+        isButtonHidden undoButton =! true
+        isButtonHidden redoButton =! true
 
         // Returning to Move mode reveals them in their stack-derived enabled state, proving
         // the hiding neither popped nor pushed either stack while View mode was active.
         world |> enterMode Moving
         syncModalControls world |> ignore
         handleUndoRedo world |> ignore
-        isButtonHidden undoBtn =! false
-        isButtonHidden redoBtn =! false
-        isButtonDisabled undoBtn =! false
-        isButtonDisabled redoBtn =! false
+        isButtonHidden undoButton =! false
+        isButtonHidden redoButton =! false
+        isButtonDisabled undoButton =! false
+        isButtonDisabled redoButton =! false
 
         // Exercise both preserved stacks after returning to Move mode to prove they kept their
         // exact contents, not merely nonzero counts. Redo reapplies the second drag (to 15); the
         // first undo then reverses that drag again (back to 10); the second undo pops the
         // surviving original undo entry (5).
-        click redoBtn
+        click redoButton
         (node |> get TargetPosition).Value.x =! 15.0
-        click undoBtn
+        click undoButton
         (node |> get TargetPosition).Value.x =! 10.0
-        click undoBtn
+        click undoButton
         (node |> get TargetPosition).Value.x =! 5.0
 
     /// A click can no longer reach a hidden button — `Events.handleClick` refuses to raise one —
@@ -350,9 +365,9 @@ type Tests() =
         // View mode hides the button; a delayed click on it must be dropped at the source.
         world |> enterMode Viewing
         syncModalControls world |> ignore
-        let undoBtn = world |> buttonWithLabel "Undo"
-        undoBtn |> handleClick world
-        undoBtn |> wasClicked world =! false
+        let undoButton = world |> buttonWithLabel "Undo"
+        undoButton |> handleClick world
+        undoButton |> wasClicked world =! false
         handleUndoRedo world |> ignore
         node |> has TargetPosition =! false
 
@@ -361,8 +376,8 @@ type Tests() =
         world |> enterMode Moving
         syncModalControls world |> ignore
         handleUndoRedo world |> ignore
-        isButtonDisabled undoBtn =! false
-        undoBtn |> handleClick world
+        isButtonDisabled undoButton =! false
+        undoButton |> handleClick world
         handleUndoRedo world |> ignore
         node |> has TargetPosition =! true
         (node |> get TargetPosition).Value =! Line3.pos 5.0 0.0 0.0

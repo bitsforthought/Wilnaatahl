@@ -452,9 +452,9 @@ no overlays are shown.
 
 ### Mode transitions
 
-Switching modes clears selection and dismisses any overlay. A click that occurs in
-the same frame as a mode switch is discarded rather than reinterpreted in the mode
-being entered.
+Switching modes clears selection and dismisses any overlay. Clicks use the mode
+stamped when they were raised; under the current Runner order, a mode change clears
+existing selection before Selection applies its queued clicks.
 
 ---
 

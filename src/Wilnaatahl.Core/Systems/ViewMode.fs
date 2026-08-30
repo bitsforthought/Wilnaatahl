@@ -43,11 +43,6 @@ let syncModalControls (world: IWorld) =
 
 /// Toggles the app mode when the mode-toggle button was clicked this frame, then makes the modal
 /// controls match the resulting mode.
-///
-/// A click landing in the same frame as a mode switch is ambiguous — the user cannot have meant
-/// it in the mode they are leaving *and* the mode they are entering — so the switch wins and
-/// every other click that frame is discarded. That, plus clearing the selection, is what lets
-/// this run early: no later system can see input that belongs to the mode just left.
 let updateViewMode (world: IWorld) =
     let buttonEntity = world.Query(With ViewModeButton, With Button) |> Seq.exactlyOne
 
@@ -65,6 +60,5 @@ let updateViewMode (world: IWorld) =
         world.Set CurrentMode switchingTo
         buttonEntity |> setWith Button (fun data -> {| data with label = label |})
         world.RemoveAll Selected
-        world |> discardClicks
 
     world |> syncModalControls

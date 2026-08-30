@@ -74,6 +74,23 @@ let private handleButtonClicked destination (toStack: Stack<Command>) (fromStack
         // The same command is used in both directions, so the other button can apply it back.
         toStack.Push command
 
+let private applyInput
+    undoButtonEntity
+    redoButtonEntity
+    (undoStack: Stack<Command>)
+    (redoStack: Stack<Command>)
+    (world: IWorld)
+    event
+    =
+    match event with
+    | Clicked(target, _) when target = undoButtonEntity ->
+        undoStack |> handleButtonClicked _.Before redoStack
+        world
+    | Clicked(target, _) when target = redoButtonEntity ->
+        redoStack |> handleButtonClicked _.After undoStack
+        world
+    | _ -> world
+
 let handleUndoRedo (world: IWorld) =
     // Buttons must exist and have the right traits or we have an app setup issue.
     let undoStack, undoButtonEntity =
@@ -87,12 +104,12 @@ let handleUndoRedo (world: IWorld) =
     // Commands are pushed before a click is applied; see pushCommitted for why.
     pushCommitted world undoStack redoStack
 
-    // Multi-touch makes it possible to tap Undo and Redo in the same frame, and Undo wins. The
-    // only difference between the two is which of a move's two positions the node is moved to.
-    if undoButtonEntity |> wasClicked world then
-        undoStack |> handleButtonClicked _.Before redoStack
-    elif redoButtonEntity |> wasClicked world then
-        redoStack |> handleButtonClicked _.After undoStack
+    // Multi-touch makes it possible to tap Undo and Redo in the same frame. Each click moves one
+    // command between the stacks, in the order the clicks were raised.
+    world
+    |> inputEvents
+    |> Seq.fold (applyInput undoButtonEntity redoButtonEntity undoStack redoStack) world
+    |> ignore
 
     // Anything above can move an entry between the two stacks, so settle both buttons rather
     // than only the one that was clicked.
