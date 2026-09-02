@@ -1,15 +1,16 @@
 module Wilnaatahl.Tests.EcsTestSupport
 
+open System
 open Wilnaatahl.ECS
 open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.ECS.Mocks
+open Wilnaatahl.ECS.Trait
 open Wilnaatahl.Entities
 open Wilnaatahl.Traits.History
+open Wilnaatahl.Traits.Intents
 open Wilnaatahl.Traits.ViewTraits
 
-/// A disposable wrapper around TestWorld that installs the TestECS mock
-/// and provides access to the IWorld interface.
 type EcsWorld() =
     do TestECS.install ()
     let testWorld = new TestWorld()
@@ -21,12 +22,38 @@ type EcsWorld() =
         member _.Dispose() =
             (testWorld :> System.IDisposable).Dispose()
 
+type internal AddTrackingWorld(inner: IWorld) =
+    let mutable addCalls = 0
+
+    member _.AddCalls = addCalls
+
+    interface IWorld with
+        member _.Add someTrait =
+            addCalls <- addCalls + 1
+            inner.Add someTrait
+
+        member _.Get(valueTrait: IValueTrait<'T>) = inner.Get valueTrait
+        member _.Has someTrait = inner.Has someTrait
+        member _.Query([<ParamArray>] where: QueryOperator[]) = inner.Query(where)
+        member _.QueryTrait(someTrait, [<ParamArray>] where: QueryOperator[]) = inner.QueryTrait(someTrait, where)
+
+        member _.QueryTraits(firstTrait, secondTrait, [<ParamArray>] where: QueryOperator[]) =
+            inner.QueryTraits(firstTrait, secondTrait, where)
+
+        member _.QueryTraits3(firstTrait, secondTrait, thirdTrait, [<ParamArray>] where: QueryOperator[]) =
+            inner.QueryTraits3(firstTrait, secondTrait, thirdTrait, where)
+
+        member _.QueryTraits4(firstTrait, secondTrait, thirdTrait, fourthTrait, [<ParamArray>] where: QueryOperator[]) =
+            inner.QueryTraits4(firstTrait, secondTrait, thirdTrait, fourthTrait, where)
+
+        member _.QueryFirst([<ParamArray>] where: QueryOperator[]) = inner.QueryFirst(where)
+        member _.Remove someTrait = inner.Remove someTrait
+        member _.Set (valueTrait: IValueTrait<'T>) (value: 'T) = inner.Set valueTrait value
+        member _.Spawn([<ParamArray>] specs: SpawnSpec[]) = inner.Spawn(specs)
+
 /// The label on a toolbar button. Fails when the entity carries no `Button`.
 let buttonLabel entity = (entity |> get Button).Value.label
 
-/// Puts the world in the given mode, establishing one if the view-mode controls were never
-/// spawned. Any test driving a system that reads the mode needs one, whether or not it spawns
-/// the mode button.
 let internal enterMode mode (world: IWorld) =
     if world.Has CurrentMode then
         world.Set CurrentMode mode
@@ -48,3 +75,9 @@ let internal moveAlongX node fromX toX = {
     Before = Line3.pos fromX 0.0 0.0
     After = Line3.pos toX 0.0 0.0
 }
+
+/// Spawns the background singleton with its clear-selection declaration.
+let internal spawnBackground (world: IWorld) =
+    world.Spawn(Background.Tag(), EmitsIntent.Val [ ClearSelection ]) |> ignore
+
+let internal runWithIntents system (world: IWorld) = system (world |> derivedIntents) world

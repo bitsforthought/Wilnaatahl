@@ -11,6 +11,7 @@ open Wilnaatahl.ViewModel.Vector
 open Wilnaatahl.Entities
 open Wilnaatahl.Traits.Events
 open Wilnaatahl.Traits.History
+open Wilnaatahl.Traits.Intents
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Traits.ViewTraits
 open Wilnaatahl.Systems.UndoRedo
@@ -31,7 +32,7 @@ type Tests() =
     /// system does when it commits a command; undo/redo never watches that system directly.
     let commit moves =
         world |> commitCommand (Command.create moves).Value
-        handleUndoRedo world |> ignore
+        world |> runWithIntents handleUndoRedo |> ignore
         world |> clearCommittedCommands
 
     /// Moves a node to the given x and commits the change, the way a completed drag does.
@@ -44,7 +45,7 @@ type Tests() =
     /// Clicks a button and runs the frame it lands on.
     let click button =
         button |> handleClick world
-        handleUndoRedo world |> ignore
+        world |> runWithIntents handleUndoRedo |> ignore
         cleanupEvents world |> ignore
 
     // Leaves one command on Undo and an empty Redo stack.
@@ -95,6 +96,11 @@ type Tests() =
         labels =! [ "Redo"; "Undo" ]
 
     [<Fact>]
+    member _.``spawnUndoRedoControls declares each button's own intent``() =
+        (world |> buttonWithLabel "Undo" |> get EmitsIntent).Value =! [ Undo ]
+        (world |> buttonWithLabel "Redo" |> get EmitsIntent).Value =! [ Redo ]
+
+    [<Fact>]
     member _.``Undo and redo buttons start disabled``() =
         let undoButton = world |> buttonWithLabel "Undo"
         let redoButton = world |> buttonWithLabel "Redo"
@@ -119,7 +125,7 @@ type Tests() =
         world.Query(buttonWrites <=> [| Button |]) |> Seq.length |> ignore
 
         // Both stacks are empty and both buttons already start disabled: no writes.
-        handleUndoRedo world |> ignore
+        world |> runWithIntents handleUndoRedo |> ignore
         (world.Query(buttonWrites <=> [| Button |]) |> Seq.length) =! 0
 
         // A committed command fills the undo stack, so only the Undo button changes.
@@ -145,7 +151,7 @@ type Tests() =
     member _.``A frame that records nothing leaves the undo button alone``() =
         world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}) |> ignore
 
-        handleUndoRedo world |> ignore
+        world |> runWithIntents handleUndoRedo |> ignore
 
         world |> buttonWithLabel "Undo" |> isButtonDisabled =! true
 
@@ -197,7 +203,7 @@ type Tests() =
         world |> commitCommand (Command.create [ moveAlongX node 1.0 2.0 ]).Value
         world |> commitCommand (Command.create [ moveAlongX node 2.0 5.0 ]).Value
 
-        handleUndoRedo world |> ignore
+        world |> runWithIntents handleUndoRedo |> ignore
         world |> clearCommittedCommands
 
         world |> buttonWithLabel "Undo" |> click
@@ -238,7 +244,7 @@ type Tests() =
         let redoButton = world |> buttonWithLabel "Redo"
         undoButton |> handleClick world
         redoButton |> handleClick world
-        handleUndoRedo world |> ignore
+        world |> runWithIntents handleUndoRedo |> ignore
 
         (node |> get TargetPosition).Value =! Line3.pos movedX 0.0 0.0
 
@@ -250,9 +256,30 @@ type Tests() =
         let redoButton = world |> buttonWithLabel "Redo"
         redoButton |> handleClick world
         undoButton |> handleClick world
-        handleUndoRedo world |> ignore
+        world |> runWithIntents handleUndoRedo |> ignore
 
         (node |> get TargetPosition).Value =! Line3.pos originalX 0.0 0.0
+
+    [<Fact>]
+    member _.``Two undo clicks in one frame pop both commands, landing at the oldest before``() =
+        let node = world.Spawn(Position.Val {| x = 5.0; y = 0.0; z = 0.0 |}, Selected.Tag())
+
+        dragNodeTo node 10.0
+        dragNodeTo node 15.0
+
+        let undoButton = world |> buttonWithLabel "Undo"
+        isButtonDisabled undoButton =! false
+
+        undoButton |> handleClick world
+        undoButton |> handleClick world
+        world |> runWithIntents handleUndoRedo |> ignore
+
+        // Both commands popped: second drag undone (back to 10), then first (back to 5).
+        (node |> get TargetPosition).Value =! Line3.pos 5.0 0.0 0.0
+        isButtonDisabled undoButton =! true
+
+        // Both entries moved to redo stack.
+        world |> buttonWithLabel "Redo" |> isButtonDisabled =! false
 
     /// A button is disabled once its stack empties, but the view layer takes a frame to stop
     /// drawing it, so a click can still reach a button with nothing to pop. Clicking Undo
@@ -328,7 +355,7 @@ type Tests() =
         // In View mode, ViewMode hides both buttons.
         world |> enterMode Viewing
         syncModalControls world |> ignore
-        handleUndoRedo world |> ignore
+        world |> runWithIntents handleUndoRedo |> ignore
         isButtonHidden undoButton =! true
         isButtonHidden redoButton =! true
 
@@ -336,7 +363,7 @@ type Tests() =
         // the hiding neither popped nor pushed either stack while View mode was active.
         world |> enterMode Moving
         syncModalControls world |> ignore
-        handleUndoRedo world |> ignore
+        world |> runWithIntents handleUndoRedo |> ignore
         isButtonHidden undoButton =! false
         isButtonHidden redoButton =! false
         isButtonDisabled undoButton =! false
@@ -367,17 +394,17 @@ type Tests() =
         syncModalControls world |> ignore
         let undoButton = world |> buttonWithLabel "Undo"
         undoButton |> handleClick world
-        undoButton |> wasClicked world =! false
-        handleUndoRedo world |> ignore
+        world |> inputEvents |> Seq.isEmpty =! true
+        world |> runWithIntents handleUndoRedo |> ignore
         node |> has TargetPosition =! false
 
         // The undo entry survived, so once back in Move mode the same click restores the
         // original position — proving the dropped click neither popped nor discarded the stack.
         world |> enterMode Moving
         syncModalControls world |> ignore
-        handleUndoRedo world |> ignore
+        world |> runWithIntents handleUndoRedo |> ignore
         isButtonDisabled undoButton =! false
         undoButton |> handleClick world
-        handleUndoRedo world |> ignore
+        world |> runWithIntents handleUndoRedo |> ignore
         node |> has TargetPosition =! true
         (node |> get TargetPosition).Value =! Line3.pos 5.0 0.0 0.0

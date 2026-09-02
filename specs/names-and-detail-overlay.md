@@ -452,9 +452,13 @@ no overlays are shown.
 
 ### Mode transitions
 
-Switching modes clears selection and dismisses any overlay. Clicks use the mode
-stamped when they were raised; under the current Runner order, a mode change clears
-existing selection before Selection applies its queued clicks.
+Switching modes clears selection and dismisses any overlay. Input is raised between
+frames; Runner resolves each target's `EmitsIntent` from the pre-system declaration
+snapshot once, and all systems share that ordered list. The `AppMode` on each click
+is captured when it is raised, while later declaration mutations affect only later
+snapshots and frames. A same-frame node click before the mode switch is applied
+before the switch clears the selection, while one after it is interpreted under the
+mode the switch just entered.
 
 ---
 

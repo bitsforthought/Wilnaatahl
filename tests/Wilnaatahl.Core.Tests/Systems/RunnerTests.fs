@@ -11,6 +11,7 @@ open Wilnaatahl.Model.FamilyGraph
 open Wilnaatahl.ViewModel.Vector
 open Wilnaatahl.System.Layout
 open Wilnaatahl.Traits.Events
+open Wilnaatahl.Traits.Intents
 open Wilnaatahl.Traits.PeopleTraits
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Traits.ViewTraits
@@ -142,12 +143,47 @@ type Tests() =
         world |> currentMode =! Viewing
         selectModeButton |> has Hidden =! true
 
-    /// A node click raised before the mode toggle is still applied after the toggle.
+    /// The frame's true click order was node-then-mode-toggle: the node click happened while
+    /// still in View mode, so it selects the node; the mode toggle that came after it, later in
+    /// the same frame, still clears the selection it made. A fixed system-pass order that ran
+    /// ViewMode's whole pass before Selection's, regardless of the clicks' real order, used to
+    /// leave the node selected instead.
     [<Fact>]
-    member _.``runSystems applies a same-frame node click after the mode toggles``() =
+    member _.``runSystems clears a same-frame node click that a later mode toggle supersedes``() =
         let modeButton = world |> buttonWithLabel "Move"
         let node = world.Spawn(PersonRef.Val Person.Empty, Position.Val zeroPosition)
+        node |> addWith EmitsIntent [ ToggleNodeSelection node ]
 
+        node |> handleClick world
+        modeButton |> handleClick world
+        runSystems world frameDelta
+
+        world |> currentMode =! Moving
+        node |> has Selected =! false
+
+    /// The opposite true order: the mode toggle happens first, so the node click that follows it
+    /// in the same frame is interpreted under the new mode and its selection survives.
+    [<Fact>]
+    member _.``runSystems keeps a same-frame node click that follows an earlier mode toggle``() =
+        let modeButton = world |> buttonWithLabel "Move"
+        let node = world.Spawn(PersonRef.Val Person.Empty, Position.Val zeroPosition)
+        node |> addWith EmitsIntent [ ToggleNodeSelection node ]
+
+        modeButton |> handleClick world
+        node |> handleClick world
+        runSystems world frameDelta
+
+        world |> currentMode =! Moving
+        node |> has Selected =! true
+
+    /// Both mode clicks resolve from one snapshot, and the second explicit target is a no-op.
+    [<Fact>]
+    member _.``runSystems keeps selection when an idempotent second mode-button click follows a node click``() =
+        let modeButton = world |> buttonWithLabel "Move"
+        let node = world.Spawn(PersonRef.Val Person.Empty, Position.Val zeroPosition)
+        node |> addWith EmitsIntent [ ToggleNodeSelection node ]
+
+        modeButton |> handleClick world
         node |> handleClick world
         modeButton |> handleClick world
         runSystems world frameDelta

@@ -1,17 +1,10 @@
 module Wilnaatahl.Systems.FileCommands
 
 open Wilnaatahl.ECS
-open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.ECS.Trait
-open Wilnaatahl.Traits.Events
+open Wilnaatahl.Traits.Intents
 open Wilnaatahl.Traits.ViewTraits
-
-/// Discriminator marking the toolbar button that requests opening a file.
-let internal OpenFileButton = tagTrait ()
-
-/// Discriminator marking the toolbar button that requests saving a file.
-let internal SaveButton = tagTrait ()
 
 /// World signal raised when the open-file button is clicked. It is deliberately not
 /// cleared during frame cleanup, so it persists until consumed and removed; a single
@@ -24,22 +17,24 @@ let SaveRequested = tagTrait ()
 
 /// Spawns the open-file and save toolbar buttons at consecutive sort orders.
 let spawnFileControls (sortOrder, world: IWorld) =
-    world.Spawn(Button.Val {| sortOrder = sortOrder; label = "Open file…"; disabled = false |}, OpenFileButton.Tag())
+    world.Spawn(
+        Button.Val {| sortOrder = sortOrder; label = "Open file…"; disabled = false |},
+        EmitsIntent.Val [ OpenFile ]
+    )
     |> ignore
 
-    world.Spawn(Button.Val {| sortOrder = sortOrder + 1; label = "Save"; disabled = false |}, SaveButton.Tag())
+    world.Spawn(Button.Val {| sortOrder = sortOrder + 1; label = "Save"; disabled = false |}, EmitsIntent.Val [ Save ])
     |> ignore
 
     sortOrder + 2, world
 
-/// Maps a click on the open-file (resp. save) button to the matching world request
-/// signal. Each button is checked independently, so raising one request never depends
-/// on the state of the other.
-let handleFileCommands (world: IWorld) =
-    if world |> clickedEntities |> Seq.exists (has OpenFileButton) then
+/// Maps this frame's `OpenFile`/`Save` intents to the matching world request signal. Each is
+/// checked independently, so raising one request never depends on the other.
+let internal handleFileCommands intents (world: IWorld) =
+    if intents |> List.contains OpenFile then
         world.Add OpenFileRequested
 
-    if world |> clickedEntities |> Seq.exists (has SaveButton) then
+    if intents |> List.contains Save then
         world.Add SaveRequested
 
     world

@@ -70,8 +70,7 @@ let private applyInput world event =
     | DragStarted -> world |> startDrag
     | Dragged distance -> world |> moveParticipants distance
     | DragEnded -> world |> endDrag
-    | Clicked _
-    | PointerMissed -> world
+    | Clicked _ -> world
 
 let dragNodes (world: IWorld) =
     // Any combination of input events can arrive in one frame, so they are applied one at a time,

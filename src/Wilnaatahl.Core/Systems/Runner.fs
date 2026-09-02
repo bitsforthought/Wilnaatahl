@@ -3,6 +3,7 @@ module Wilnaatahl.Systems.Runner
 open Wilnaatahl.ECS
 open Wilnaatahl.ECS.Tracking
 open Wilnaatahl.Traits.Events
+open Wilnaatahl.Traits.Intents
 open Wilnaatahl.Systems.Animation
 open Wilnaatahl.Systems.Dragging
 open Wilnaatahl.Systems.FileCommands
@@ -34,21 +35,23 @@ let private movementTracker = createChanged ()
 
 /// Runs all systems in the correct order for a single frame.
 let runSystems (world: IWorld) delta =
-    // The order is behavioural, not incidental:
-    //   - updateViewMode runs before selectNodes. It clears Selected when the mode changes, and
-    //     Selection then applies the queued clicks. ViewMode and Selection both write Selected,
-    //     so fixed Runner order cannot preserve both node-then-mode and mode-then-node.
-    //     Deriving ordered intents before either system acts is the planned resolution.
-    //   - dragNodes runs before handleUndoRedo because a completed drag commits the command that
-    //     undo/redo must see in the same frame. Any future command-committing system belongs
-    //     before handleUndoRedo for the same reason.
+    // Proven ordering constraints:
+    //   - animate before dragNodes: a grab during animation captures the post-animation position,
+    //     and an animation that finishes on the grab frame completes before drag origin capture.
+    //   - dragNodes before handleUndoRedo: a completed drag commits the same-frame command that
+    //     undo/redo must see.
+    //
+    // Input is raised between frames. Resolve each target's EmitsIntent once before systems run;
+    // every system shares this immutable list, and declaration mutations affect later snapshots.
+    let intents = world |> derivedIntents
+
     world
     |> animate delta
-    |> updateViewMode
+    |> updateViewMode intents
     |> dragNodes
-    |> selectNodes
-    |> handleUndoRedo
-    |> handleFileCommands
+    |> selectNodes intents
+    |> handleUndoRedo intents
+    |> handleFileCommands intents
     |> move movementTracker
     |> render
     |> cleanupEvents

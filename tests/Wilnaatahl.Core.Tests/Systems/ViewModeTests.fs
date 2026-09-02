@@ -8,6 +8,7 @@ open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.Model
 open Wilnaatahl.Traits.Events
+open Wilnaatahl.Traits.Intents
 open Wilnaatahl.Traits.PeopleTraits
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Traits.ViewTraits
@@ -24,6 +25,9 @@ let private modeButton (world: IWorld) =
 
 let private modeButtonLabel (world: IWorld) =
     (modeButton world |> get Button).Value.label
+
+let private modeButtonIntent (world: IWorld) =
+    (modeButton world |> get EmitsIntent).Value
 
 type Tests() =
     let ecs = new EcsWorld()
@@ -44,55 +48,84 @@ type Tests() =
         // first updateViewMode frame, so a consumer reading world state at startup sees View.
         world |> currentMode =! Viewing
 
+    /// A click on the button in View mode must switch to Move, so the button's own declared
+    /// intent has to name that target from the moment it is spawned.
+    [<Fact>]
+    member _.``spawnViewModeControls declares an intent to switch into Move mode``() =
+        modeButtonIntent world =! [ ChangeMode Moving ]
+
     [<Fact>]
     member _.``app boots in View mode: button reads Move and the mode is Viewing``() =
         modeButtonLabel world =! "Move"
-        updateViewMode world |> ignore
+        world |> runWithIntents updateViewMode |> ignore
         world |> currentMode =! Viewing
 
     [<Fact>]
     member _.``clicking the mode button switches View to Move: label becomes View, mode becomes Moving``() =
         // Establish the boot mode.
-        updateViewMode world |> ignore
+        world |> runWithIntents updateViewMode |> ignore
         world |> currentMode =! Viewing
 
         modeButton world |> handleClick world
-        updateViewMode world |> ignore
+        world |> runWithIntents updateViewMode |> ignore
 
         modeButtonLabel world =! "View"
         world |> currentMode =! Moving
+
+    /// The button's declared intent flips to name the opposite target only once the mode has
+    /// actually changed, so the next click switches back.
+    [<Fact>]
+    member _.``clicking the mode button rewrites its declared intent to switch back``() =
+        modeButton world |> handleClick world
+        world |> runWithIntents updateViewMode |> ignore
+
+        modeButtonIntent world =! [ ChangeMode Viewing ]
 
     [<Fact>]
     member _.``clicking the mode button twice returns to View mode``() =
         // View -> Move
         modeButton world |> handleClick world
-        updateViewMode world |> ignore
+        world |> runWithIntents updateViewMode |> ignore
         cleanupEvents world |> ignore
         modeButtonLabel world =! "View"
         world |> currentMode =! Moving
 
         // Move -> View
         modeButton world |> handleClick world
-        updateViewMode world |> ignore
+        world |> runWithIntents updateViewMode |> ignore
         modeButtonLabel world =! "Move"
         world |> currentMode =! Viewing
 
+    /// Both clicks resolve from one pre-system snapshot, so the second target is already current
+    /// and is a no-op rather than toggling the mode back.
     [<Fact>]
-    member _.``switching mode clears the selection``() =
-        let node = spawnSelectedNode world
-        updateViewMode world |> ignore
-
-        // Switch to Move mode.
+    member _.``clicking the mode button twice in the same frame switches mode only once``() =
         modeButton world |> handleClick world
-        updateViewMode world |> ignore
+        modeButton world |> handleClick world
 
-        node |> has Selected =! false
+        world |> runWithIntents updateViewMode |> ignore
+
+        world |> currentMode =! Moving
+        modeButtonLabel world =! "View"
+
+    /// Selection owns clearing the selection on a mode switch — it reads the same `ChangeMode`
+    /// intents `updateViewMode` reads — so `updateViewMode` on its own must never touch `Selected`,
+    /// whether or not a switch happened this frame.
+    [<Fact>]
+    member _.``updateViewMode never writes Selected``() =
+        let node = spawnSelectedNode world
+
+        modeButton world |> handleClick world
+        world |> runWithIntents updateViewMode |> ignore
+
+        world |> currentMode =! Moving
+        node |> has Selected =! true
 
     [<Fact>]
     member _.``a frame without a mode-button click leaves the mode and selection alone``() =
         let node = spawnSelectedNode world
 
-        updateViewMode world |> ignore
+        world |> runWithIntents updateViewMode |> ignore
 
         world |> currentMode =! Viewing
         node |> has Selected =! true
@@ -133,17 +166,17 @@ type Tests() =
         otherButton |> handleClick world
         modeBtn |> handleClick world
 
-        updateViewMode world |> ignore
+        world |> runWithIntents updateViewMode |> ignore
 
         world |> currentMode =! Moving
-        node |> wasClicked world =! true
-        otherButton |> wasClicked world =! true
+        world |> inputEvents |> Seq.contains (Clicked(node, Viewing)) =! true
+        world |> inputEvents |> Seq.contains (Clicked(otherButton, Viewing)) =! true
 
     [<Fact>]
     member _.``a frame without a mode switch leaves other clicks untouched``() =
         let node = spawnSelectedNode world
         node |> handleClick world
 
-        updateViewMode world |> ignore
+        world |> runWithIntents updateViewMode |> ignore
 
-        node |> wasClicked world =! true
+        world |> inputEvents |> Seq.contains (Clicked(node, Viewing)) =! true

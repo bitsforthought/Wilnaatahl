@@ -10,6 +10,7 @@ open Wilnaatahl.ECS.Relation
 open Wilnaatahl.Model
 open Wilnaatahl.Model.FamilyGraph
 open Wilnaatahl.Traits.ConnectorTraits
+open Wilnaatahl.Traits.Intents
 open Wilnaatahl.Traits.PeopleTraits
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Traits.ViewTraits
@@ -40,6 +41,13 @@ type Tests() =
         let buttonCount = world.Query(With Button) |> Seq.length
         // Undo, Redo, View/Move mode, Multi-select mode, Open file, and Save buttons
         buttonCount =! 6
+
+    /// The Background singleton must exist from app startup so background clicks resolve to it.
+    [<Fact>]
+    member _.``spawnControls creates exactly one Background singleton that emits ClearSelection``() =
+        spawnControls world
+        let background = world.Query(With Background) |> Seq.exactlyOne
+        (background |> get EmitsIntent).Value =! [ ClearSelection ]
 
     [<Fact>]
     member _.``spawnControls boots into View mode with the Move-mode-only controls hidden``() =

@@ -68,14 +68,30 @@ partition or category.
   input rather than to split the system across the pipeline. Constraints that
   remain are real behaviour: state them in the `runSystems` comment and pin them
   with a test that drives whole frames through `runSystems`, not one that calls a
-  single system.
-- **Resolve same-frame input in the system that owns each behaviour.** Events live
-  for the whole frame (`cleanupEvents` runs last), so several inputs can be raised
-  before any system runs. Each click carries the `AppMode` that was live when the
-  view layer raised it. `Selection` and `UndoRedo` fold their `Clicked` events in
-  queue order; `Dragging` folds raw drag input in queue order according to its own
-  semantics. `handleDragStart` still discards queued clicks and background misses
-  because a drag and those inputs cannot be applied together.
+  single system. `runSystems` currently requires `animate` before `dragNodes`,
+  because a grab during animation captures the post-animation position, and
+  `dragNodes` before `handleUndoRedo`, because a completed drag commits the
+  command undo/redo must see in the same frame.
+- **Resolve same-frame input by deriving intents once, not by system order.**
+  Events live for the whole frame (`cleanupEvents` runs last), so several clicks
+  can be raised before any system runs. Each click captures the `AppMode` that was
+  live when it was raised; its target's `EmitsIntent` (`Traits/Intents.fs`) is
+  resolved from the declaration present in the pre-system Runner snapshot. A click
+  on an entity with no `EmitsIntent` means nothing. Runner derives this frame's
+  ordered `Intent list` once, up front, and hands the same immutable list to every
+  system that reads it; declaration mutations afterward affect only later
+  snapshots and frames. This lets `updateViewMode` and `selectNodes` fold the
+  identical click-ordered sequence rather than one system's whole pass running
+  before the other's, so each click order reaches the result its own order implies
+  regardless of which system Runner calls first. A system that rewrites an
+  `EmitsIntent` value as it applies an intent (`ChangeMode`'s button flips to name
+  the opposite mode) must not derive the list again mid-frame, because that would
+  make this frame depend on a later declaration mutation. `Dragging` still folds
+  raw drag input directly, in queue order, according to its own semantics —
+  dragging never resolves to an intent. The empty scene/background is a click
+  target like any other, on a singleton entity tagged `Background`;
+  `handleDragStart` discards every queued click, including one on it, because a
+  drag and a click cannot be applied together.
 - **Never write a trait value that hasn't changed.** Koota's `set` notifies change
   subscribers unconditionally — it does not diff old against new — so a system
   that recomputes a value each frame and writes it unconditionally re-renders

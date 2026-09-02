@@ -9,19 +9,29 @@ open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.ECS.Tracking
 open Wilnaatahl.Model
 open Wilnaatahl.Traits.Events
+open Wilnaatahl.Traits.Intents
 open Wilnaatahl.Traits.PeopleTraits
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Traits.ViewTraits
 open Wilnaatahl.Systems.Selection
 open Wilnaatahl.Tests.EcsTestSupport
 
+/// Spawns a node whose selection intent targets its own entity id.
 let private spawnNode (world: IWorld) =
-    world.Spawn(PersonRef.Val Person.Empty, Position.Val {| x = 0.0; y = 0.0; z = 0.0 |})
+    let node =
+        world.Spawn(PersonRef.Val Person.Empty, Position.Val {| x = 0.0; y = 0.0; z = 0.0 |})
+
+    node |> addWith EmitsIntent [ ToggleNodeSelection node ]
+    node
+
+let private spawnModeSwitch newMode (world: IWorld) =
+    world.Spawn(EmitsIntent.Val [ ChangeMode newMode ])
 
 type Tests() =
     let ecs = new EcsWorld()
     let world = ecs.World
     let sortOrder, _ = spawnSelectControls (0, world)
+    do world |> spawnBackground
 
     // Selection reads the mode when it interprets a node click, and these tests spawn the select
     // controls without the mode button, so establish the mode the button would have set. Move is
@@ -47,11 +57,16 @@ type Tests() =
         isButtonDisabled buttonEntity =! false
 
     [<Fact>]
+    member _.``spawnSelectControls declares an intent to toggle multi-select``() =
+        let buttonEntity = world |> buttonWithLabel "Multi-select"
+        (buttonEntity |> get EmitsIntent).Value =! [ ToggleMultiSelect ]
+
+    [<Fact>]
     member _.``Clicking node in single-select mode selects it``() =
         let node = spawnNode world
         node |> handleClick world
 
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         (node |> has Selected) =! true
 
@@ -61,7 +76,7 @@ type Tests() =
         node |> add Selected
         node |> handleClick world
 
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         (node |> has Selected) =! false
 
@@ -72,7 +87,7 @@ type Tests() =
         node1 |> add Selected
         node2 |> handleClick world
 
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         (node1 |> has Selected) =! false
         (node2 |> has Selected) =! true
@@ -88,7 +103,7 @@ type Tests() =
         spawnedSecond |> handleClick world
         spawnedFirst |> handleClick world
 
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         (spawnedSecond |> has Selected) =! false
         (spawnedFirst |> has Selected) =! true
@@ -99,7 +114,7 @@ type Tests() =
         node |> add Selected
         world |> handlePointerMissed
 
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         (node |> has Selected) =! false
 
@@ -110,7 +125,7 @@ type Tests() =
 
         world |> handlePointerMissed
         node |> handleClick world
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         node |> has Selected =! true
 
@@ -120,7 +135,7 @@ type Tests() =
 
         node |> handleClick world
         world |> handlePointerMissed
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         node |> has Selected =! false
 
@@ -131,7 +146,7 @@ type Tests() =
 
         button |> handleClick world
         node |> handleClick world
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         node |> has Selected =! true
         buttonLabel button =! "Single-select"
@@ -143,7 +158,7 @@ type Tests() =
 
         node |> handleClick world
         button |> handleClick world
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         node |> has Selected =! false
         buttonLabel button =! "Single-select"
@@ -154,14 +169,14 @@ type Tests() =
         let second = spawnNode world
 
         world |> buttonWithLabel "Multi-select" |> handleClick world
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
         cleanupEvents world |> ignore
 
         first |> add Selected
         world |> enterMode Viewing
         second |> handleClick world
         world |> enterMode Moving
-        world |> selectNodes |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         first |> has Selected =! false
         second |> has Selected =! true
@@ -173,14 +188,14 @@ type Tests() =
         let button = world |> buttonWithLabel "Multi-select"
 
         button |> handleClick world
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
         cleanupEvents world |> ignore
 
         first |> add Selected
         world |> enterMode Moving
         second |> handleClick world
         world |> enterMode Viewing
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         first |> has Selected =! true
         second |> has Selected =! true
@@ -194,22 +209,66 @@ type Tests() =
         buttonEntity |> handleClick world
         node1 |> handleClick world
         node2 |> handleClick world
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         (node1 |> has Selected) =! true
         (node2 |> has Selected) =! true
+
+    [<Fact>]
+    member _.``Clicking the select-mode button twice in one frame keeps single-select mode``() =
+        let buttonEntity = world |> buttonWithLabel "Multi-select"
+        let first = spawnNode world
+
+        buttonEntity |> handleClick world
+        first |> handleClick world
+        buttonEntity |> handleClick world
+        world |> runWithIntents selectNodes |> ignore
+
+        buttonLabel buttonEntity =! "Multi-select"
+        first |> has Selected =! false
+        cleanupEvents world |> ignore
+
+        let second = spawnNode world
+        let third = spawnNode world
+        second |> handleClick world
+        third |> handleClick world
+        world |> runWithIntents selectNodes |> ignore
+
+        second |> has Selected =! false
+        third |> has Selected =! true
+
+    [<Fact>]
+    member _.``Clicking a selected node in multi-select mode deselects only that node``() =
+        let buttonEntity = world |> buttonWithLabel "Multi-select"
+        let first = spawnNode world
+        let second = spawnNode world
+
+        buttonEntity |> handleClick world
+        world |> runWithIntents selectNodes |> ignore
+        cleanupEvents world |> ignore
+
+        first |> handleClick world
+        second |> handleClick world
+        world |> runWithIntents selectNodes |> ignore
+        cleanupEvents world |> ignore
+
+        first |> handleClick world
+        world |> runWithIntents selectNodes |> ignore
+
+        first |> has Selected =! false
+        second |> has Selected =! true
 
     [<Fact>]
     member _.``After toggling back to single-select, the last same-frame node click is selected``() =
         let buttonEntity = world |> buttonWithLabel "Multi-select"
 
         buttonEntity |> handleClick world
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
         cleanupEvents world |> ignore
         buttonLabel buttonEntity =! "Single-select"
 
         buttonEntity |> handleClick world
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
         cleanupEvents world |> ignore
         buttonLabel buttonEntity =! "Multi-select"
 
@@ -217,7 +276,7 @@ type Tests() =
         let second = spawnNode world
         first |> handleClick world
         second |> handleClick world
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         first |> has Selected =! false
         second |> has Selected =! true
@@ -230,7 +289,7 @@ type Tests() =
         let buttonEntity = world |> buttonWithLabel "Multi-select"
         buttonEntity |> handleClick world
 
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         (node |> has Selected) =! false
 
@@ -242,7 +301,7 @@ type Tests() =
         let node = spawnNode world
         node |> handleClick world
 
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         (node |> has Selected) =! true
 
@@ -253,7 +312,7 @@ type Tests() =
         node |> add Selected
         node |> handleClick world
 
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         (node |> has Selected) =! false
 
@@ -265,7 +324,7 @@ type Tests() =
         selected |> add Selected
         other |> handleClick world
 
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         // View mode behaves like single-select mode: the newly-clicked node replaces the
         // previous selection instead of merely dismissing the overlay.
@@ -277,21 +336,21 @@ type Tests() =
         // Toggle the select-mode button to multi-select (only meaningful while in Move mode).
         let buttonEntity = world |> buttonWithLabel "Multi-select"
         buttonEntity |> handleClick world
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
         cleanupEvents world |> ignore
 
         // Enter View mode and select the first node.
         world |> enterMode Viewing
         let node1 = spawnNode world
         node1 |> handleClick world
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
         (node1 |> has Selected) =! true
         cleanupEvents world |> ignore
 
         // Clicking a second node must replace the selection, not add to it, despite multi-select.
         let node2 = spawnNode world
         node2 |> handleClick world
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         let selectedCount = world.Query(With Selected) |> Seq.length
         selectedCount =! 1
@@ -304,7 +363,7 @@ type Tests() =
         world |> enterMode Moving
         let node3 = spawnNode world
         node3 |> handleClick world
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         (node2 |> has Selected) =! true
         (node3 |> has Selected) =! true
@@ -323,7 +382,54 @@ type Tests() =
         buttonEntity |> add Hidden
         buttonEntity |> handleClick world
 
-        selectNodes world |> ignore
+        world |> runWithIntents selectNodes |> ignore
 
         node |> has Selected =! true
         buttonLabel buttonEntity =! labelBefore
+
+    [<Fact>]
+    member _.``A node click followed by a same-frame mode switch clears the selection``() =
+        world |> enterMode Viewing
+        let node = spawnNode world
+        let modeSwitch = spawnModeSwitch Moving world
+
+        node |> handleClick world
+        modeSwitch |> handleClick world
+
+        world |> runWithIntents selectNodes |> ignore
+
+        node |> has Selected =! false
+
+    [<Fact>]
+    member _.``A mode switch followed by a same-frame node click leaves the node selected``() =
+        world |> enterMode Viewing
+        let modeSwitch = spawnModeSwitch Moving world
+        let node = spawnNode world
+
+        modeSwitch |> handleClick world
+        node |> handleClick world
+
+        world |> runWithIntents selectNodes |> ignore
+
+        node |> has Selected =! true
+
+    [<Fact>]
+    member _.``Switching into View mode forces single-select on the same frame's node clicks``() =
+        let selectModeButton = world |> buttonWithLabel "Multi-select"
+        selectModeButton |> handleClick world
+        world |> runWithIntents selectNodes |> ignore
+        cleanupEvents world |> ignore
+        buttonLabel selectModeButton =! "Single-select" // now toggled to multi-select
+
+        let modeSwitch = spawnModeSwitch Viewing world
+        let node1 = spawnNode world
+        let node2 = spawnNode world
+
+        modeSwitch |> handleClick world
+        node1 |> handleClick world
+        node2 |> handleClick world
+
+        world |> runWithIntents selectNodes |> ignore
+
+        node1 |> has Selected =! false
+        node2 |> has Selected =! true

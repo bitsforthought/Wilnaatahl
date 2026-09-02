@@ -57,3 +57,7 @@ let DragInFlight = tagTrait ()
 /// layer (from the browser locale) and read by both F#-side and TS-side consumers to
 /// resolve localizable chrome.
 let CurrentLocale = refTrait (fun () -> En)
+
+/// Marks the singleton entity that stands for the empty scene/background: clicking outside any
+/// node or control resolves to a click on this entity rather than a special-cased event.
+let internal Background = tagTrait ()

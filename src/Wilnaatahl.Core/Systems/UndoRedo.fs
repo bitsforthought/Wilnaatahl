@@ -5,8 +5,8 @@ open Wilnaatahl.ECS
 open Wilnaatahl.ECS.Entity
 open Wilnaatahl.ECS.Extensions
 open Wilnaatahl.ECS.Trait
-open Wilnaatahl.Traits.Events
 open Wilnaatahl.Traits.History
+open Wilnaatahl.Traits.Intents
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Traits.ViewTraits
 open Wilnaatahl.Systems.Controls
@@ -23,7 +23,8 @@ let spawnUndoRedoControls (sortOrder, world: IWorld) =
         Button.Val {| sortOrder = sortOrder; label = "Undo"; disabled = true |},
         UndoButton.Tag(),
         CommandStack.Val(new Stack<Command>()),
-        MoveModeOnly.Tag()
+        MoveModeOnly.Tag(),
+        EmitsIntent.Val [ Undo ]
     )
     |> ignore
 
@@ -31,7 +32,8 @@ let spawnUndoRedoControls (sortOrder, world: IWorld) =
         Button.Val {| sortOrder = sortOrder + 1; label = "Redo"; disabled = true |},
         RedoButton.Tag(),
         CommandStack.Val(new Stack<Command>()),
-        MoveModeOnly.Tag()
+        MoveModeOnly.Tag(),
+        EmitsIntent.Val [ Redo ]
     )
     |> ignore
 
@@ -74,24 +76,18 @@ let private handleButtonClicked destination (toStack: Stack<Command>) (fromStack
         // The same command is used in both directions, so the other button can apply it back.
         toStack.Push command
 
-let private applyInput
-    undoButtonEntity
-    redoButtonEntity
-    (undoStack: Stack<Command>)
-    (redoStack: Stack<Command>)
-    (world: IWorld)
-    event
-    =
-    match event with
-    | Clicked(target, _) when target = undoButtonEntity ->
-        undoStack |> handleButtonClicked _.Before redoStack
-        world
-    | Clicked(target, _) when target = redoButtonEntity ->
-        redoStack |> handleButtonClicked _.After undoStack
-        world
-    | _ -> world
+let private applyIntent (undoStack: Stack<Command>) (redoStack: Stack<Command>) intent =
+    match intent with
+    | Undo -> undoStack |> handleButtonClicked _.Before redoStack
+    | Redo -> redoStack |> handleButtonClicked _.After undoStack
+    | ChangeMode _
+    | ToggleMultiSelect
+    | ToggleNodeSelection _
+    | ClearSelection
+    | OpenFile
+    | Save -> ()
 
-let handleUndoRedo (world: IWorld) =
+let internal handleUndoRedo intents (world: IWorld) =
     // Buttons must exist and have the right traits or we have an app setup issue.
     let undoStack, undoButtonEntity =
         world.QueryTrait(CommandStack, With Button, With UndoButton).ToSequence()
@@ -101,15 +97,12 @@ let handleUndoRedo (world: IWorld) =
         world.QueryTrait(CommandStack, With Button, With RedoButton).ToSequence()
         |> Seq.exactlyOne
 
-    // Commands are pushed before a click is applied; see pushCommitted for why.
+    // Commands are pushed before an intent is applied; see pushCommitted for why.
     pushCommitted world undoStack redoStack
 
-    // Multi-touch makes it possible to tap Undo and Redo in the same frame. Each click moves one
-    // command between the stacks, in the order the clicks were raised.
-    world
-    |> inputEvents
-    |> Seq.fold (applyInput undoButtonEntity redoButtonEntity undoStack redoStack) world
-    |> ignore
+    // Multi-touch makes it possible to tap Undo and Redo in the same frame. Each intent moves one
+    // command between the stacks, in the order the clicks that raised them were raised.
+    intents |> List.iter (applyIntent undoStack redoStack)
 
     // Anything above can move an entry between the two stacks, so settle both buttons rather
     // than only the one that was clicked.

@@ -9,6 +9,7 @@ open Wilnaatahl.ViewModel
 open Wilnaatahl.ViewModel.SceneConstants
 open Wilnaatahl.ViewModel.Vector
 open Wilnaatahl.Entities
+open Wilnaatahl.Traits.Intents
 open Wilnaatahl.Traits.PeopleTraits
 open Wilnaatahl.Traits.SpaceTraits
 
@@ -33,12 +34,15 @@ let spawnTreeNode person nodeKey (label: NodeLabelView) wilp (world: IWorld) =
         | Sphere -> {| x = s; y = s; z = s |}
         | Cube -> {| x = c; y = c; z = c |}
 
-    world.Spawn(
-        PersonRef.Val person,
-        NodeKeyRef.Val nodeKey,
-        Position.Val zeroPosition,
-        Size.Val nodeSize,
-        NodeLabel.Val label,
-        RenderedIn.ToTarget wilp
-    )
-    |> ignore
+    let nodeId =
+        world.Spawn(
+            PersonRef.Val person,
+            NodeKeyRef.Val nodeKey,
+            Position.Val zeroPosition,
+            Size.Val nodeSize,
+            NodeLabel.Val label,
+            RenderedIn.ToTarget wilp
+        )
+
+    // The self-referencing EntityId is only known after spawn.
+    nodeId |> addWith EmitsIntent [ ToggleNodeSelection nodeId ]

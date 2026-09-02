@@ -12,6 +12,7 @@ open Wilnaatahl.ViewModel
 open Wilnaatahl.ViewModel.SceneConstants
 open Wilnaatahl.ViewModel.Vector
 open Wilnaatahl.Entities
+open Wilnaatahl.Traits.Intents
 open Wilnaatahl.Traits.ViewTraits
 open Wilnaatahl.Traits.PeopleTraits
 open Wilnaatahl.Traits.SpaceTraits
@@ -105,6 +106,13 @@ type Tests() =
 
         let nodeId = world.Query(With PersonRef) |> Seq.head
         (nodeId |> get NodeKeyRef).Value =! PartnerNode(p1.Id, coupleP0P1Id)
+
+    [<Fact>]
+    member _.``spawnTreeNode declares an intent to toggle its own selection``() =
+        world |> People.spawnTreeNode p0 (MemberNode p0.Id) NodeLabelView.Empty wilpId
+
+        let nodeId = world.Query(With PersonRef) |> Seq.head
+        (nodeId |> get EmitsIntent).Value =! [ ToggleNodeSelection nodeId ]
 
     interface IDisposable with
         member _.Dispose() = (ecs :> IDisposable).Dispose()

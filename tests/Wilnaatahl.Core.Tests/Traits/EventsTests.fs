@@ -15,6 +15,11 @@ type Tests() =
     let ecs = new EcsWorld()
     let world = ecs.World
     do world.AddWith CurrentMode Viewing
+    do world |> spawnBackground
+
+    /// The Background singleton spawned in the constructor, which `handlePointerMissed` clicks.
+    let background () =
+        world.Query(With Background) |> Seq.exactlyOne
 
     /// Raises the signal that a drag is running, marking nothing as taking part in it. These
     /// handlers only ever ask whether a drag is running, never what it moves.
@@ -25,6 +30,18 @@ type Tests() =
 
     interface IDisposable with
         member _.Dispose() = (ecs :> IDisposable).Dispose()
+
+    [<Fact>]
+    member _.``inputEvents returns empty and cleanupEvents is safe when no input was ever raised``() =
+        use freshEcs = new EcsWorld()
+        let trackingWorld = AddTrackingWorld(freshEcs.World)
+        let freshWorld = trackingWorld :> IWorld
+
+        freshWorld |> inputEvents |> Seq.isEmpty =! true
+        trackingWorld.AddCalls =! 0
+        cleanupEvents freshWorld |> ignore
+        freshWorld |> inputEvents |> Seq.isEmpty =! true
+        trackingWorld.AddCalls =! 0
 
     [<Fact>]
     member _.``handleClick queues a click on the entity``() =
@@ -49,7 +66,7 @@ type Tests() =
         let entity = world.Spawn()
         entity |> add Hidden
         entity |> handleClick world
-        entity |> wasClicked world =! false
+        world |> inputEvents |> Seq.isEmpty =! true
 
     /// A click can reach a control during a drag — from a second finger tapping it, for example.
     /// Acting on it would mean carrying out the click and the drag together, so it is refused.
@@ -58,7 +75,7 @@ type Tests() =
         let entity = world.Spawn()
         beginDrag ()
         entity |> handleClick world
-        entity |> wasClicked world =! false
+        world |> inputEvents |> Seq.isEmpty =! true
 
     /// Input arrives between frames, so a drag start is visible here before the Dragging system
     /// has run and added `DragInFlight`. The frame a drag starts in is part of the drag.
@@ -67,7 +84,7 @@ type Tests() =
         let entity = world.Spawn()
         handleDragStart world
         entity |> handleClick world
-        entity |> wasClicked world =! false
+        world |> inputEvents |> List.ofSeq =! [ DragStarted ]
 
     /// Refusing input must stop when the drag does, or the app would accept no input at all after
     /// the first drag.
@@ -77,24 +94,13 @@ type Tests() =
         beginDrag ()
         endDrag ()
         entity |> handleClick world
-        entity |> wasClicked world =! true
-
-    /// A click belongs to the entity it landed on, so two clicks in one frame stay apart.
-    [<Fact>]
-    member _.``wasClicked reports only the entities that were clicked``() =
-        let clicked = world.Spawn()
-        let other = world.Spawn()
-
-        clicked |> handleClick world
-
-        clicked |> wasClicked world =! true
-        other |> wasClicked world =! false
+        world |> inputEvents |> List.ofSeq =! [ Clicked(entity, Viewing) ]
 
     /// Clicks have to come back in the order they were raised, with the input raised between them
     /// left out. The entities are clicked in the opposite order to the one they were spawned in,
     /// so returning them in entity order rather than raise order would not pass.
     [<Fact>]
-    member _.``clickedEntities returns the clicked entities in order``() =
+    member _.``inputEvents returns clicks in the order they were raised, across entities``() =
         let spawnedFirst = world.Spawn()
         let spawnedSecond = world.Spawn()
 
@@ -102,7 +108,12 @@ type Tests() =
         handleDrag world 1.0 0.0 0.0
         spawnedFirst |> handleClick world
 
-        world |> clickedEntities |> List.ofSeq =! [ spawnedSecond; spawnedFirst ]
+        world |> inputEvents |> List.ofSeq
+        =! [
+            Clicked(spawnedSecond, Viewing)
+            Dragged(Line3.pos 1.0 0.0 0.0)
+            Clicked(spawnedFirst, Viewing)
+        ]
 
     [<Fact>]
     member _.``handleDrag queues the distance travelled``() =
@@ -123,15 +134,14 @@ type Tests() =
         handlePointerMissed world
 
         world |> inputEvents |> List.ofSeq
-        =! [ Clicked(entity, Viewing); PointerMissed ]
+        =! [ Clicked(entity, Viewing); Clicked(background (), Viewing) ]
 
         handleDragStart world
 
         world |> inputEvents |> List.ofSeq =! [ DragStarted ]
 
-    /// Only clicks and background misses are discarded. A queued release belongs to the drag that
-    /// is already running, and dropping it would leave that drag running with no release left to
-    /// end it.
+    /// Only clicks are discarded. A queued release belongs to the drag that is already running,
+    /// and dropping it would leave that drag running with no release left to end it.
     [<Fact>]
     member _.``handleDragStart keeps queued drag input``() =
         beginDrag ()
@@ -143,11 +153,11 @@ type Tests() =
         world |> inputEvents |> List.ofSeq
         =! [ Dragged(Line3.pos 1.0 0.0 0.0); DragEnded ]
 
-    /// Every background miss is discarded, not just the first. One left in the queue would clear
-    /// the selection on the frame the drag starts, leaving the drag moving nodes the view layer
-    /// no longer paints as selected.
+    /// Every click is discarded, not just the first — including a click on the Background
+    /// singleton. One left in the queue would clear the selection on the frame the drag starts,
+    /// leaving the drag moving nodes the view layer no longer paints as selected.
     [<Fact>]
-    member _.``handleDragStart discards every background miss``() =
+    member _.``handleDragStart discards every click, including a background click``() =
         handlePointerMissed world
         handleDrag world 1.0 0.0 0.0
         handlePointerMissed world
@@ -176,9 +186,9 @@ type Tests() =
         world |> inputEvents |> List.ofSeq =! [ DragEnded ]
 
     [<Fact>]
-    member _.``handlePointerMissed queues a background miss``() =
+    member _.``handlePointerMissed queues an ordinary click on the Background singleton``() =
         handlePointerMissed world
-        world |> inputEvents |> List.ofSeq =! [ PointerMissed ]
+        world |> inputEvents |> List.ofSeq =! [ Clicked(background (), Viewing) ]
 
     /// Systems apply a frame's input in the order it was raised, so reading the queue back has to
     /// return that same order.
@@ -208,7 +218,7 @@ type Tests() =
     /// The selection is what the view layer paints and makes draggable, so clearing it mid-drag
     /// would leave the app dragging nodes it no longer shows as selected.
     [<Fact>]
-    member _.``handlePointerMissed queues no background miss while a drag is in flight``() =
+    member _.``handlePointerMissed queues no click while a drag is in flight``() =
         beginDrag ()
         handlePointerMissed world
         world |> inputEvents |> Seq.isEmpty =! true
@@ -225,4 +235,3 @@ type Tests() =
         cleanupEvents world |> ignore
 
         world |> inputEvents |> Seq.isEmpty =! true
-        entity |> wasClicked world =! false

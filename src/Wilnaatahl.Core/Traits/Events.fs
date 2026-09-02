@@ -15,7 +15,6 @@ type internal InputEvent =
     | DragStarted
     | Dragged of distance: {| x: float; y: float; z: float |}
     | DragEnded
-    | PointerMissed
 
 // The input raised since the last frame, in the order the view layer raised it. It is held in one
 // ResizeArray that is emptied at the end of each frame rather than replaced, so the queue itself
@@ -25,6 +24,7 @@ type internal InputEvent =
 // running. That is what lets a system read the queue directly instead of copying it first.
 let private InputQueue = refTrait (fun () -> ResizeArray<InputEvent>())
 
+/// Returns the queue, creating it if absent. Mutates world state; use only for appending input.
 let private queue (world: IWorld) =
     match world.Get InputQueue with
     | Some queued -> queued
@@ -36,22 +36,10 @@ let private queue (world: IWorld) =
 let private raiseInput event (world: IWorld) = (world |> queue).Add event
 
 /// The input raised since the last frame, in the order it was raised.
-let internal inputEvents (world: IWorld) = (world |> queue) :> seq<InputEvent>
-
-/// The entities clicked since the last frame, in the order the clicks were raised.
-///
-/// An entity id held outside the ECS is not maintained by it, so a click must not outlive the
-/// entity it names.
-let internal clickedEntities world =
-    world
-    |> inputEvents
-    |> Seq.choose (function
-        | Clicked(target, _) -> Some target
-        | _ -> None)
-
-/// Whether the entity was clicked since the last frame.
-let internal wasClicked (world: IWorld) entity =
-    world |> clickedEntities |> Seq.contains entity
+let internal inputEvents (world: IWorld) =
+    match world.Get InputQueue with
+    | Some queued -> queued :> seq<InputEvent>
+    | None -> Seq.empty
 
 /// Whether a drag is happening. The two checks cover different parts of one drag: input arrives
 /// between frames, so a queued `DragStarted` covers the window before any system has run, and
@@ -63,10 +51,6 @@ let internal wasClicked (world: IWorld) entity =
 /// for every drag it starts — including when the pointer is cancelled or capture is lost.
 let private dragInFlight (world: IWorld) =
     world.Has DragInFlight || world |> inputEvents |> Seq.contains DragStarted
-
-/// Removes every background miss from the queue, leaving the rest of it in order.
-let private discardPointerMisses (world: IWorld) =
-    (world |> queue).RemoveAll(fun event -> event = PointerMissed) |> ignore
 
 /// Raises a click on the entity, unless the entity is `Hidden` or a drag is happening.
 ///
@@ -85,17 +69,18 @@ let handleDrag (world: IWorld) x y z =
 
 let handleDragEnd (world: IWorld) = world |> raiseInput DragEnded
 
-/// Raises a drag start, discarding any click or background miss that arrived since the last frame.
+/// Raises a drag start, discarding any click that arrived since the last frame.
 ///
-/// While a drag runs, clicks, background misses and further drag starts are refused, so every
-/// system that reads `DragStarted` can assume it means a new drag. Movement and releases are
-/// still accepted, because a running drag needs them.
+/// While a drag runs, clicks and further drag starts are refused, so every system that reads
+/// `DragStarted` can assume it means a new drag. Movement and releases are still accepted,
+/// because a running drag needs them.
 ///
 /// Input accepted moments earlier has not been discarded and would be handled in the same frame:
 /// a second finger can tap a control just before a drag starts. The drag takes precedence,
-/// because handling a tap and a drag in the same frame has no sensible meaning. Only clicks and
-/// background misses are discarded — a queued release may belong to a drag that is still running,
-/// and dropping it would leave that drag running with no release left to end it.
+/// because handling a tap and a drag in the same frame has no sensible meaning. Only clicks are
+/// discarded — a click on the Background singleton is an ordinary click and is discarded along
+/// with the rest — a queued release may belong to a drag that is still running, and dropping it
+/// would leave that drag running with no release left to end it.
 let handleDragStart (world: IWorld) =
     (world |> queue)
         .RemoveAll(
@@ -105,22 +90,24 @@ let handleDragStart (world: IWorld) =
         )
     |> ignore
 
-    world |> discardPointerMisses
-
     if not (dragInFlight world) then
         world |> raiseInput DragStarted
 
-/// Raises a background miss, unless a drag is happening. The selection is what the view layer
-/// paints and makes draggable, so clearing it mid-drag would leave the app dragging nodes it no
-/// longer shows as selected.
+/// Raises a click on the Background singleton, unless a drag is happening. Background clicks are
+/// ordinary clicks that just happen to land outside any node or control; the selection system
+/// clears the selection on one exactly as it would for any other click resolving to
+/// `ClearSelection`.
 let handlePointerMissed (world: IWorld) =
     if not (dragInFlight world) then
-        world |> raiseInput PointerMissed
+        let background = world.Query(With Background) |> Seq.exactlyOne
+        world |> raiseInput (Clicked(background, currentMode world))
 
 let cleanupEvents (world: IWorld) =
     // Input belongs to the frame it arrived in. Left standing, the next frame would act on it a
     // second time.
-    (world |> queue).Clear()
+    match world.Get InputQueue with
+    | Some queued -> queued.Clear()
+    | None -> ()
 
     // A command belongs to the frame its change happened in. Left standing, the next frame would
     // see the previous frame's changes as its own, once per frame, for a change that happened once.
