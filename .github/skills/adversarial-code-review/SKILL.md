@@ -162,7 +162,16 @@ before consolidating, addressing findings, or committing** — do not act on a
 partial panel. The whole point of multi-model review is that any single model, or
 even the majority, can be wrong: a lone dissenter is often the one who caught the
 real bug, so a finding that lands after you think you're done still counts.
-Consolidate and deduplicate the findings across the **full** panel, address every
-genuine issue, then **re-solicit** a fresh multi-model pass on the updated diff.
-Iterate this address-and-re-solicit loop for **at most three rounds**, stopping as
-soon as a round surfaces no genuine findings. Only then is the change done.
+Consolidate and deduplicate the findings across the **full** panel, then address
+every genuine issue. The first panel reviews the complete candidate diff. A fresh
+panel after a fix reviews the resolution delta: verify the stated finding is
+resolved and inspect the changed files for regressions caused by that resolution.
+Do not re-audit unchanged code or re-raise a rejected finding unless the delta
+provides new contrary evidence. An unresolved deferred finding stays in each
+delta packet with the files needed to adjudicate it, even when otherwise
+unchanged. Resolve each deferral as accepted or rejected before the final
+permitted review round. If any genuine finding remains unaddressed after the
+final permitted round, stop and raise it to the user for manual human review; do
+not declare the change done or begin a fourth review round. Iterate this
+address-and-re-solicit loop for **at most three rounds**, stopping as soon as a
+round surfaces no genuine findings. Only then is the change done.

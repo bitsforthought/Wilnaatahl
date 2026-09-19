@@ -159,6 +159,11 @@ lean directly lowers cost. When working in this repo:
   exploration to an `explore`/`research` subagent so its tokens come back as a
   summary instead of accreting raw file contents into the main context that every
   later turn re-sends.
+- **Use the configured explore agent for broad read-only mapping.** Delegate
+  bounded investigation—such as locating implementations, mapping call sites
+  across multiple files, or summarizing unfamiliar subsystems—before reading many
+  files in the main context. Do not delegate narrow lookups or tightly iterative
+  debugging.
 - **Prefer the built-in `view`/`grep`/`glob` over shelling out** to
   `Get-Content`/`Select-String`/`Get-ChildItem`; they return capped, structured
   output instead of dumping raw text into context.
@@ -213,6 +218,36 @@ plan (tests before implementation, never batched to the end)
 
 The adversarial review is **not optional** and **not something to wait to be
 prompted for** — it is part of every change.
+
+### Review scope and re-review protocol
+
+The primary agent prepares a compact review packet for every panel: a
+machine-generated full diff and status from the stated base, intended observable
+behaviour, load-bearing invariants, and validation already run. Keep the packet
+focused; link to historical plans or discussion only when an invariant cannot
+otherwise be understood. For a re-review, also name the prior finding, the
+changed files, and the claimed resolution.
+
+The first panel reviews the complete candidate diff against the full rubric.
+After fixing a finding, the next panel is a delta review: verify that resolution
+and inspect the changed files for regressions it caused. Do not re-audit
+unchanged code or re-raise a rejected finding unless the delta provides new
+contrary evidence. Include every unresolved deferred finding and the files
+needed to adjudicate it in the delta packet, even when they are otherwise
+unchanged.
+
+Maintain a session-local review outcome ledger while a change is under review.
+For each finding, record the reviewer/model, classification, decision
+(accepted, rejected, or deferred), evidence, and the code or test resolving an
+accepted finding. A deferred genuine finding blocks completion and remains in
+each later packet until it is accepted or rejected with evidence. Use the ledger
+to consolidate the panel and scope re-reviews. Do not commit the ledger or create
+repository tracking files unless the user explicitly asks. Resolve every
+deferred finding as accepted or rejected no later than the final permitted review
+round; the three-round cap does not permit declaring a change done with one open.
+If any genuine finding remains unaddressed after the final permitted round, stop
+and raise it to the user for manual human review; do not declare the change done
+or begin a fourth review round.
 
 ## Committing and source hygiene
 
