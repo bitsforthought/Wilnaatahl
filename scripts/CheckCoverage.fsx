@@ -10,6 +10,25 @@ type CheckResult =
     | Improved of current: float
     | Regressed of current: float * baseline: float
 
+/// A coverage metric tracked against a watermark: its display name, its key in
+/// coverage-baseline.json, and its key in the ReportGenerator JsonSummary.
+type Metric =
+    { Label: string
+      BaselineKey: string
+      SummaryKey: string }
+
+let lineMetric =
+    { Label = "Line coverage"
+      BaselineKey = "lineCoverage"
+      SummaryKey = "linecoverage" }
+
+let branchMetric =
+    { Label = "Branch coverage"
+      BaselineKey = "branchCoverage"
+      SummaryKey = "branchcoverage" }
+
+let metrics = [ lineMetric; branchMetric ]
+
 let tryGetProperty (property: string) (element: JsonElement) =
     match element.TryGetProperty(property) with
     | true, prop -> Ok prop
@@ -18,19 +37,15 @@ let tryGetProperty (property: string) (element: JsonElement) =
 let tryGetDouble (property: string) (element: JsonElement) =
     tryGetProperty property element |> Result.map (fun prop -> prop.GetDouble())
 
-let parseBaseline (json: string) path =
-    let doc = JsonDocument.Parse(json)
-
-    tryGetDouble "lineCoverage" doc.RootElement
+let parseBaseline (metric: Metric) (doc: JsonDocument) path =
+    tryGetDouble metric.BaselineKey doc.RootElement
     |> Result.mapError (fun prop -> PropertyNotFound(prop, path))
 
-let parseSummary (json: string) path =
-    let doc = JsonDocument.Parse(json)
-
+let parseSummary (metric: Metric) (doc: JsonDocument) path =
     tryGetProperty "summary" doc.RootElement
     |> Result.mapError (fun prop -> PropertyNotFound(prop, path))
     |> Result.bind (fun summary ->
-        tryGetDouble "linecoverage" summary
+        tryGetDouble metric.SummaryKey summary
         |> Result.mapError (fun prop -> PropertyNotFound(prop, path)))
 
 let checkCoverage current baseline =
@@ -57,29 +72,52 @@ let exitWithError error =
 
     exit 1
 
-let baseline =
-    readFile baselinePath
-    |> Result.bind (fun json -> parseBaseline json baselinePath)
-    |> function
-        | Ok value -> value
-        | Error e -> exitWithError e
+let unwrap result =
+    match result with
+    | Ok value -> value
+    | Error e -> exitWithError e
 
-let current =
-    readFile summaryPath
-    |> Result.bind (fun json -> parseSummary json summaryPath)
-    |> function
-        | Ok value -> value
-        | Error e -> exitWithError e
+let baselineDoc = readFile baselinePath |> Result.map JsonDocument.Parse |> unwrap
 
-printfn "Line coverage: %.1f%% (baseline: %.1f%%)" current baseline
+let summaryDoc = readFile summaryPath |> Result.map JsonDocument.Parse |> unwrap
 
-match checkCoverage current baseline with
-| Regressed(current, baseline) ->
-    eprintfn "FAIL: Line coverage regressed from %.1f%% to %.1f%%." baseline current
+let results =
+    metrics
+    |> List.map (fun metric ->
+        let baseline = parseBaseline metric baselineDoc baselinePath |> unwrap
+        let current = parseSummary metric summaryDoc summaryPath |> unwrap
+        printfn "%s: %.1f%% (baseline: %.1f%%)" metric.Label current baseline
+        metric, current, checkCoverage current baseline)
+
+let anyRegressed =
+    results
+    |> List.exists (fun (_, _, result) ->
+        match result with
+        | Regressed _ -> true
+        | _ -> false)
+
+for metric, current, result in results do
+    match result with
+    | Regressed(current, baseline) -> eprintfn "FAIL: %s regressed from %.1f%% to %.1f%%." metric.Label baseline current
+    | Improved current -> printfn "PASS: %s improved to %.1f%%." metric.Label current
+    | Pass -> printfn "PASS: %s meets or exceeds baseline." metric.Label
+
+if anyRegressed then
     exit 1
-| Improved current ->
-    printfn "PASS: Line coverage improved from %.1f%% to %.1f%%." baseline current
-    let newBaseline = sprintf "{\n  \"lineCoverage\": %.1f\n}\n" current
-    File.WriteAllText(baselinePath, newBaseline)
-    printfn "Updated %s with new baseline." baselinePath
-| Pass -> printfn "PASS: Line coverage meets or exceeds baseline."
+else
+    let anyImproved =
+        results
+        |> List.exists (fun (_, _, result) ->
+            match result with
+            | Improved _ -> true
+            | _ -> false)
+
+    if anyImproved then
+        let properties =
+            results
+            |> List.map (fun (metric, current, _) -> sprintf "  \"%s\": %.1f" metric.BaselineKey current)
+            |> String.concat ",\n"
+
+        let newBaseline = sprintf "{\n%s\n}\n" properties
+        File.WriteAllText(baselinePath, newBaseline)
+        printfn "Updated %s with new baseline." baselinePath
