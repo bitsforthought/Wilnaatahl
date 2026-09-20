@@ -43,6 +43,7 @@ bin/
 obj/
 TestResults/
 coveragereport/
+coveragereport-ts/
 .fable/
 .ionide/
 .fsac/
