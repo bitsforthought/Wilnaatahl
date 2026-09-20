@@ -21,23 +21,15 @@ not reimplement domain logic.
 - **No duplication of business logic.** React components use the F#-generated view
   model and ECS systems for state and actions; do not reimplement domain rules in
   TypeScript.
-- **…but avoiding redundant state outranks that.** Koota is a bridge: the same
-  world is queryable from both sides. When a value is a one-line derivation over
-  traits TypeScript can already query (e.g. `useOverlayVisible` = `CurrentMode` is
-  `Viewing` AND exactly one `Selected`), derive it in a hook here instead of having
-  an F# system
-  mirror it into an extra trait each frame. An extra trait is a cached second
-  source of truth that can disagree with what it was derived from. Keep the
-  derivation in F# when it is genuinely domain logic rather than a trivial
-  predicate over traits, when several consumers would otherwise repeat it, or when
-  per-consumer recomputation is measurably expensive. **Price of the trade:** this
-  layer has no unit tests yet, so a derivation moved here loses automated
-  coverage — take the trade only when the derivation is simple enough to verify by
-  reading, and record the gap in the feature's spec.
-- **Never write a trait value that hasn't changed.** Koota's `set` notifies change
-  subscribers unconditionally — it does not diff. A per-frame system that writes a
-  recomputed value every frame re-renders every subscribed component at 60 fps.
-  Guard the write on an actual change (see `Systems.Controls.setButtonDisabled`).
+- **Keep `.tsx` presentation-only.** JSX may wire hooks, state, props, and styles,
+  but arithmetic, string composition, branching, and I/O sequences belong in F#
+  when they are domain/layout logic, or in a tested `.ts` sibling when they are
+  browser-specific. See `AGENTS.md` for the canonical boundary; `.tsx` is outside
+  the TypeScript coverage denominator.
+- **Avoid redundant state and unconditional trait writes.** Follow the canonical
+  Koota guidance in `AGENTS.md`: derive trivial predicates from queryable traits,
+  and guard changed-value writes. TypeScript derivations need direct Vitest
+  coverage.
 - **Use named functions for hot-path callbacks.** ECS/query callbacks (e.g.
   Koota `updateEach`) called per frame per entity should reference named
   functions, not inline lambdas, so the closure is allocated once.
