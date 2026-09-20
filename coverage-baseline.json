@@ -1,4 +1,6 @@
 {
   "lineCoverage": 98.6,
-  "branchCoverage": 93.2
+  "branchCoverage": 93.3,
+  "tsLineCoverage": 94.2,
+  "tsBranchCoverage": 98.8
 }

@@ -40,12 +40,12 @@ let branchMetric =
       SummaryKey = "branchcoverage" }
 
 let typeScriptLineMetric =
-    { Label = "TypeScript line coverage"
+    { Label = "Line coverage"
       BaselineKey = "tsLineCoverage"
       SummaryKey = "linecoverage" }
 
 let typeScriptBranchMetric =
-    { Label = "TypeScript branch coverage"
+    { Label = "Branch coverage"
       BaselineKey = "tsBranchCoverage"
       SummaryKey = "branchcoverage" }
 
