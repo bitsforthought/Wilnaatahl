@@ -20,7 +20,7 @@
 // methods; theory data discovery and property-based execution are not available
 // in this Fable/Vitest harness.
 
-import { test } from "vitest";
+import { describe, test } from "vitest";
 import * as EntityTests from "../Wilnaatahl.ECS.Tests/out/ECS/EntityTests.ts";
 import * as QueryTests from "../Wilnaatahl.ECS.Tests/out/ECS/QueryTests.ts";
 import * as RelationTests from "../Wilnaatahl.ECS.Tests/out/ECS/RelationTests.ts";
@@ -77,19 +77,21 @@ function registerTestClass({ className, module }: TestClass): void {
     );
   }
 
-  for (const key of methodKeys) {
-    const method = module[key] as (instance: TestInstance) => void;
+  describe(className, () => {
+    for (const key of methodKeys) {
+      const method = module[key] as (instance: TestInstance) => void;
 
-    test(decodeFableName(key.slice(memberPrefix.length)), () => {
-      // A fresh instance per test, mirroring xUnit's per-test class lifetime.
-      const instance = (construct as () => TestInstance)();
-      try {
-        method(instance);
-      } finally {
-        instance.Dispose();
-      }
-    });
-  }
+      test(decodeFableName(key.slice(memberPrefix.length)), () => {
+        // A fresh instance per test, mirroring xUnit's per-test class lifetime.
+        const instance = (construct as () => TestInstance)();
+        try {
+          method(instance);
+        } finally {
+          instance.Dispose();
+        }
+      });
+    }
+  });
 }
 
 for (const testClass of testClasses) {
