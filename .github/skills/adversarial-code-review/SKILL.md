@@ -30,6 +30,14 @@ touched, ask:
 - Are tests **strong** — would each assertion actually fail if the code were
   broken? Flag tautological assertions (checking a value didn't change when
   nothing could have changed it).
+- Does any new `.tsx` contain computation rather than hook/state/props/style
+  wiring? Because `.tsx` is excluded from the coverage denominator, arithmetic,
+  string composition, branching, and I/O sequences there can evade the coverage
+  gate; require the logic to move to F# or a tested `.ts` sibling.
+- Does any new `.ts` logic lack a corresponding test? The TypeScript denominator
+  covers hand-written `src/**/*.ts` (excluding generated files and `vite-env`),
+  so untested browser logic is a coverage and regression risk even when the
+  aggregate gate passes.
 - For `internal` primitives of fundamental types (e.g. `FamilyGraph`), is there a
   **direct** test, or only transitive coverage through callers?
 - **A RED test that only failed to compile was never RED.** Confirm new tests

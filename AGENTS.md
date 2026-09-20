@@ -111,6 +111,12 @@ partition or category.
   and data structures originate in F# and are generated to TypeScript via Fable.
   React components must use the F#-generated view model and ECS systems for state
   and actions — do not reimplement domain logic in TypeScript.
+- **Keep `.tsx` presentation-only.** JSX files may contain hook, state, props, and
+  style wiring, but not arithmetic, string composition, branching, or I/O
+  sequences that encode domain or layout logic. Move domain/layout logic to F#
+  (and regenerate `src/generated/`), or put browser-specific logic in a tested
+  `.ts` sibling. This boundary matters because the TypeScript coverage denominator
+  intentionally excludes `.tsx`.
 - **Avoiding redundant state outranks "F# is authoritative".** Koota is a bridge:
   the same world is queryable from both F# and TypeScript. So when a value is a
   one-line derivation of world state both sides can already see (e.g. "the overlay
@@ -120,10 +126,8 @@ partition or category.
   values it came from; that cost is real, whereas "the rule lives in F#" is only a
   default. Keep the derivation in F# when it is genuinely domain logic (more than
   a trivial predicate over traits), when several consumers would otherwise repeat
-  it, or when recomputing it per consumer is measurably expensive. Note the price:
-  the TypeScript layer has **no unit tests yet**, so moving a derivation there
-  trades automated coverage for the removal of the cached copy — take that trade
-  only for derivations simple enough to verify by reading.
+  it, or when recomputing it per consumer is measurably expensive. TypeScript
+  derivations need direct Vitest coverage.
 - **Presentation formatting is a view-layer (TS) concern, not domain logic.**
   Locale-dependent **date/number formatting** belongs in the TypeScript view layer
   (e.g. `Intl.DateTimeFormat`), not F#. **Translatable language strings** come from
@@ -144,10 +148,14 @@ partition or category.
 - **Setup:** `npm run init` (installs npm packages, restores .NET tools/packages)
 - **Dev server:** `npm run dev` (runs Fable then Vite with hot reload)
 - **Build for deploy:** `npm run build`
-- **Unit tests:** `npm test` (.NET xUnit, then Koota conformance via Fable + vite-node)
+- **Unit tests:** `npm test` (.NET xUnit, then the full Vitest suite, including
+  Koota conformance)
+- **TypeScript tests:** `npm run test:ts` (full Vitest suite, including Koota
+  conformance)
 - **Koota tests only:** `npm run test:koota`
-- **Coverage gate:** `npm run coverage:check`
-- **Coverage report:** `npm run report --coveragefile=<path-to-xml>`
+- **Coverage gate:** `npm run coverage:check` (F# and TypeScript are gated
+  separately through the same `CheckCoverage.fsx`)
+- **Coverage report:** `npm run report` (F#) or `npm run report:ts` (TypeScript)
 - **Format code:** `npm run format` (Prettier for TS, Fantomas for F#)
 
 ## Keeping token cost down
@@ -205,8 +213,8 @@ plan (tests before implementation, never batched to the end)
   → GREEN (smallest idiomatic-F# change that passes)
   → REFACTOR (deep dead-code removal, truthful comments)
   → npm run build          (Fable can emit bad TS that `dotnet test` misses)
-  → npm test / test:koota
-  → npm run coverage:check
+  → npm test  (use test:ts or test:koota for targeted iteration)
+  → npm run coverage:check  (separate F# and TypeScript ratchets)
   → MANDATORY multi-model adversarial review  (run the `adversarial-reviewer`
     agent under several different models — e.g. an Anthropic, an OpenAI, and a
     Google model — never skipped, never gated on perceived risk; WAIT for every
