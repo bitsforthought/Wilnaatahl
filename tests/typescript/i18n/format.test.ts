@@ -14,6 +14,7 @@ import {
   detectLocale,
   EN,
   kinshipRowText,
+  nodeLabelText,
   otherNamesHeading,
 } from "../../../src/i18n/format";
 
@@ -129,6 +130,16 @@ describe("format date rendering", () => {
 });
 
 describe("composeNodeLabel", () => {
+  test("returns an empty label for an absent view", () => {
+    expect(nodeLabelText(undefined, EN)).toBe("");
+  });
+
+  test("composes a present label view", () => {
+    const view = labelView("Colonial", undefined, undefined, undefined, undefined);
+
+    expect(nodeLabelText(view, EN)).toBe("Colonial");
+  });
+
   test.each([
     [
       "all available lines",
