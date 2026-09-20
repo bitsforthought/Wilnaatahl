@@ -103,6 +103,11 @@ export function composeNodeLabel(view: NodeLabelView, locale: Locale): string {
   return lines.join("\n");
 }
 
+/** Formats the optional node label view, using an empty string when no label exists. */
+export function nodeLabelText(view: NodeLabelView | undefined, locale: Locale): string {
+  return view === undefined ? "" : composeNodeLabel(view, locale);
+}
+
 /** Renders one Kinship row of the detail overlay as `<label> <value>`. */
 export function kinshipRowText(locale: Locale, row: KinshipRow): string {
   switch (row.kind) {

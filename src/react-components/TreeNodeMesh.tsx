@@ -3,7 +3,7 @@ import { Html } from "@react-three/drei";
 import { Entity } from "koota";
 import { useActions, useTrait } from "koota/react";
 import { eventActions, NodeLabel, Size, PersonRef, useMeshRef } from "../ecs";
-import { composeNodeLabel } from "../i18n/format";
+import { nodeLabelText } from "../i18n/format";
 import { useLocale } from "../i18n/hooks";
 
 // Scales the HTML label so it tracks the apparent size of the node as the camera
@@ -22,7 +22,7 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
   // multi-line text for the active locale, so a locale change re-composes it.
   const labelView = useTrait(entity, NodeLabel);
   const locale = useLocale();
-  const label = labelView ? composeNodeLabel(labelView, locale) : "";
+  const label = nodeLabelText(labelView, locale);
   const ref = useMeshRef(entity);
 
   const { handleMeshClick } = useActions(eventActions);
