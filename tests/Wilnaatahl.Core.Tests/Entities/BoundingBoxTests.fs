@@ -1,5 +1,6 @@
 module Wilnaatahl.Tests.Entities.BoundingBoxTests
 
+open System
 open Xunit
 open Swensen.Unquote
 open Wilnaatahl.ECS
@@ -10,84 +11,92 @@ open Wilnaatahl.Entities
 open Wilnaatahl.Traits.ViewTraits
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Tests.EcsTestSupport
+open Wilnaatahl.Tests.TestUtils
 
-[<Fact>]
-let ``spawn creates bounding box with Size and Hidden`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
-    let boxId, _, _ = world |> BoundingBox.spawn {| x = 1.0; y = 2.0; z = 3.0 |}
-
-    boxId |> has Hidden =! true
-
-[<Fact>]
-let ``spawn creates two corners with Position and Hidden`` () =
-    use ecs = new EcsWorld()
+type Tests() =
+    let ecs = new EcsWorld()
     let world = ecs.World
 
-    let _, boxPosId, boundPosId = world |> BoundingBox.spawn zeroPosition
+    interface IDisposable with
+        member _.Dispose() = (ecs :> IDisposable).Dispose()
 
-    boxPosId |> has Position =! true
-    boxPosId |> has Hidden =! true
-    boundPosId |> has Position =! true
-    boundPosId |> has Hidden =! true
+    [<Fact>]
+    member _.``spawn creates bounding box with Size and Hidden``() =
+        let boxId, _, _ = world |> BoundingBox.spawn {| x = 1.0; y = 2.0; z = 3.0 |}
 
-[<Fact>]
-let ``spawn returns three distinct entity ids`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
+        boxId |> has Hidden =! true
 
-    let boxId, boxPosId, boundPosId = world |> BoundingBox.spawn zeroPosition
+    [<Fact>]
+    member _.``spawn creates two corners with Position and Hidden``() =
+        let _, boxPosId, boundPosId = world |> BoundingBox.spawn zeroPosition
 
-    boxId <>! boxPosId
-    boxId <>! boundPosId
-    boxPosId <>! boundPosId
+        boxPosId |> has Position =! true
+        boxPosId |> has Hidden =! true
+        boundPosId |> has Position =! true
+        boundPosId |> has Hidden =! true
 
-[<Fact>]
-let ``getCorners returns the two corner entities`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
+    [<Fact>]
+    member _.``spawn returns three distinct entity ids``() =
+        let boxId, boxPosId, boundPosId = world |> BoundingBox.spawn zeroPosition
 
-    let boxId, boxPosId, boundPosId = world |> BoundingBox.spawn zeroPosition
-    let c1, c2 = boxId |> BoundingBox.getCorners world
+        boxId <>! boxPosId
+        boxId <>! boundPosId
+        boxPosId <>! boundPosId
 
-    Set.ofList [ c1; c2 ] =! Set.ofList [ boxPosId; boundPosId ]
+    [<Fact>]
+    member _.``getCorners returns the two corner entities``() =
+        let boxId, boxPosId, boundPosId = world |> BoundingBox.spawn zeroPosition
+        let c1, c2 = boxId |> BoundingBox.getCorners world
 
-[<Fact>]
-let ``updateCorners calls callback for each corner with correct IsBounds flag`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
+        Set.ofList [ c1; c2 ] =! Set.ofList [ boxPosId; boundPosId ]
 
-    let boxId, _, _ = world |> BoundingBox.spawn zeroPosition
-    let mutable isBoundsValues = []
+    [<Fact>]
+    member _.``getCorners rejects a bounding box without two corners``() =
+        let boxId, boxPosId, _ = world |> BoundingBox.spawn zeroPosition
+        boxPosId |> destroy
 
-    boxId
-    |> BoundingBox.updateCorners world AlwaysTrack (fun _ isBounds -> isBoundsValues <- isBounds :: isBoundsValues)
+        captureExceptionMessage (fun () -> boxId |> BoundingBox.getCorners world |> ignore)
+        =! Some $"Found BoundingBox {boxId} with 1 corners."
 
-    // Should have exactly one true and one false
-    isBoundsValues |> List.sort =! [ false; true ]
+    [<Fact>]
+    member _.``getCorners rejects a bounding box without corners``() =
+        let boxId, boxPosId, boundPosId = world |> BoundingBox.spawn zeroPosition
+        boxPosId |> destroy
+        boundPosId |> destroy
 
-[<Fact>]
-let ``updateCorners can modify corner positions`` () =
-    use ecs = new EcsWorld()
-    let world = ecs.World
+        captureExceptionMessage (fun () -> boxId |> BoundingBox.getCorners world |> ignore)
+        =! Some $"Found BoundingBox {boxId} with 0 corners."
 
-    let boxId, boxPosId, boundPosId = world |> BoundingBox.spawn zeroPosition
+    [<Fact>]
+    member _.``updateCorners calls callback for each corner with correct IsBounds flag``() =
+        let boxId, _, _ = world |> BoundingBox.spawn zeroPosition
+        let mutable isBoundsValues = []
 
-    boxId
-    |> BoundingBox.updateCorners world AlwaysTrack (fun pos isBounds ->
-        if isBounds then
-            pos.x <- 10.0
-            pos.y <- 10.0
-            pos.z <- 10.0
-        else
-            pos.x <- -1.0
-            pos.y <- -1.0
-            pos.z <- -1.0)
+        boxId
+        |> BoundingBox.updateCorners world AlwaysTrack (fun _ isBounds -> isBoundsValues <- isBounds :: isBoundsValues)
 
-    // Check that positions were updated (we don't know which corner is which,
-    // so check both possibilities)
-    let pos1 = (boxPosId |> get Position).Value
-    let pos2 = (boundPosId |> get Position).Value
+        // Should have exactly one true and one false
+        isBoundsValues |> List.sort =! [ false; true ]
 
-    Set.ofList [ pos1; pos2 ]
-    =! Set.ofList [ Line3.pos -1.0 -1.0 -1.0; Line3.pos 10.0 10.0 10.0 ]
+    [<Fact>]
+    member _.``updateCorners can modify corner positions``() =
+        let boxId, boxPosId, boundPosId = world |> BoundingBox.spawn zeroPosition
+
+        boxId
+        |> BoundingBox.updateCorners world AlwaysTrack (fun pos isBounds ->
+            if isBounds then
+                pos.x <- 10.0
+                pos.y <- 10.0
+                pos.z <- 10.0
+            else
+                pos.x <- -1.0
+                pos.y <- -1.0
+                pos.z <- -1.0)
+
+        let pos1 = (boxPosId |> get Position).Value
+        let pos2 = (boundPosId |> get Position).Value
+
+        // Check that positions were updated (we don't know which corner is which,
+        // so check both possibilities)
+        Set.ofList [ pos1; pos2 ]
+        =! Set.ofList [ Line3.pos -1.0 -1.0 -1.0; Line3.pos 10.0 10.0 10.0 ]

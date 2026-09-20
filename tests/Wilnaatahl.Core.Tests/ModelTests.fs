@@ -59,6 +59,12 @@ let ``huwilp returns all unique huwilp`` () =
     let huwilpSet = huwilp graph
     huwilpSet =! Set.ofList [ WilpName "H"; WilpName "L" ]
 
+[<Fact>]
+let ``huwilpForest returns the empty sequence for a Wilp absent from the graph`` () =
+    let graph = createFamilyGraph testPeopleAndParents testCouples []
+
+    graph |> huwilpForest (WilpName "absent") |> Seq.toList =! []
+
 type private TreeStats = {
     NodeCount: int
     LeafCount: int

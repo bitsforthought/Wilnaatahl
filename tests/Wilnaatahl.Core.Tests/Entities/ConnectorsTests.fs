@@ -15,6 +15,7 @@ open Wilnaatahl.Traits.PeopleTraits
 open Wilnaatahl.Traits.SpaceTraits
 open Wilnaatahl.Tests.EcsTestSupport
 open Wilnaatahl.Tests.TestData
+open Wilnaatahl.Tests.TestUtils
 
 let private spawnTestScene (world: IWorld) =
     let graph = createFamilyGraph testPeopleAndParents testCouples []
@@ -83,3 +84,15 @@ type Tests() =
 
         let elbowCount = world.Query(With Elbow) |> Seq.length
         elbowCount =! 0
+
+    [<Fact>]
+    member _.``spawnAllConnectors rejects a rendered Wilp entity without a name``() =
+        let graph = createFamilyGraph testPeopleAndParents testCouples []
+        let wilpId = world.Spawn()
+        let nodes = Scene.enumerateHuwilpToRender graph |> Map.find testWilpName
+
+        for nodeKey, person in nodes do
+            world |> People.spawnTreeNode person nodeKey NodeLabelView.Empty wilpId
+
+        captureExceptionMessage (fun () -> world |> Connectors.spawnAllConnectors graph)
+        =! Some $"Found Wilp {wilpId} without a name."

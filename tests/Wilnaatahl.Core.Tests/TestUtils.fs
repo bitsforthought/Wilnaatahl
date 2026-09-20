@@ -5,6 +5,15 @@ open System.Threading
 open Wilnaatahl.Model
 open Wilnaatahl.ViewModel.LayoutBox
 
+/// Runs the given action and returns the message of the exception it throws, or None if it does
+/// not throw.
+let captureExceptionMessage action =
+    try
+        action ()
+        None
+    with ex ->
+        Some ex.Message
+
 /// Pauses a test run to allow attaching a debugger to the test host.
 let debugBreak () =
     if not Debugger.IsAttached then
