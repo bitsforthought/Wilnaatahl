@@ -44,7 +44,7 @@ type TestWorldWrapper() =
     interface System.IDisposable with
         member _.Dispose() =
 #if FABLE_COMPILER
-            ()
+            FableTestInfra.disposeTestWorld world
 #else
             (testWorld :> System.IDisposable).Dispose()
 #endif

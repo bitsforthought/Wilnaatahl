@@ -112,6 +112,17 @@ type WorldTests() =
         let afterChanges = world.Query().ToSequence() |> Seq.map snd |> Set.ofSeq
         afterChanges =! set [ target; relationOnly; tagged ]
 
+#if FABLE_COMPILER
+    /// Disposed wrappers release their Koota world slot for reuse.
+    [<Fact>]
+    member _.``Can reuse Koota world slots after disposal``() =
+        let worldCreationAttempts = 32 // Twice Koota's bounded 16-slot pool.
+
+        for _ in 1..worldCreationAttempts do
+            use temporaryWorld = new TestWorldWrapper()
+            temporaryWorld.World.Query() |> ignore
+#endif
+
 // ------------------------------------------------------------------
 // .NET-only tests (use Unquote quotations or TestECS internals)
 // ------------------------------------------------------------------

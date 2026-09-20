@@ -219,6 +219,13 @@ runSystems world 0.1` asserts nothing and silently under-runs if the tuning
   tested with confidence in .NET-only `Wilnaatahl.Core.Tests`. Keep the portable
   surface to the minimum needed to establish wrapper/mock equivalence; do **not**
   port app or system tests into it just because they touch the ECS.
+- **Portable ECS tests use `[<Fact>]` only.** The Fable test infrastructure
+  provides only a no-op `FactAttribute`, and the Vitest harness invokes each
+  compiled test method once with no data arguments. `[<Theory>]` data discovery
+  is therefore unsupported, and `[<Property>]` remains .NET-only because FsCheck
+  is not part of the portable test project. This is an intentional exception to
+  the general preference for theories and properties: keep parameterized or
+  property-based coverage in `Wilnaatahl.Core.Tests`.
 - **Koota is the gold standard.** The mock must match Koota's behavior exactly,
   even when that behavior appears buggy or inconsistent. Document known Koota bugs
   with issue links, but replicate them faithfully.

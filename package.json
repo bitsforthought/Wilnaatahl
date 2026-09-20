@@ -13,7 +13,7 @@
     "dev": "npm run fable && npm run prettier && vite",
     "preview": "npm run fable && npm run prettier && vite preview",
     "test": "dotnet test && npm run test:koota",
-    "test:koota": "dotnet fable tests/Wilnaatahl.ECS.Tests --lang typescript --outDir tests/Wilnaatahl.ECS.Tests/out --noCache && npx vite-node tests/Wilnaatahl.ECS.Tests/out/Runner.ts",
+    "test:koota": "dotnet fable tests/Wilnaatahl.ECS.Tests --lang typescript --outDir tests/Wilnaatahl.ECS.Tests/out --noCache && vitest run kootaConformance",
     "test:ts": "vitest run",
     "coverage": "node -e \"require('fs').rmSync('TestResults',{recursive:true,force:true})\" && dotnet test --collect:\"XPlat Code Coverage\" --results-directory TestResults",
     "coverage:check": "npm run coverage && dotnet reportgenerator -reports:TestResults/**/coverage.cobertura.xml -targetdir:coveragereport -reporttypes:JsonSummary && dotnet fsi --warnaserror --warnon:3886 scripts/CheckCoverage.fsx",

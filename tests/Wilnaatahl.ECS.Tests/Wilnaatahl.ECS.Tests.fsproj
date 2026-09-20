@@ -13,7 +13,6 @@
     <Compile Include="ECS/RelationTests.fs" />
     <Compile Include="ECS/WorldTests.fs" />
     <Compile Include="ECS/TrackingTests.fs" />
-    <Compile Include="Runner.fs" />
   </ItemGroup>
 
   <ItemGroup>
