@@ -22,6 +22,7 @@
     <Compile Include="ViewModel/Palette.fs" />
     <Compile Include="ViewModel/Scene.fs" />
     <Compile Include="ViewModel/NodeContent.fs" />
+    <Compile Include="ViewModel/OverlayPlacement.fs" />
     <Compile Include="ViewModel/Localization.fs" />
     <Compile Include="Traits/ViewTraits.fs" />
     <Compile Include="Traits/History.fs" />
