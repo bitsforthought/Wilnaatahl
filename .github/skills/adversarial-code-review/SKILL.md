@@ -124,6 +124,12 @@ Check the diff against the `fsharp-style` skill. Common regressions to hunt for:
 
 - Doc comments follow the `fsharp-doc-comments` skill: contract-not-consumer, no
   version numbers, no restating the signature, dependency→consumer direction.
+- **Code movement is not permission to refactor.** When a change relocates code,
+  compare the old and new forms: named functions, helper boundaries, declaration
+  order, and useful explanatory comments should survive unless the task
+  explicitly requires restructuring or the old explanation became false. Flag
+  incidental inlining, renaming, reordering, or comment deletion because it hides
+  the mechanical move in review noise and can discard deliberate structure.
 - **Duplicated explanation is drift waiting to happen.** If the same mechanism is
   explained at more than one use site, flag it: the explanation belongs once, on
   the declaration the sites share. Grep the diff for a sentence repeated across

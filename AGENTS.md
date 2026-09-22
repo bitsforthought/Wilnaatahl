@@ -262,6 +262,15 @@ or begin a fourth review round.
 - **Wrap commit messages at a maximum of 80 columns.** `git commit -m` keeps each
   `-m` argument as one unwrapped line; use `git commit -F <file>` (or `\n` inside
   `-m`) to wrap properly. Include the `Co-authored-by: Copilot` trailer.
+- **Do not amend a commit after its branch has been pushed by default.** Add a
+  follow-up commit so collaborators who fetched the published tip can
+  fast-forward normally. This also applies to the layer that owns a stacked-PR
+  change: descendants may still need rebasing onto the updated layer, but keeping
+  one commit per PR is not worth unnecessarily invalidating the owning branch's
+  published history. Amend or otherwise rewrite a pushed commit only with
+  explicit user approval or when the branch is known to be unshared;
+  force-with-lease protects remote updates, not collaborators' existing local
+  references.
 - **Source files use LF line endings and spaces (never tabs) for indentation**,
   enforced by `.editorconfig` (plus `.gitattributes` for line endings). Don't
   fight the formatters — Prettier owns `.ts`/`.tsx`, Fantomas owns `.fs`/`.fsx`.

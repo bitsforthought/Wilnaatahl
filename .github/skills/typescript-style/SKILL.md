@@ -21,6 +21,12 @@ not reimplement domain logic.
 - **No duplication of business logic.** React components use the F#-generated view
   model and ECS systems for state and actions; do not reimplement domain rules in
   TypeScript.
+- **Keep code moves mechanical by default.** When relocating existing code,
+  preserve its named functions, helper boundaries, declaration order, and useful
+  explanatory comments. A move should be easy to review as the same code in a new
+  home; do not inline, restructure, rename, or delete comments unless the task
+  explicitly requires that separate refactor or the original text is no longer
+  correct.
 - **Keep `.tsx` presentation-only.** JSX may wire hooks, state, props, and styles,
   but arithmetic, string composition, branching, and I/O sequences belong in F#
   when they are domain/layout logic, or in a tested `.ts` sibling when they are
@@ -36,6 +42,11 @@ not reimplement domain logic.
 - **All `import` statements at the top of the file.** No inline imports
   (`import("...").T`). Group them at the top so dependencies are visible at a
   glance.
+- **Prefer named public types over type-query indirection.** Import `World`,
+  `Entity`, `IWorld`, and other exported types directly instead of spelling them as
+  `ReturnType<typeof createWorld>`, `ReturnType<World["spawn"]>`, or
+  `Parameters<typeof render>[0]`. Use `ReturnType`/`Parameters` only when the
+  relevant shape genuinely has no named public type.
 - **No magic numbers.** Extract a named `const` whose name says what the value
   _means_, and put the reasoning in a comment on the constant rather than at each
   use site. This matters most for values from a domain the reader may not know —
@@ -49,6 +60,9 @@ not reimplement domain logic.
     `NDC_TO_UNIT_OFFSET` — not one shared name. A plausible-sounding name that is
     wrong (`0.5` is not the "half-extent" of a -1..1 range; that is `1`) is worse
     than the bare literal, because it reads as verified.
+- **Name representation conversions.** Replace unexplained transforms such as
+  repeated `slice(1)` with a helper whose name states the representation it
+  returns.
 - **Name unlabelled boolean arguments at the call site.** TypeScript has no named
   parameters, so a call like `mesh.updateWorldMatrix(true, false)` tells the reader
   nothing. Bind a `const` per argument (`UPDATE_PARENTS`/`UPDATE_CHILDREN`) so the
@@ -61,6 +75,32 @@ not reimplement domain logic.
   function implements non-obvious maths, say in a sentence what it is doing and why
   it works, and link an external reference — the arithmetic is visible in the code;
   the concept is not.
+
+## TypeScript tests
+
+- **Choose matchers by contract.** `toBe` uses `Object.is`, so use it for primitive
+  values and required reference identity. `toEqual` recursively compares values;
+  `toStrictEqual` also pins strict shape and prototype semantics. Prefer one
+  whole-value assertion over separate field assertions when the complete value is
+  the contract, but do not use `toStrictEqual` on library objects whose private
+  runtime fields differ despite equivalent public state (for example, compare a
+  Three.js quaternion's documented `[x, y, z, w]` array).
+- **Every assertion must add an independent guarantee.** Remove comparisons that
+  follow logically from stronger exact assertions, repeated assertions with no
+  intervening state change, and checks that merely restate an input assigned by
+  the test. Keep both value equality and `not.toBe` when the contract requires
+  equal-but-independently-allocated defaults.
+- **Assert canonical defaults, not only agreement between instances.** Two fresh
+  values can be equally wrong. Compare a factory result with its named canonical
+  constructor or explicit expected value, then separately assert reference
+  independence when mutability makes that significant.
+- **Exercise subscription boundaries.** For reactive hooks, test the first
+  add-after-mount transition as well as updates and removals of an already-present
+  trait. Mounting only before or only after the trait exists can miss a broken
+  subscription path.
+- **Assert mathematical invariants directly.** For vector, colour, or geometry
+  assertions, test the invariant itself (for example, vector distance near zero
+  for alignment) rather than relying on an unstated mathematical premise.
 
 ## React + Three.js
 

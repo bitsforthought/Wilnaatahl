@@ -50,6 +50,12 @@ away from C#-in-F# habits. Each is a hard convention for this codebase.
   on the dependency's types. The dependency module should expose primitives
   (lookups, queries) that any consumer can build on. (See the `fsharp-doc-comments`
   skill for the related rule about how this affects the dependency's doc comments.)
+- **Keep code moves mechanical by default.** When relocating existing code,
+  preserve its named functions, helper boundaries, declaration order, and useful
+  explanatory comments. A move should be easy to review as the same code in a new
+  home; do not inline, restructure, rename, or delete comments unless the task
+  explicitly requires that separate refactor or the original text is no longer
+  correct.
 - **Smart constructors for types with invariants.** When direct record
   construction could produce an invalid value (canonical field ordering,
   mutually-exclusive cases, validation rules), declare the record `private` and
