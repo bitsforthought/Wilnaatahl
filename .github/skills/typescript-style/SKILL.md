@@ -3,8 +3,8 @@ name: typescript-style
 description: >-
   TypeScript, React, and Three.js conventions for the Wilnaatahl frontend —
   the thin UI/ECS-bridge layer that consumes the F#-generated view model. Use
-  when writing or modifying any `.ts`/`.tsx` file under `src/` (react-components,
-  ecs). This skill is the home for TypeScript guidance as that surface grows.
+  when writing or modifying `.ts`/`.tsx` under `src/`. This skill is the home
+  for TypeScript production-code guidance as that surface grows.
 ---
 
 # TypeScript / React / Three.js style
@@ -36,23 +36,17 @@ not reimplement domain logic.
 - **All `import` statements at the top of the file.** No inline imports
   (`import("...").T`). Group them at the top so dependencies are visible at a
   glance.
-- **No magic numbers.** Extract a named `const` whose name says what the value
-  _means_, and put the reasoning in a comment on the constant rather than at each
-  use site. This matters most for values from a domain the reader may not know —
-  graphics maths, camera and projection constants, animation tunings — where the
-  literal alone carries no clue. A number repeated across a formula is the
-  clearest signal.
-  - **Name the role, and check the name is arithmetically true.** The same literal
-    playing two roles needs two constants. In `TreeScene.tsx`'s NDC-to-pixel
-    conversion, `0.5` is both a scale (one over the -1..1 span) and an offset
-    (shifting the origin to the edge), so it is `NDC_TO_UNIT_SCALE` and
-    `NDC_TO_UNIT_OFFSET` — not one shared name. A plausible-sounding name that is
-    wrong (`0.5` is not the "half-extent" of a -1..1 range; that is `1`) is worse
-    than the bare literal, because it reads as verified.
-- **Name unlabelled boolean arguments at the call site.** TypeScript has no named
-  parameters, so a call like `mesh.updateWorldMatrix(true, false)` tells the reader
-  nothing. Bind a `const` per argument (`UPDATE_PARENTS`/`UPDATE_CHILDREN`) so the
-  call documents itself without a comment.
+- **Prefer named public types over type-query indirection.** Import `World`,
+  `Entity`, `IWorld`, and other exported types directly instead of spelling them as
+  `ReturnType<typeof createWorld>`, `ReturnType<World["spawn"]>`, or
+  `Parameters<typeof render>[0]`. Use `ReturnType`/`Parameters` only when the
+  relevant shape genuinely has no named public type.
+- **Name representation conversions.** Replace unexplained transforms such as
+  repeated `slice(1)` with a helper whose name states the representation it
+  returns.
+- **TypeScript call sites do not show parameter names.** Bind unclear positional
+  inputs locally before the call; for example, name the two booleans passed to
+  `updateWorldMatrix`.
 - **Define acronyms once, at their first appearance in the file.** Domain-standard
   acronyms are fine to use, but expand the first one — and note that "first" means
   first in reading order, so a comment on a constant declared _above_ a function

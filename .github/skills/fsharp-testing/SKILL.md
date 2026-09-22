@@ -101,9 +101,6 @@ failwith …` and nest the assertions in the success branch: that is procedural
     reusable helper, not an inline `match` per test — then assert directly on it.
   - Verbosity is not the enemy: a large expected literal is easier to read than a
     terse chain of projections and pattern matches. Prefer the literal.
-- **No magic numbers in tests.** Extract constants with descriptive names and
-  comments explaining the chosen value (e.g., `let frameDelta = 0.016 // one frame
-at 60 FPS`).
 - **Pass `[]` for an empty `seq<_>` argument, not `Seq.empty`.** F# coerces a list
   literal to `seq<_>` at the call site, so `[]` reads as an ordinary empty
   collection and lines up with the non-empty literals the same parameter takes

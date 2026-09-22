@@ -91,13 +91,18 @@ The following terminal commands are your dev inner loop:
 - To build and run in the dev server for iterative development: `npm run dev`
 - To build for deployment: `npm run build`
 - To host the deployment-ready build locally for testing: `npx serve dist`
-- To run unit tests: `npm test`
+- To run all unit tests (.NET xUnit and Vitest, including Koota conformance):
+  `npm test`
+- To run only the TypeScript/Vitest suite: `npm run test:ts`
+- To run only the portable Koota conformance suite: `npm run test:koota`
+- To enforce the independent F# and TypeScript line/branch coverage baselines:
+  `npm run coverage:check`
+- To generate coverage data for both languages: `npm run coverage`
+  - F# only: `npm run coverage:fsharp`
+  - TypeScript only: `npm run coverage:ts`
+- To generate and open both language-specific coverage reports: `npm run report`
+  - F# only: `npm run report:fsharp`
+  - TypeScript only: `npm run report:ts`
 - To format the TypeScript code with Prettier and F# code with Fantomas: `npm run format`
   - Prettier is configured via the `.prettierrc` file in the project root. Files and folders to ignore are listed in `.prettierignore`.
   - Fantomas is configured via the `.editorconfig` file in the project root.
-- To collect Code Coverage data and generate a Code Coverage report:
-
-```powershell
-npm run coverage
-npm run report
-```

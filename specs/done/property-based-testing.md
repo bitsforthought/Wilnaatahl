@@ -37,7 +37,7 @@ not Fable-compatible and these tests are dual-targeted via
 Two project-specific constraints shape the recommendation:
 
 1. **Fable portability.** `Wilnaatahl.ECS.Tests` runs against both the .NET
-   mock ECS _and_ real Koota via Fable + vite-node. FsCheck's `Arb.Default`
+   mock ECS _and_ real Koota via Fable + Vitest. FsCheck's `Arb.Default`
    infrastructure depends on .NET reflection that Fable does not support.
    Any PBT adoption is .NET-only and limited to `Wilnaatahl.Core.Tests`.
 2. **One-person team, single F# stack.** The maintainer has prior FsCheck

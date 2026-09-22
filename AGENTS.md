@@ -29,6 +29,13 @@ legal meaning under Canada's _Indian Act_ that does not apply here and invites
 confusion. Prefer **"group"** (or a more precise domain term) when naming a
 partition or category.
 
+## Language
+
+Use Canadian English for agent-authored English text unless instructed
+otherwise: `prioritize`, not `prioritise`; `colour` and `behaviour`, not `color`
+and `behavior`. Preserve established identifiers, API names, and quoted text.
+This convention does not apply to Sim Algyax/Gitxsanimx text.
+
 ## Architecture & Data Flow
 
 - **Frontend:** React (TypeScript) in `src/react-components/` and `src/main.tsx`.
@@ -155,7 +162,10 @@ partition or category.
 - **Koota tests only:** `npm run test:koota`
 - **Coverage gate:** `npm run coverage:check` (F# and TypeScript are gated
   separately through the same `CheckCoverage.fsx`)
-- **Coverage report:** `npm run report` (F#) or `npm run report:ts` (TypeScript)
+- **Coverage data:** `npm run coverage` (both languages), or
+  `npm run coverage:fsharp` / `npm run coverage:ts`
+- **Coverage reports:** `npm run report` (opens both reports), or
+  `npm run report:fsharp` / `npm run report:ts`
 - **Format code:** `npm run format` (Prettier for TS, Fantomas for F#)
 
 ## Keeping token cost down
@@ -203,9 +213,10 @@ lean directly lowers cost. When working in this repo:
 
 ## Mandatory dev loop (definition of done)
 
-Detailed conventions live in **skills** (`.github/skills/`) and specialized
-**agents** (`.github/agents/`). A change is not done until it has been through this
-loop:
+Detailed conventions live in path-scoped **custom instructions**
+(`.github/instructions/`), **skills** (`.github/skills/`), and specialized
+**agents** (`.github/agents/`). A change is not done until it has been through
+this loop:
 
 ```
 plan (tests before implementation, never batched to the end)
@@ -259,9 +270,15 @@ or begin a fourth review round.
 
 ## Committing and source hygiene
 
-- **Wrap commit messages at a maximum of 80 columns.** `git commit -m` keeps each
-  `-m` argument as one unwrapped line; use `git commit -F <file>` (or `\n` inside
-  `-m`) to wrap properly. Include the `Co-authored-by: Copilot` trailer.
+- **Do not amend a commit after its branch has been pushed by default.** Add a
+  follow-up commit so collaborators who fetched the published tip can
+  fast-forward normally. This also applies to the layer that owns a stacked-PR
+  change: descendants may still need rebasing onto the updated layer, but keeping
+  one commit per PR is not worth unnecessarily invalidating the owning branch's
+  published history. Amend or otherwise rewrite a pushed commit only with
+  explicit user approval or when the branch is known to be unshared;
+  force-with-lease protects remote updates, not collaborators' existing local
+  references.
 - **Source files use LF line endings and spaces (never tabs) for indentation**,
   enforced by `.editorconfig` (plus `.gitattributes` for line endings). Don't
   fight the formatters — Prettier owns `.ts`/`.tsx`, Fantomas owns `.fs`/`.fsx`.
@@ -271,17 +288,23 @@ or begin a fourth review round.
 | Doing this                                                                        | Use                                                            |
 | --------------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | Implementing/modifying F# core (Model, ViewModel, Traits, Entities, Systems, ECS) | `fsharp-implementer` agent                                     |
-| Writing/editing any `.fs` file                                                    | `fsharp-style` + `fsharp-doc-comments` skills                  |
+| Writing/editing any `.fs` file                                                    | `fsharp-style` skill                                           |
 | Writing or strengthening F# tests                                                 | `fsharp-testing` skill                                         |
+| Writing or strengthening TypeScript tests                                         | `typescript-testing` skill                                     |
 | Running the build/test/coverage gate                                              | `tdd-coverage-loop` skill                                      |
 | Reviewing a change (the mandatory step)                                           | `adversarial-reviewer` agent / `adversarial-code-review` skill |
 | Adding/editing build/CI/codegen scripts                                           | `infra-scripts-fsharp` skill                                   |
 | Writing/modifying TypeScript / React / Three.js                                   | `typescript-implementer` agent / `typescript-style` skill      |
+| Creating, revising, or reviewing a commit message                                 | `commit-messages` skill                                        |
+| Maintaining a PR stack after a merge, including final cleanup                     | `post-merge-stack-maintenance` skill                           |
 
-Skills load automatically when Copilot judges them relevant (driven by each
-skill's `description`). The routing table above and each agent's own instructions
-name the skills to apply; if a skill does not auto-load when its trigger applies,
-load it explicitly from the table.
+Path-scoped custom instructions apply automatically when their `applyTo` pattern
+matches the files being changed. Set `excludeAgent` to `code-review` or
+`cloud-agent` when an instruction should not apply to that agent. Skills load
+when Copilot judges them relevant (driven by each skill's `description`). The
+routing table above and each agent's own instructions name the skills to apply;
+if a skill does not auto-load when its trigger applies, load it explicitly from
+the table.
 
 ## Examples
 

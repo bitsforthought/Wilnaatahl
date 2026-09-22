@@ -14,15 +14,16 @@ class of failure the others miss.
 
 ## Commands
 
-| Step            | Command                                | Purpose                                                                                                                                                               |
-| --------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Build (full)    | `npm run build`                        | Invokes Fable to compile F# core to TypeScript, then Vite. Catches Fable-emitted invalid TS that `dotnet test` cannot.                                                |
-| Tests           | `npm test`                             | Runs .NET xUnit tests, then the full Vitest suite, including Koota conformance.                                                                                       |
-| TypeScript      | `npm run test:ts`                      | Runs the full Vitest suite from `tests/typescript`, including Koota conformance.                                                                                      |
-| Koota only      | `npm run test:koota`                   | Runs only the portable Koota conformance suite; use for faster targeted iteration.                                                                                    |
-| Coverage gate   | `npm run coverage:check`               | Runs F# and TypeScript coverage separately, then applies both ratchets through the same `CheckCoverage.fsx` script. The baseline auto-updates when coverage improves. |
-| Coverage report | `npm run report` / `npm run report:ts` | Generates the F# or TypeScript HTML report in `coveragereport/` or `coveragereport-ts/`.                                                                              |
-| Format          | `npm run format`                       | Prettier for TS, Fantomas for F#.                                                                                                                                     |
+| Step             | Command                  | Purpose                                                                                                                                                               |
+| ---------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Build (full)     | `npm run build`          | Invokes Fable to compile F# core to TypeScript, then Vite. Catches Fable-emitted invalid TS that `dotnet test` cannot.                                                |
+| Tests            | `npm test`               | Runs .NET xUnit tests, then the full Vitest suite, including Koota conformance.                                                                                       |
+| TypeScript       | `npm run test:ts`        | Runs the full Vitest suite from `tests/typescript`, including Koota conformance.                                                                                      |
+| Koota only       | `npm run test:koota`     | Runs only the portable Koota conformance suite; use for faster targeted iteration.                                                                                    |
+| Coverage data    | `npm run coverage`       | Generates F# and TypeScript coverage data. Use `coverage:fsharp` or `coverage:ts` for one language.                                                                   |
+| Coverage gate    | `npm run coverage:check` | Runs F# and TypeScript coverage separately, then applies both ratchets through the same `CheckCoverage.fsx` script. The baseline auto-updates when coverage improves. |
+| Coverage reports | `npm run report`         | Generates fresh data and opens both language-specific HTML reports. Use `report:fsharp` or `report:ts` for one language.                                              |
+| Format           | `npm run format`         | Prettier for TS, Fantomas for F#.                                                                                                                                     |
 
 ## Rules
 

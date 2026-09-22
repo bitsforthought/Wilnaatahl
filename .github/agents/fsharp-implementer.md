@@ -34,8 +34,7 @@ final review has passed:
 3. **GREEN.** Implement the smallest change that makes the test pass, writing
    idiomatic functional F# per the `fsharp-style` skill (pure/impure separation,
    DU error returns, no optional params, smart constructors for invariants,
-   `internal` by default, named constants, spelled-out names). Doc comments follow
-   the `fsharp-doc-comments` skill.
+   `internal` by default, spelled-out names).
 4. **REFACTOR.** Remove dead code deeply, tighten encapsulation, keep comments
    truthful.
 5. **Validate** with the full gate from the `tdd-coverage-loop` skill.
