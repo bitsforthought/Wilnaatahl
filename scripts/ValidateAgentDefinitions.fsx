@@ -1,7 +1,8 @@
-// Validates the YAML frontmatter of custom-agent and skill definitions against
-// the officially documented schemas, so malformed/undocumented definitions are
-// caught at build time (VS Code's own diagnostics only run on open files and use
-// a different schema than the Copilot CLI this project targets).
+// Validates the YAML frontmatter of custom-agent, skill, and path-specific
+// instruction definitions against the officially documented schemas, so
+// malformed/undocumented definitions are caught at build time (VS Code's own
+// diagnostics only run on open files and use a different schema than the Copilot
+// CLI this project targets).
 //
 // Source of truth (no machine-readable schema is published anywhere):
 //   - Agents: https://docs.github.com/en/copilot/reference/custom-agents-configuration
@@ -10,7 +11,10 @@
 //             handoffs, hooks, agents, argument-hint, mcp-servers, metadata).
 //   - Skills: https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-skills
 //             SKILL.md frontmatter is name, description, license, allowed-tools.
-// Last reconciled with the docs: 2026-06.
+//   - Path-specific instructions:
+//             https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/add-custom-instructions/add-repository-instructions
+//             frontmatter requires applyTo and optionally accepts excludeAgent.
+// Last reconciled with the docs: 2026-09.
 //
 // The frontmatter is parsed with YamlDotNet (a standard, well-maintained .NET YAML
 // library) rather than a hand-rolled parser, so YAML subtleties — duplicate keys,
@@ -31,16 +35,18 @@
 #r "nuget: YamlDotNet, 16.3.0"
 
 open System.IO
+open System.Globalization
 open YamlDotNet.Core
 open YamlDotNet.RepresentationModel
 
+/// A scalar's text and whether it was plain (unquoted and non-block). Preserving
+/// the style lets validation distinguish `1` and `true` from `"1"` and `"true"`.
+type ScalarValue = { Text: string; IsPlain: bool }
+
 type FieldValue =
-    /// A scalar value and whether it was a *plain* (unquoted, non-block) scalar.
-    /// Only a plain `true`/`false` is a boolean; a quoted or block-scalar `true`
-    /// is the string "true".
-    | Scalar of value: string * isPlain: bool
+    | Scalar of ScalarValue
     /// A sequence whose every element is a scalar.
-    | Items of string list
+    | Items of ScalarValue list
     /// A sequence containing at least one non-scalar element.
     | NonStringList
     /// A nested mapping (sub-object).
@@ -53,6 +59,10 @@ type Severity =
 
 type Finding = { Severity: Severity; Message: string }
 
+let private toScalarValue (scalar: YamlScalarNode) =
+    { Text = if isNull scalar.Value then "" else scalar.Value
+      IsPlain = scalar.Style = ScalarStyle.Plain }
+
 /// Converts a YAML node into the shape this validator reasons about: scalars
 /// (with their quoted-ness), all-scalar sequences, sequences with a non-scalar
 /// element, and nested mappings. Plain null scalars become the empty string so
@@ -60,23 +70,27 @@ type Finding = { Severity: Severity; Message: string }
 let private toFieldValue (node: YamlNode) : FieldValue =
     match node with
     | :? YamlScalarNode as scalar ->
-        let isPlain = scalar.Style = ScalarStyle.Plain
+        let scalarValue = toScalarValue scalar
 
-        let raw = if isNull scalar.Value then "" else scalar.Value
-
-        let value =
-            if isPlain && (raw = "~" || raw = "null" || raw = "Null" || raw = "NULL") then
+        let text =
+            if
+                scalarValue.IsPlain
+                && (scalarValue.Text = "~"
+                    || scalarValue.Text = "null"
+                    || scalarValue.Text = "Null"
+                    || scalarValue.Text = "NULL")
+            then
                 ""
             else
-                raw
+                scalarValue.Text
 
-        Scalar(value, isPlain)
+        Scalar { scalarValue with Text = text }
     | :? YamlSequenceNode as sequence ->
         let scalars =
             sequence.Children
             |> Seq.choose (fun child ->
                 match child with
-                | :? YamlScalarNode as item -> Some(if isNull item.Value then "" else item.Value)
+                | :? YamlScalarNode as item -> Some(toScalarValue item)
                 | _ -> None)
             |> Seq.toList
 
@@ -138,167 +152,244 @@ let parseFrontmatter (text: string) : Result<(string * FieldValue) list, string>
         | Some offset -> lines[1..offset] |> String.concat "\n" |> parseMapping
 
 
-// --- Documented allow-lists (see header) ---
+module Validation =
+    // --- Documented allow-lists (see header) ---
 
-let agentKnownKeys =
-    set
-        [ "agents"
-          "argument-hint"
-          "description"
-          "disable-model-invocation"
-          "github"
-          "handoffs"
-          "hooks"
-          "model"
-          "name"
-          "target"
-          "tools"
-          "user-invocable"
-          "mcp-servers"
-          "metadata" ]
+    let booleanKeys = set [ "disable-model-invocation"; "user-invocable" ]
 
-let skillKnownKeys = set [ "name"; "description"; "license"; "allowed-tools" ]
+    let listOrStringKeys = set [ "tools"; "allowed-tools"; "handoffs" ]
 
-let booleanKeys = set [ "disable-model-invocation"; "user-invocable" ]
+    let nestedMappingKeys = set [ "github"; "metadata"; "mcp-servers" ]
 
-let listOrStringKeys = set [ "tools"; "allowed-tools"; "handoffs" ]
+    /// Keys that were once valid but have been removed from the schema, mapped to
+    /// their per-key remediation advice. A `Map` (not a bare set with a fixed
+    /// message) keeps a future retirement a genuine one-line addition with correct
+    /// guidance.
+    let retiredKeys =
+        Map [ ("infer", "use 'disable-model-invocation' and 'user-invocable' instead") ]
 
-let nestedMappingKeys = set [ "github"; "metadata"; "mcp-servers" ]
+    // --- Shared validation rules ---
 
-/// Keys that were once valid but have been removed from the schema, mapped to
-/// their per-key remediation advice. A `Map` (not a bare set with a fixed
-/// message) keeps a future retirement a genuine one-line addition with correct
-/// guidance.
-let retiredKeys =
-    Map [ ("infer", "use 'disable-model-invocation' and 'user-invocable' instead") ]
+    let private findField key fields =
+        fields |> List.tryPick (fun (k, v) -> if k = key then Some v else None)
 
-// --- Pure validation rules ---
+    /// Matches a scalar whose value is non-blank, yielding the trimmed text.
+    /// Centralizes the "present and not just whitespace" check several rules share.
+    let private (|NonEmptyScalar|_|) value =
+        match value with
+        | Scalar scalar when scalar.Text.Trim() <> "" -> Some(scalar.Text.Trim())
+        | _ -> None
 
-let private findField key fields =
-    fields |> List.tryPick (fun (k, v) -> if k = key then Some v else None)
+    [<RequireQualifiedAccess>]
+    type private PlainScalarKind =
+        | Boolean
+        | Number
+        | String
 
-/// Matches a scalar whose value is non-blank, yielding the trimmed text.
-/// Centralizes the "present and not just whitespace" check several rules share.
-let private (|NonEmptyScalar|_|) value =
-    match value with
-    | Scalar(s, _) when s.Trim() <> "" -> Some(s.Trim())
-    | _ -> None
+    let private classifyPlainScalar (value: string) =
+        let text = value.Trim()
 
-/// True when `candidate` is exactly one insertion, deletion, or substitution away
-/// from `target` — used to treat an unknown key as a likely typo of a documented
-/// one rather than a genuinely new key.
-let private isOneEdit (candidate: string) (target: string) =
-    let lengthGap = abs (candidate.Length - target.Length)
+        if text = "true" || text = "false" then
+            PlainScalarKind.Boolean
+        else
+            match System.Double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture) with
+            | true, _ -> PlainScalarKind.Number
+            // Deliberately treat every other plain scalar as text; stricter YAML
+            // edge-case classification is not worth the validator complexity.
+            | false, _ -> PlainScalarKind.String
 
-    if lengthGap > 1 then
-        false
-    elif candidate.Length = target.Length then
-        (Seq.zip candidate target |> Seq.filter (fun (a, b) -> a <> b) |> Seq.length) = 1
-    else
-        let shorter, longer =
-            if candidate.Length < target.Length then
-                candidate, target
+    let private isStringScalar scalar =
+        not scalar.IsPlain || classifyPlainScalar scalar.Text = PlainScalarKind.String
+
+    /// Matches a non-empty string under the project's scalar rules. Quoted and
+    /// block scalars are strings; a plain scalar must classify as a string.
+    let private (|NonEmptyStringScalar|_|) value =
+        match value with
+        | Scalar scalar when scalar.Text.Trim() <> "" && isStringScalar scalar -> Some(scalar.Text.Trim())
+        | _ -> None
+
+    /// True when `candidate` is exactly one insertion, deletion, or substitution away
+    /// from `target` — used to treat an unknown key as a likely typo of a documented
+    /// one rather than a genuinely new key.
+    let private isOneEdit (candidate: string) (target: string) =
+        let lengthGap = abs (candidate.Length - target.Length)
+
+        if lengthGap > 1 then
+            false
+        elif candidate.Length = target.Length then
+            (Seq.zip candidate target |> Seq.filter (fun (a, b) -> a <> b) |> Seq.length) = 1
+        else
+            let shorter, longer =
+                if candidate.Length < target.Length then
+                    candidate, target
+                else
+                    target, candidate
+
+            [ 0 .. longer.Length - 1 ]
+            |> List.exists (fun i -> longer.Remove(i, 1) = shorter)
+
+    let validateDescription fields =
+        match findField "description" fields with
+        | Some(NonEmptyStringScalar _) -> []
+        | Some _ ->
+            [ { Severity = Severity.Error
+                Message = "'description' must be a non-empty string" } ]
+        | None ->
+            [ { Severity = Severity.Error
+                Message = "missing required 'description'" } ]
+
+    let validateRetiredKeys fields =
+        fields
+        |> List.choose (fun (k, _) ->
+            retiredKeys
+            |> Map.tryFind k
+            |> Option.map (fun remediation ->
+                { Severity = Severity.Error
+                  Message = sprintf "'%s' is retired; %s" k remediation }))
+
+    let retiredKeyNames = retiredKeys |> Map.keys |> Set.ofSeq
+
+    let private validateUnknownKeysIgnoring (ignored: Set<string>) (known: Set<string>) fields =
+        fields
+        |> List.map fst
+        |> List.filter (fun k -> not (ignored.Contains k) && not (known.Contains k))
+        |> List.map (fun k ->
+            if known |> Set.exists (isOneEdit k) then
+                { Severity = Severity.Warning
+                  Message = sprintf "undocumented key '%s' looks like a typo of a documented key" k }
             else
-                target, candidate
+                { Severity = Severity.Warning
+                  Message = sprintf "undocumented key '%s' (not in the official schema)" k })
 
-        [ 0 .. longer.Length - 1 ]
-        |> List.exists (fun i -> longer.Remove(i, 1) = shorter)
+    let validateUnknownKeys known fields =
+        validateUnknownKeysIgnoring retiredKeyNames known fields
 
-let descriptionFindings fields =
-    match findField "description" fields with
-    | Some(NonEmptyScalar _) -> []
-    | Some _ ->
-        [ { Severity = Severity.Error
-            Message = "'description' must be a non-empty string" } ]
-    | None ->
-        [ { Severity = Severity.Error
-            Message = "missing required 'description'" } ]
+    let validateBooleans fields =
+        fields
+        |> List.filter (fun (k, _) -> booleanKeys.Contains k)
+        |> List.choose (fun (k, v) ->
+            match v with
+            | Scalar { Text = text; IsPlain = true } when
+                (let trimmed = text.Trim() in trimmed = "true" || trimmed = "false")
+                ->
+                None
+            | _ ->
+                Some
+                    { Severity = Severity.Error
+                      Message = sprintf "'%s' must be a boolean (unquoted true or false)" k })
 
-let retiredFindings fields =
-    fields
-    |> List.choose (fun (k, _) ->
-        retiredKeys
-        |> Map.tryFind k
-        |> Option.map (fun remediation ->
-            { Severity = Severity.Error
-              Message = sprintf "'%s' is retired; %s" k remediation }))
+    let validateStringLists fields =
+        fields
+        |> List.filter (fun (k, _) -> listOrStringKeys.Contains k)
+        |> List.choose (fun (k, v) ->
+            match v with
+            | Items values when values |> List.forall isStringScalar -> None
+            | NonEmptyStringScalar _ -> None
+            | _ ->
+                Some
+                    { Severity = Severity.Error
+                      Message = sprintf "'%s' must be a string or list of strings" k })
 
-let unknownKeyFindings (known: Set<string>) fields =
-    fields
-    |> List.map fst
-    |> List.filter (fun k -> not (retiredKeys.ContainsKey k) && not (known.Contains k))
-    |> List.map (fun k ->
-        if known |> Set.exists (isOneEdit k) then
-            { Severity = Severity.Warning
-              Message = sprintf "undocumented key '%s' looks like a typo of a documented key" k }
-        else
-            { Severity = Severity.Warning
-              Message = sprintf "undocumented key '%s' (not in the official schema)" k })
+    let validateNestedMappings fields =
+        fields
+        |> List.filter (fun (k, _) -> nestedMappingKeys.Contains k)
+        |> List.choose (fun (k, v) ->
+            match v with
+            | Mapping -> None
+            | _ ->
+                Some
+                    { Severity = Severity.Error
+                      Message = sprintf "'%s' must be a mapping" k })
 
-let booleanFindings fields =
-    fields
-    |> List.filter (fun (k, _) -> booleanKeys.Contains k)
-    |> List.choose (fun (k, v) ->
-        match v with
-        | Scalar(s, true) when (let t = s.Trim() in t = "true" || t = "false") -> None
-        | _ ->
-            Some
-                { Severity = Severity.Error
-                  Message = sprintf "'%s' must be a boolean (unquoted true or false)" k })
+    module Agent =
+        let private knownKeys =
+            set
+                [ "agents"
+                  "argument-hint"
+                  "description"
+                  "disable-model-invocation"
+                  "github"
+                  "handoffs"
+                  "hooks"
+                  "model"
+                  "name"
+                  "target"
+                  "tools"
+                  "user-invocable"
+                  "mcp-servers"
+                  "metadata" ]
 
-let listTypeFindings fields =
-    fields
-    |> List.filter (fun (k, _) -> listOrStringKeys.Contains k)
-    |> List.choose (fun (k, v) ->
-        match v with
-        | Items _ -> None
-        | NonEmptyScalar _ -> None
-        | _ ->
-            Some
-                { Severity = Severity.Error
-                  Message = sprintf "'%s' must be a string or list of strings" k })
+        let validateAgent fields =
+            validateDescription fields
+            @ validateRetiredKeys fields
+            @ validateUnknownKeys knownKeys fields
+            @ validateBooleans fields
+            @ validateStringLists fields
+            @ validateNestedMappings fields
 
-let nestedMappingFindings fields =
-    fields
-    |> List.filter (fun (k, _) -> nestedMappingKeys.Contains k)
-    |> List.choose (fun (k, v) ->
-        match v with
-        | Mapping -> None
-        | _ ->
-            Some
-                { Severity = Severity.Error
-                  Message = sprintf "'%s' must be a mapping" k })
+    module Skill =
+        let private knownKeys = set [ "name"; "description"; "license"; "allowed-tools" ]
 
-let validateAgent fields =
-    descriptionFindings fields
-    @ retiredFindings fields
-    @ unknownKeyFindings agentKnownKeys fields
-    @ booleanFindings fields
-    @ listTypeFindings fields
-    @ nestedMappingFindings fields
+        let validateName (directory: string) fields =
+            match findField "name" fields with
+            | Some(NonEmptyStringScalar name) ->
+                if name <> directory then
+                    [ { Severity = Severity.Warning
+                        Message = sprintf "skill 'name' (%s) does not match its directory (%s)" name directory } ]
+                else
+                    []
+            | Some _ ->
+                [ { Severity = Severity.Error
+                    Message = "'name' must be a non-empty string" } ]
+            | None ->
+                [ { Severity = Severity.Error
+                    Message = "missing required 'name'" } ]
 
-let skillNameFindings (directory: string) fields =
-    match findField "name" fields with
-    | Some(NonEmptyScalar name) ->
-        if name <> directory then
-            [ { Severity = Severity.Warning
-                Message = sprintf "skill 'name' (%s) does not match its directory (%s)" name directory } ]
-        else
-            []
-    | Some _ ->
-        [ { Severity = Severity.Error
-            Message = "'name' must be a non-empty string" } ]
-    | None ->
-        [ { Severity = Severity.Error
-            Message = "missing required 'name'" } ]
+        let validateSkill directory fields =
+            validateDescription fields
+            @ validateName directory fields
+            @ validateRetiredKeys fields
+            @ validateUnknownKeys knownKeys fields
+            @ validateBooleans fields
+            @ validateStringLists fields
 
-let validateSkill directory fields =
-    descriptionFindings fields
-    @ skillNameFindings directory fields
-    @ retiredFindings fields
-    @ unknownKeyFindings skillKnownKeys fields
-    @ booleanFindings fields
-    @ listTypeFindings fields
+    module Instruction =
+        let private knownKeys = set [ "applyTo"; "excludeAgent" ]
+
+        let validateApplyTo fields =
+            match findField "applyTo" fields with
+            | Some(NonEmptyStringScalar _) -> []
+            | Some _ ->
+                [ { Severity = Severity.Error
+                    Message = "'applyTo' must be a non-empty string" } ]
+            | None ->
+                [ { Severity = Severity.Error
+                    Message = "missing required 'applyTo'" } ]
+
+        let validateExcludeAgent fields =
+            match findField "excludeAgent" fields with
+            | None -> []
+            | Some(NonEmptyScalar value) when value = "code-review" || value = "cloud-agent" -> []
+            | Some _ ->
+                [ { Severity = Severity.Error
+                    Message = "'excludeAgent' must be either 'code-review' or 'cloud-agent'" } ]
+
+        let validateInstruction fields =
+            validateApplyTo fields
+            @ validateExcludeAgent fields
+            @ validateUnknownKeysIgnoring Set.empty knownKeys fields
+
+let private definitionFiles (directory: string) (pattern: string) (searchOption: SearchOption) =
+    if Directory.Exists directory then
+        Directory.GetFiles(directory, pattern, searchOption) |> Array.sort
+    else
+        [||]
+
+let instructionDefinitionFiles directory =
+    definitionFiles directory "*.instructions.md" SearchOption.AllDirectories
+
+let validationSummary agentCount skillCount instructionCount =
+    sprintf "Validating %d agent, %d skill, and %d instruction definition(s)..." agentCount skillCount instructionCount
 
 /// Runs a validator over raw file text, collapsing a frontmatter parse failure
 /// into a single error finding (mirroring the file-scanning pipeline).
@@ -346,10 +437,24 @@ let private selfTest () =
 
         ok
 
-    let agent text = validateText validateAgent text
+    let checkValue name actual expected =
+        let ok = actual = expected
+
+        if ok then
+            printfn "  PASS: %s" name
+        else
+            printfn "  FAIL: %s — expected %A, got %A" name expected actual
+
+        ok
+
+    let agent text =
+        validateText Validation.Agent.validateAgent text
 
     let skill directory text =
-        validateText (validateSkill directory) text
+        validateText (Validation.Skill.validateSkill directory) text
+
+    let instruction text =
+        validateText Validation.Instruction.validateInstruction text
 
     let validAgent =
         """---
@@ -533,6 +638,70 @@ description: A skill.
 ---
 """
 
+    let validInstruction =
+        """---
+applyTo: "**/*.fs,**/*.ts"
+---
+"""
+
+    let validExcludedInstruction =
+        """---
+applyTo: "**/*.ts"
+excludeAgent: code-review
+---
+"""
+
+    let missingApplyToInstruction =
+        """---
+excludeAgent: cloud-agent
+---
+"""
+
+    let listApplyToInstruction =
+        """---
+applyTo: ["**/*.fs", "**/*.ts"]
+---
+"""
+
+    let invalidExcludeAgentInstruction =
+        """---
+applyTo: "**/*.ts"
+excludeAgent: other
+---
+"""
+
+    let booleanApplyToInstruction =
+        """---
+applyTo: true
+---
+"""
+
+    let numericApplyToInstruction =
+        """---
+applyTo: 1e3
+---
+"""
+
+    let unknownKeyInstruction =
+        """---
+applyTo: "**/*.ts"
+description: Not a documented instruction key.
+---
+"""
+
+    let typoKeyInstruction =
+        """---
+applyto: "**/*.ts"
+---
+"""
+
+    let retiredAgentKeyInstruction =
+        """---
+applyTo: "**/*.ts"
+infer: true
+---
+"""
+
     let malformed =
         """name: demo
 description: A thing.
@@ -545,6 +714,119 @@ description: A thing.
 tools: ["read", "search"]
 ---
 """
+
+    let booleanDescriptionAgent =
+        """---
+name: demo
+description: true
+---
+"""
+
+    let booleanToolsAgent =
+        """---
+name: demo
+description: A thing.
+tools: true
+---
+"""
+
+    let booleanToolsListAgent =
+        """---
+name: demo
+description: A thing.
+tools: ["read", true]
+---
+"""
+
+    let numericToolsListAgent =
+        """---
+name: demo
+description: A thing.
+tools: ["read", -0.5]
+---
+"""
+
+    let numericNameSkill =
+        """---
+name: 123
+description: A skill.
+---
+"""
+
+    let numericAllowedToolsSkill =
+        """---
+name: demo-skill
+description: A skill.
+allowed-tools: 123
+---
+"""
+
+    let numericHandoffsAgent =
+        """---
+name: demo
+description: A thing.
+handoffs: ["review", 1]
+---
+"""
+
+    let quotedScalarStringsAgent =
+        """---
+name: demo
+description: "true"
+tools: ["1"]
+---
+"""
+
+    let quotedBooleanApplyToInstruction =
+        """---
+applyTo: "true"
+---
+"""
+
+    let quotedNumericApplyToInstruction =
+        """---
+applyTo: "123"
+---
+"""
+
+    let digitLeadingNonNumberApplyToInstruction =
+        """---
+applyTo: 0xnope
+---
+"""
+
+    let mixedCaseBooleanApplyToInstruction =
+        """---
+applyTo: True
+---
+"""
+
+    let digitLeadingNonNumberToolsAgent =
+        """---
+name: demo
+description: A thing.
+tools: [0_x2a]
+---
+"""
+
+    let nestedInstructionDiscovery =
+        let root =
+            Path.Combine(Path.GetTempPath(), $"wilnaatahl-instruction-test-{System.Guid.NewGuid()}")
+
+        let nested = Path.Combine(root, "nested")
+
+        try
+            Directory.CreateDirectory(nested) |> ignore
+            File.WriteAllText(Path.Combine(root, "root.instructions.md"), validInstruction)
+            File.WriteAllText(Path.Combine(nested, "nested.instructions.md"), validInstruction)
+            File.WriteAllText(Path.Combine(nested, "ignored.md"), validInstruction)
+
+            instructionDefinitionFiles root
+            |> Array.map (fun (path: string) -> Path.GetFileName path)
+            |> Set.ofArray
+        finally
+            if Directory.Exists root then
+                Directory.Delete(root, true)
 
     printfn "Running self-test..."
 
@@ -569,10 +851,91 @@ tools: ["read", "search"]
           check "unterminated frontmatter is an error" (agent unterminatedAgent) 1 0 [ "unterminated" ]
           check "multiple documents are an error" (agent multiDocAgent) 1 0 [ "multiple" ]
           check "inline flow list tools is accepted" (agent flowToolsAgent) 0 0 []
+          check "boolean description is an error" (agent booleanDescriptionAgent) 1 0 [ "non-empty string" ]
+          check "boolean tools scalar is an error" (agent booleanToolsAgent) 1 0 [ "string or list of strings" ]
+          check
+              "boolean tools list item is an error"
+              (agent booleanToolsListAgent)
+              1
+              0
+              [ "'tools' must be a string or list of strings" ]
+          check "numeric tools list item is an error" (agent numericToolsListAgent) 1 0 [ "string or list of strings" ]
+          check "numeric skill name is an error" (skill "123" numericNameSkill) 1 0 [ "non-empty string" ]
+          check
+              "numeric allowed-tools scalar is an error"
+              (skill "demo-skill" numericAllowedToolsSkill)
+              1
+              0
+              [ "string or list of strings" ]
+          check
+              "numeric handoffs list item is an error"
+              (agent numericHandoffsAgent)
+              1
+              0
+              [ "string or list of strings" ]
+          check "quoted string-shaped scalars are accepted" (agent quotedScalarStringsAgent) 0 0 []
           check "valid skill has no findings" (skill "demo-skill" validSkill) 0 0 []
           check "skill missing description is an error" (skill "demo-skill" noDescSkill) 1 0 [ "description" ]
           check "skill user-invocable is a warning" (skill "demo-skill" userInvocableSkill) 0 1 [ "user-invocable" ]
           check "skill name != directory is a warning" (skill "demo-skill" mismatchSkill) 0 1 [ "does not match" ]
+          check "valid instruction has no findings" (instruction validInstruction) 0 0 []
+          check "valid instruction exclusion is accepted" (instruction validExcludedInstruction) 0 0 []
+          check "instruction missing applyTo is an error" (instruction missingApplyToInstruction) 1 0 [ "applyTo" ]
+          check "instruction applyTo list is an error" (instruction listApplyToInstruction) 1 0 [ "non-empty string" ]
+          check
+              "instruction invalid excludeAgent is an error"
+              (instruction invalidExcludeAgentInstruction)
+              1
+              0
+              [ "code-review"; "cloud-agent" ]
+          check
+              "instruction boolean applyTo is an error"
+              (instruction booleanApplyToInstruction)
+              1
+              0
+              [ "non-empty string" ]
+          check
+              "instruction numeric applyTo is an error"
+              (instruction numericApplyToInstruction)
+              1
+              0
+              [ "non-empty string" ]
+          check
+              "instruction quoted boolean-looking applyTo is accepted"
+              (instruction quotedBooleanApplyToInstruction)
+              0
+              0
+              []
+          check
+              "instruction quoted numeric-looking applyTo is accepted"
+              (instruction quotedNumericApplyToInstruction)
+              0
+              0
+              []
+          check
+              "instruction digit-leading non-number applyTo is accepted"
+              (instruction digitLeadingNonNumberApplyToInstruction)
+              0
+              0
+              []
+          check "instruction mixed-case boolean is accepted" (instruction mixedCaseBooleanApplyToInstruction) 0 0 []
+          check "agent digit-leading non-number list item is accepted" (agent digitLeadingNonNumberToolsAgent) 0 0 []
+          check "instruction undocumented key is a warning" (instruction unknownKeyInstruction) 0 1 [ "description" ]
+          check "instruction typo key is a warning" (instruction typoKeyInstruction) 1 1 [ "applyTo"; "typo" ]
+          check
+              "agent-only retired key is unknown on instructions"
+              (instruction retiredAgentKeyInstruction)
+              0
+              1
+              [ "infer" ]
+          checkValue
+              "instruction discovery includes nested instruction files"
+              nestedInstructionDiscovery
+              (set [ "nested.instructions.md"; "root.instructions.md" ])
+          checkValue
+              "validation summary includes instruction count"
+              (validationSummary 3 7 1)
+              "Validating 3 agent, 7 skill, and 1 instruction definition(s)..."
           check "malformed frontmatter is an error" (agent malformed) 1 0 [ "frontmatter" ] ]
 
     let passed = results |> List.filter id |> List.length
@@ -586,40 +949,39 @@ tools: ["read", "search"]
 let repoRoot = Path.GetDirectoryName(Path.GetFullPath(__SOURCE_DIRECTORY__))
 let agentsDir = Path.Combine(repoRoot, ".github", "agents")
 let skillsDir = Path.Combine(repoRoot, ".github", "skills")
+let instructionsDir = Path.Combine(repoRoot, ".github", "instructions")
 
 let scriptArgs = fsi.CommandLineArgs |> Array.skip 1
 
 if scriptArgs |> Array.contains "--self-test" then
     selfTest ()
 
-let agentFiles =
-    if Directory.Exists agentsDir then
-        Directory.GetFiles(agentsDir, "*.md") |> Array.sort
-    else
-        [||]
+let agentFiles = definitionFiles agentsDir "*.md" SearchOption.TopDirectoryOnly
 
-let skillFiles =
-    if Directory.Exists skillsDir then
-        Directory.GetFiles(skillsDir, "SKILL.md", SearchOption.AllDirectories)
-        |> Array.sort
-    else
-        [||]
+let skillFiles = definitionFiles skillsDir "SKILL.md" SearchOption.AllDirectories
+
+let instructionFiles = instructionDefinitionFiles instructionsDir
 
 let relative (path: string) = Path.GetRelativePath(repoRoot, path)
 
 let agentResults =
     agentFiles
-    |> Array.map (fun file -> relative file, validateText validateAgent (File.ReadAllText file))
+    |> Array.map (fun file -> relative file, validateText Validation.Agent.validateAgent (File.ReadAllText file))
 
 let skillResults =
     skillFiles
     |> Array.map (fun file ->
         let directory = Path.GetFileName(Path.GetDirectoryName file)
-        relative file, validateText (validateSkill directory) (File.ReadAllText file))
+        relative file, validateText (Validation.Skill.validateSkill directory) (File.ReadAllText file))
 
-let allResults = Array.append agentResults skillResults
+let instructionResults =
+    instructionFiles
+    |> Array.map (fun file ->
+        relative file, validateText Validation.Instruction.validateInstruction (File.ReadAllText file))
 
-printfn "Validating %d agent and %d skill definition(s)..." agentFiles.Length skillFiles.Length
+let allResults = Array.concat [ agentResults; skillResults; instructionResults ]
+
+printfn "%s" (validationSummary agentFiles.Length skillFiles.Length instructionFiles.Length)
 
 for file, findings in allResults do
     for finding in findings do

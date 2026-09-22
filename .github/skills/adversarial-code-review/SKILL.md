@@ -3,9 +3,9 @@ name: adversarial-code-review
 description: >-
   The adversarial review rubric for Wilnaatahl changes — the high-signal,
   project-specific checks a reviewer applies to a diff (logic-vs-line coverage,
-  F# idiom violations, weakened/tautological tests, doc-comment drift, dead
-  code, exception-message contracts). Use when reviewing any change before it
-  is declared done.
+  language-specific idiom violations, weakened/tautological tests, comment
+  drift, dead code, exception-message contracts). Use when reviewing any change
+  before it is declared done.
 ---
 
 # Adversarial code review rubric
@@ -14,6 +14,11 @@ Review the change as an adversary trying to break it, not as its author. Surface
 only issues that genuinely matter — bugs, logic errors, missing cases, idiom
 violations, weakened tests. Do not comment on formatting (Prettier/Fantomas own
 that) or trivia. For each finding, state the concrete failure it would cause.
+
+Apply the repository's code-quality custom instructions and the language-specific
+skills that match the diff: `typescript-style` for TypeScript production code,
+`typescript-testing` for TypeScript tests, `fsharp-style` for F# production code,
+and `fsharp-testing` for F# tests.
 
 This rubric is deliberately tuned to the three failure modes most often seen in
 generated changes here.
@@ -30,6 +35,7 @@ touched, ask:
 - Are tests **strong** — would each assertion actually fail if the code were
   broken? Flag tautological assertions (checking a value didn't change when
   nothing could have changed it).
+- For TypeScript tests, apply the `typescript-testing` skill in full.
 - Does any new `.tsx` contain computation rather than hook/state/props/style
   wiring? Because `.tsx` is excluded from the coverage denominator, arithmetic,
   string composition, branching, and I/O sequences there can evade the coverage
@@ -74,8 +80,8 @@ Check the diff against the `fsharp-style` skill. Common regressions to hunt for:
   smart constructor.
 - Declarations left `public` that should be `internal`; `private` used where
   assembly-scoped `internal` was meant.
-- Abbreviated/Hungarian names (`mk*`, `m*`, `p*`, `kid`), single-letter record
-  fields, magic numbers without a named binding.
+- Abbreviated/Hungarian names (`mk*`, `m*`, `p*`, `kid`) and single-letter record
+  fields.
 - **`obj` / `box` / `unbox` / `:?>` used to erase types for convenience** where a
   shared base type or a flexible `#Base` parameter would keep static checking.
   Every `obj` (parameter, field, generic argument, collection key/value) and every
@@ -120,10 +126,14 @@ Check the diff against the `fsharp-style` skill. Common regressions to hunt for:
   bespoke check is justified only after looking (no suitable library, or a
   Fable/browser constraint precludes it).
 
-## 3. Doc comments, dead code, and drift
+## 3. TypeScript idiom violations
 
-- Doc comments follow the `fsharp-doc-comments` skill: contract-not-consumer, no
-  version numbers, no restating the signature, dependency→consumer direction.
+Apply the `typescript-style` skill in full. Keep the canonical TypeScript checklist
+there rather than duplicating it in this rubric; report each violation through the
+concrete failure or regression it would cause.
+
+## 4. Comments, dead code, and drift
+
 - **Duplicated explanation is drift waiting to happen.** If the same mechanism is
   explained at more than one use site, flag it: the explanation belongs once, on
   the declaration the sites share. Grep the diff for a sentence repeated across
@@ -141,7 +151,7 @@ Check the diff against the `fsharp-style` skill. Common regressions to hunt for:
   are backed up by the code. Behaviour changes are reflected in comments; dead
   paths `failwith` rather than silently returning defaults.
 
-## 4. Correctness and validation
+## 5. Correctness and validation
 
 - Does the change actually solve the stated problem, including edge cases?
 - **Redundant state.** Flag any new trait/field that is recomputed each frame from

@@ -48,8 +48,7 @@ away from C#-in-F# habits. Each is a hard convention for this codebase.
   function exists solely to assist one specific caller (e.g. a comparator the
   layout uses to sort), it belongs in the caller's module even though it operates
   on the dependency's types. The dependency module should expose primitives
-  (lookups, queries) that any consumer can build on. (See the `fsharp-doc-comments`
-  skill for the related rule about how this affects the dependency's doc comments.)
+  (lookups, queries) that any consumer can build on.
 - **Smart constructors for types with invariants.** When direct record
   construction could produce an invalid value (canonical field ordering,
   mutually-exclusive cases, validation rules), declare the record `private` and
@@ -196,9 +195,6 @@ away from C#-in-F# habits. Each is a hard convention for this codebase.
   assemblies, so `internal` declarations remain test-visible. F# `private` is
   _module_-scoped, not assembly-scoped — use `internal` when you mean "visible to
   tests but not to other projects".
-- **No magic numbers in production code.** Algorithmic constants need names. For
-  values used in only one function, declare a local `let` binding inside the
-  function rather than a module-level constant.
 - **Use named top-level functions for hot-path callbacks.** ECS/query callbacks
   (e.g. `updateEach`) called per frame per entity should reference named
   functions, not inline lambdas, so the closure is allocated once.

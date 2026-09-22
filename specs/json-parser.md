@@ -2,13 +2,14 @@
 
 ## Problem
 
-The import feature (spec: `specs/import-export-feature.md`) needs a parser that
-transforms a JSON file of genealogical data into the inputs `createFamilyGraph`
-consumes: `(Person * CoupleId option) seq`, `Couple seq`, and the Name holdings
-`(PersonId * NameHeld) seq`. The format uses numeric ids for people, couples,
-huwilp, and names; per-person current and birth Wilp are `wilp` / `birthWilp`
-references into a top-level `huwilp` array, and Name holdings are `namesHeld` rows
-linking `names` to `people`. The format itself is specified in
+The import feature (spec:
+[`specs/done/import-export-feature.md`](./done/import-export-feature.md)) needs a
+parser that transforms a JSON file of genealogical data into the inputs
+`createFamilyGraph` consumes: `(Person * CoupleId option) seq`, `Couple seq`, and
+the Name holdings `(PersonId * NameHeld) seq`. The format uses numeric ids for
+people, couples, huwilp, and names; per-person current and birth Wilp are `wilp` /
+`birthWilp` references into a top-level `huwilp` array, and Name holdings are
+`namesHeld` rows linking `names` to `people`. The format itself is specified in
 [`specs/json-file-format.md`](./json-file-format.md); the Names/adoption additions
 and the model types they feed are designed in
 [`specs/names-and-detail-overlay.md`](./names-and-detail-overlay.md). This plan

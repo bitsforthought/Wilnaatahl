@@ -20,11 +20,12 @@ changes belong in F# (use the `fsharp-implementer` agent), after which
 Apply the `typescript-style` skill (named hot-path callbacks, imports at top, the
 React/Three.js and Koota `useTrait` rules). Keep `.tsx` limited to presentation
 wiring; put domain/layout logic in F# and browser-specific logic in tested `.ts`.
-TypeScript tests live under `tests/typescript` and use Vitest. Use
-`npm run test:ts` for the full TypeScript suite or `npm run test:koota` for the
-portable conformance subset during iteration; the final gate is `npm test`.
+Apply the `typescript-testing` skill when adding or modifying tests. TypeScript
+tests live under `tests/typescript` and use Vitest. Use `npm run test:ts` for the
+full TypeScript suite or `npm run test:koota` for the portable conformance subset
+during iteration; the final gate is `npm test`.
 Then run the mandatory `adversarial-reviewer` panel exactly as specified by the
 `adversarial-code-review` skill before declaring the change complete.
 
 > This agent is a stub. As project-specific TypeScript conventions accumulate,
-> grow the `typescript-style` skill and this prompt accordingly.
+> grow the TypeScript skills and this prompt accordingly.
