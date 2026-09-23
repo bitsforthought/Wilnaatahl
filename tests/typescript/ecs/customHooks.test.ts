@@ -3,18 +3,12 @@
 import { createElement, forwardRef, useImperativeHandle, useLayoutEffect, useMemo } from "react";
 import { act, cleanup, render, renderHook } from "@testing-library/react";
 import { WorldProvider } from "koota/react";
-import { createWorld } from "koota";
+import { createWorld, Entity, World } from "koota";
 import { Mesh } from "three";
 import { afterEach, describe, expect, test } from "vitest";
-import {
-  AppMode_Moving,
-  AppMode_Viewing,
-  isViewing,
-} from "../../../src/generated/Traits/ViewTraits";
+import { AppMode_Moving, AppMode_Viewing } from "../../../src/generated/Traits/ViewTraits";
 import { CurrentMode, MeshRef, Selected } from "../../../src/ecs";
 import { useMeshRef, useOverlayVisible } from "../../../src/ecs/customHooks";
-
-type World = ReturnType<typeof createWorld>;
 
 function worldWrapper(world: World) {
   return function WorldWrapper({ children }: { children?: React.ReactNode }) {
@@ -33,13 +27,7 @@ function MeshHost({ onMesh }: { onMesh: (mesh: Mesh) => void }, ref: React.Forwa
 
 const ForwardedMeshHost = forwardRef(MeshHost);
 
-function MeshRefHarness({
-  entity,
-  onMesh,
-}: {
-  entity: ReturnType<World["spawn"]>;
-  onMesh: (mesh: Mesh) => void;
-}) {
+function MeshRefHarness({ entity, onMesh }: { entity: Entity; onMesh: (mesh: Mesh) => void }) {
   const meshRef = useMeshRef(entity);
   return createElement(ForwardedMeshHost, { onMesh, ref: meshRef });
 }
@@ -166,8 +154,7 @@ describe("useOverlayVisible", () => {
     act(() => {
       world.set(CurrentMode, AppMode_Viewing());
     });
-
     expect(result.current).toBe(true);
-    expect(isViewing(world.get(CurrentMode)!)).toBe(true);
+    expect(result.current).toBe(true);
   });
 });

@@ -3,14 +3,12 @@
 import { createElement } from "react";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { WorldProvider } from "koota/react";
-import { createWorld } from "koota";
+import { createWorld, World } from "koota";
 import { afterEach, describe, expect, test } from "vitest";
 import { CurrentLocale } from "../../../src/ecs";
 import { LocaleModule_parse } from "../../../src/generated/ViewModel/Localization";
 import { EN } from "../../../src/i18n/format";
 import { useLocale } from "../../../src/i18n/hooks";
-
-type World = ReturnType<typeof createWorld>;
 
 function worldWrapper(world: World) {
   return function WorldWrapper({ children }: { children?: React.ReactNode }) {
