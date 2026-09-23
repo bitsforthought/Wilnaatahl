@@ -1,4 +1,4 @@
-import { createWorld } from "koota";
+import { createWorld, World } from "koota";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { Mesh } from "three";
 import {
@@ -22,7 +22,7 @@ import { Person_get_Empty } from "../../../src/generated/Model";
 import { AppMode_Moving } from "../../../src/generated/Traits/ViewTraits";
 
 describe("ECS trait declarations", () => {
-  let world: ReturnType<typeof createWorld>;
+  let world: World;
 
   beforeEach(() => {
     world = createWorld();

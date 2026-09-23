@@ -1,12 +1,12 @@
-import { createWorld, Entity } from "koota";
+import { createWorld, Entity, World } from "koota";
 import { CylinderGeometry, Mesh, MeshStandardMaterial, Vector3 } from "three";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { render } from "../../../src/ecs/rendering";
-import { fromKootaWorld } from "../../../src/ecs/koota/kootaWrapper";
+import { fromKootaWorld, IWorld } from "../../../src/ecs/koota/kootaWrapper";
 import { Hidden, Line, MeshRef, PersonRef, Position, Selected } from "../../../src/ecs/traits";
 import { Person_get_Empty } from "../../../src/generated/Model";
 import { getEndpoints, spawn as spawnLine } from "../../../src/generated/Entities/Line";
-import { nodePaint } from "../../../src/generated/ViewModel/Palette";
+import { nodePaint, NodePaint, SrgbColour } from "../../../src/generated/ViewModel/Palette";
 
 function createMesh() {
   return new Mesh(new CylinderGeometry(1, 1, 1), new MeshStandardMaterial());
@@ -16,13 +16,29 @@ function getMaterial(mesh: Mesh) {
   return mesh.material as MeshStandardMaterial;
 }
 
-function hex({ Red, Green, Blue }: { Red: number; Green: number; Blue: number }) {
-  return `#${Red.toString(16).padStart(2, "0")}${Green.toString(16).padStart(2, "0")}${Blue.toString(16).padStart(2, "0")}`;
+function hexDigits({ Red, Green, Blue }: SrgbColour) {
+  return `${Red.toString(16).padStart(2, "0")}${Green.toString(16).padStart(2, "0")}${Blue.toString(16).padStart(2, "0")}`;
+}
+
+function materialState(material: MeshStandardMaterial) {
+  return {
+    color: material.color.getHexString(),
+    emissive: material.emissive.getHexString(),
+    emissiveIntensity: material.emissiveIntensity,
+  };
+}
+
+function expectedMaterialState(paint: NodePaint) {
+  return {
+    color: hexDigits(paint.Colour),
+    emissive: hexDigits(paint.Emissive),
+    emissiveIntensity: paint.EmissiveIntensity,
+  };
 }
 
 describe("render", () => {
-  let world: ReturnType<typeof createWorld>;
-  let wrappedWorld: ReturnType<typeof fromKootaWorld>;
+  let world: World;
+  let wrappedWorld: IWorld;
 
   beforeEach(() => {
     world = createWorld();
@@ -41,9 +57,8 @@ describe("render", () => {
 
     render(wrappedWorld);
 
-    expect(visibleMesh.position).toEqual(new Vector3(1, 2, 3));
-    expect(hiddenMesh.position).toEqual(new Vector3(0, 0, 0));
-    expect(visibleMesh.position).not.toEqual(hiddenMesh.position);
+    expect(visibleMesh.position).toStrictEqual(new Vector3(1, 2, 3));
+    expect(hiddenMesh.position).toStrictEqual(new Vector3(0, 0, 0));
   });
 
   test("paints selected and unselected visible people using their palette instructions", () => {
@@ -60,12 +75,8 @@ describe("render", () => {
     const selectedMaterial = getMaterial(selectedMesh);
     const unselectedMaterial = getMaterial(unselectedMesh);
 
-    expect(selectedMaterial.color.getHexString()).toBe(hex(selectedPaint.Colour).slice(1));
-    expect(selectedMaterial.emissive.getHexString()).toBe(hex(selectedPaint.Emissive).slice(1));
-    expect(selectedMaterial.emissiveIntensity).toBe(selectedPaint.EmissiveIntensity);
-    expect(unselectedMaterial.color.getHexString()).toBe(hex(unselectedPaint.Colour).slice(1));
-    expect(unselectedMaterial.emissive.getHexString()).toBe(hex(unselectedPaint.Emissive).slice(1));
-    expect(unselectedMaterial.emissiveIntensity).toBe(unselectedPaint.EmissiveIntensity);
+    expect(materialState(selectedMaterial)).toStrictEqual(expectedMaterialState(selectedPaint));
+    expect(materialState(unselectedMaterial)).toStrictEqual(expectedMaterialState(unselectedPaint));
   });
 
   test("does not paint hidden entities", () => {
@@ -73,14 +84,10 @@ describe("render", () => {
     world.spawn(MeshRef(hiddenMesh), PersonRef(Person_get_Empty()), Hidden, Selected);
 
     const hiddenMaterial = getMaterial(hiddenMesh);
-    const hiddenColorBefore = hiddenMaterial.color.getHex();
-    const hiddenEmissiveBefore = hiddenMaterial.emissive.getHex();
-    const hiddenIntensityBefore = hiddenMaterial.emissiveIntensity;
+    const materialBefore = materialState(hiddenMaterial);
     render(wrappedWorld);
 
-    expect(hiddenMaterial.color.getHex()).toBe(hiddenColorBefore);
-    expect(hiddenMaterial.emissive.getHex()).toBe(hiddenEmissiveBefore);
-    expect(hiddenMaterial.emissiveIntensity).toBe(hiddenIntensityBefore);
+    expect(materialState(hiddenMaterial)).toStrictEqual(materialBefore);
   });
 
   test("updates visible line geometry, midpoint, and orientation", () => {
@@ -96,10 +103,11 @@ describe("render", () => {
     expect(dispose).toHaveBeenCalledTimes(1);
     expect(lineMesh.geometry).toBeInstanceOf(CylinderGeometry);
     expect((lineMesh.geometry as CylinderGeometry).parameters.height).toBe(5);
-    expect(lineMesh.position).toEqual(new Vector3(2.5, 4, 3));
+    expect(lineMesh.position).toStrictEqual(new Vector3(2.5, 4, 3));
     const renderedDirection = new Vector3(0, 1, 0).applyQuaternion(lineMesh.quaternion);
     const expectedDirection = new Vector3(3, 4, 0).normalize();
-    expect(Math.abs(renderedDirection.dot(expectedDirection))).toBeCloseTo(1);
+    // The dot product of unit vectors is 1 only when they point in the same direction.
+    expect(renderedDirection.dot(expectedDirection)).toBeCloseTo(1);
   });
 
   test("does not update hidden line geometry", () => {
@@ -117,11 +125,8 @@ describe("render", () => {
 
     expect(dispose).not.toHaveBeenCalled();
     expect(lineMesh.geometry).toBe(oldGeometry);
-    expect(lineMesh.position).toEqual(positionBefore);
-    expect(lineMesh.quaternion.x).toBe(quaternionBefore.x);
-    expect(lineMesh.quaternion.y).toBe(quaternionBefore.y);
-    expect(lineMesh.quaternion.z).toBe(quaternionBefore.z);
-    expect(lineMesh.quaternion.w).toBe(quaternionBefore.w);
+    expect(lineMesh.position).toStrictEqual(positionBefore);
+    expect(lineMesh.quaternion.toArray()).toEqual(quaternionBefore.toArray());
   });
 
   test("propagates the generated line endpoint error with its contract message", () => {
@@ -149,7 +154,7 @@ describe("render", () => {
   });
 
   test("rejects an invalid world implementation", () => {
-    expect(() => render({} as Parameters<typeof render>[0])).toThrowError(
+    expect(() => render({} as IWorld)).toThrowError(
       "Invalid IWorld implementation passed to toKootaWorld."
     );
   });
