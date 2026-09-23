@@ -1,4 +1,4 @@
-import { createWorld } from "koota";
+import { createWorld, World } from "koota";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
   createEntityOperations,
@@ -21,7 +21,7 @@ function expectExactError(action: () => unknown, expectedMessage: string): void 
 }
 
 describe("Koota wrapper contracts", () => {
-  let world: ReturnType<typeof createWorld>;
+  let world: World;
 
   beforeEach(() => {
     world = createWorld();
