@@ -84,8 +84,8 @@ describe("ECS trait declarations", () => {
     const firstPosition = first.get(Position)!;
     const secondPosition = second.get(Position)!;
 
-    expect(firstPosition).toMatchObject({ x: 0, y: 0, z: 0 });
-    expect(secondPosition).toMatchObject({ x: 0, y: 0, z: 0 });
+    expect(firstPosition).toStrictEqual({ x: 0, y: 0, z: 0 });
+    expect(secondPosition).toStrictEqual({ x: 0, y: 0, z: 0 });
     expect(firstPosition).not.toBe(secondPosition);
 
     firstPosition.x = 9;
@@ -98,7 +98,9 @@ describe("ECS trait declarations", () => {
 
     expect(first.get(CurrentMode)).toEqual(second.get(CurrentMode));
     expect(first.get(CurrentMode)).not.toBe(second.get(CurrentMode));
+    expect(first.get(CurrentLocale)).toEqual(second.get(CurrentLocale));
     expect(first.get(CurrentLocale)).not.toBe(second.get(CurrentLocale));
+    expect(first.get(NodeLabel)).toEqual(second.get(NodeLabel));
     expect(first.get(NodeLabel)).not.toBe(second.get(NodeLabel));
   });
 

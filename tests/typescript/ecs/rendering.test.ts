@@ -106,8 +106,8 @@ describe("render", () => {
     expect(lineMesh.position).toStrictEqual(new Vector3(2.5, 4, 3));
     const renderedDirection = new Vector3(0, 1, 0).applyQuaternion(lineMesh.quaternion);
     const expectedDirection = new Vector3(3, 4, 0).normalize();
-    // The dot product of unit vectors is 1 only when they point in the same direction.
-    expect(renderedDirection.dot(expectedDirection)).toBeCloseTo(1);
+    // Rotating the cylinder's local Y axis should align it with the normalized endpoint vector.
+    expect(renderedDirection.distanceTo(expectedDirection)).toBeCloseTo(0);
   });
 
   test("does not update hidden line geometry", () => {
