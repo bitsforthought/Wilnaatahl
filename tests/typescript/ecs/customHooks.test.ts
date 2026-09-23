@@ -97,14 +97,21 @@ describe("useOverlayVisible", () => {
     world?.destroy();
   });
 
-  test("starts hidden when mode and selection have not been established", () => {
+  test("starts hidden without a mode and reacts when the mode is added", () => {
     world = createWorld();
+    world.spawn(Selected);
 
     const { result } = renderHook(() => useOverlayVisible(), {
       wrapper: worldWrapper(world),
     });
 
     expect(result.current).toBe(false);
+
+    act(() => {
+      world.add(CurrentMode(AppMode_Viewing()));
+    });
+
+    expect(result.current).toBe(true);
   });
 
   test("shows only in viewing mode with exactly one selected entity", () => {
@@ -154,7 +161,6 @@ describe("useOverlayVisible", () => {
     act(() => {
       world.set(CurrentMode, AppMode_Viewing());
     });
-    expect(result.current).toBe(true);
     expect(result.current).toBe(true);
   });
 });

@@ -24,14 +24,21 @@ describe("useLocale", () => {
     world?.destroy();
   });
 
-  test("falls back to the English locale before the world has a locale", () => {
+  test("falls back to English and reacts when a locale is added", () => {
     world = createWorld();
+    const locale = LocaleModule_parse("en-US");
 
     const { result } = renderHook(() => useLocale(), {
       wrapper: worldWrapper(world),
     });
 
     expect(result.current).toBe(EN);
+
+    act(() => {
+      world.add(CurrentLocale(locale));
+    });
+
+    expect(result.current).toBe(locale);
   });
 
   test("subscribes to world locale changes and returns the current locale", () => {
