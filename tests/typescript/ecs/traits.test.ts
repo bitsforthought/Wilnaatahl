@@ -19,7 +19,9 @@ import {
   Size,
 } from "../../../src/ecs/traits";
 import { Person_get_Empty } from "../../../src/generated/Model";
-import { AppMode_Moving } from "../../../src/generated/Traits/ViewTraits";
+import { AppMode_Moving, AppMode_Viewing } from "../../../src/generated/Traits/ViewTraits";
+import { Locale } from "../../../src/generated/ViewModel/Localization";
+import { NodeLabelView_get_Empty } from "../../../src/generated/ViewModel/NodeContent";
 
 describe("ECS trait declarations", () => {
   let world: World;
@@ -96,11 +98,11 @@ describe("ECS trait declarations", () => {
     const first = world.spawn(CurrentMode(), CurrentLocale(), NodeLabel());
     const second = world.spawn(CurrentMode(), CurrentLocale(), NodeLabel());
 
-    expect(first.get(CurrentMode)).toEqual(second.get(CurrentMode));
+    expect(first.get(CurrentMode)).toStrictEqual(AppMode_Viewing());
     expect(first.get(CurrentMode)).not.toBe(second.get(CurrentMode));
-    expect(first.get(CurrentLocale)).toEqual(second.get(CurrentLocale));
+    expect(first.get(CurrentLocale)).toStrictEqual(new Locale());
     expect(first.get(CurrentLocale)).not.toBe(second.get(CurrentLocale));
-    expect(first.get(NodeLabel)).toEqual(second.get(NodeLabel));
+    expect(first.get(NodeLabel)).toStrictEqual(NodeLabelView_get_Empty());
     expect(first.get(NodeLabel)).not.toBe(second.get(NodeLabel));
   });
 
