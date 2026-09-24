@@ -104,9 +104,11 @@ describe("render", () => {
     expect(lineMesh.geometry).toBeInstanceOf(CylinderGeometry);
     expect((lineMesh.geometry as CylinderGeometry).parameters.height).toBe(5);
     expect(lineMesh.position).toStrictEqual(new Vector3(2.5, 4, 3));
+    // Three.js cylinders extend along their local Y axis. Rendering stores a quaternion that
+    // rotates that default axis onto the line between the endpoints, so applying the stored
+    // rotation to Y recovers the direction in which the cylinder will appear in the scene.
     const renderedDirection = new Vector3(0, 1, 0).applyQuaternion(lineMesh.quaternion);
     const expectedDirection = new Vector3(3, 4, 0).normalize();
-    // Rotating the cylinder's local Y axis should align it with the normalized endpoint vector.
     expect(renderedDirection.distanceTo(expectedDirection)).toBeCloseTo(0);
   });
 
