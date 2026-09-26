@@ -1,7 +1,6 @@
-/**
- * Serializes JSON text into a browser download and releases the temporary URL
- * after the browser has been asked to start the download.
- */
+// Serialize a JSON string to a Blob and trigger a portable download. No native
+// save dialog is shown — the browser writes to its download location — which
+// keeps this working across all browsers.
 export function downloadJson(json: string, filename: string): void {
   const blob = new Blob([json], { type: "application/json" });
   const url = URL.createObjectURL(blob);
