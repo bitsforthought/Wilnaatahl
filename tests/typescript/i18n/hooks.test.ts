@@ -6,7 +6,7 @@ import { WorldProvider } from "koota/react";
 import { createWorld, World } from "koota";
 import { afterEach, describe, expect, test } from "vitest";
 import { CurrentLocale } from "../../../src/ecs";
-import { LocaleModule_parse } from "../../../src/generated/ViewModel/Localization";
+import { Locale } from "../../../src/generated/ViewModel/Localization";
 import { EN } from "../../../src/i18n/format";
 import { useLocale } from "../../../src/i18n/hooks";
 
@@ -24,9 +24,11 @@ describe("useLocale", () => {
     world?.destroy();
   });
 
-  test("falls back to English and reacts when a locale is added", () => {
+  // English is the only semantic locale today. Distinct instances make trait
+  // add/set transitions observable until another Locale case exists.
+  test("returns the exact locale instance added after the English fallback", () => {
     world = createWorld();
-    const locale = LocaleModule_parse("en-US");
+    const addedLocale = new Locale();
 
     const { result } = renderHook(() => useLocale(), {
       wrapper: worldWrapper(world),
@@ -35,16 +37,16 @@ describe("useLocale", () => {
     expect(result.current).toBe(EN);
 
     act(() => {
-      world.add(CurrentLocale(locale));
+      world.add(CurrentLocale(addedLocale));
     });
 
-    expect(result.current).toBe(locale);
+    expect(result.current).toBe(addedLocale);
   });
 
-  test("subscribes to world locale changes and returns the current locale", () => {
+  test("tracks replacement locale instances and falls back after removal", () => {
     world = createWorld();
-    const initialLocale = LocaleModule_parse("en-US");
-    const nextLocale = LocaleModule_parse("en-US");
+    const initialLocale = new Locale();
+    const replacementLocale = new Locale();
     world.add(CurrentLocale(initialLocale));
 
     const { result } = renderHook(() => useLocale(), {
@@ -54,10 +56,10 @@ describe("useLocale", () => {
     expect(result.current).toBe(initialLocale);
 
     act(() => {
-      world.set(CurrentLocale, nextLocale);
+      world.set(CurrentLocale, replacementLocale);
     });
 
-    expect(result.current).toBe(nextLocale);
+    expect(result.current).toBe(replacementLocale);
 
     act(() => {
       world.remove(CurrentLocale);
