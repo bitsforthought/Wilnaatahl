@@ -2,16 +2,26 @@ import { describe, expect, it } from "vitest";
 import { BoxGeometry, Mesh, MeshBasicMaterial, OrthographicCamera, PerspectiveCamera } from "three";
 import { projectAnchor } from "../../../src/react-components/anchor";
 
+const CAMERA_LEFT = -5;
+const CAMERA_RIGHT = 5;
+const CAMERA_TOP = 5;
+const CAMERA_BOTTOM = -5;
+const CAMERA_VERTICAL_FIELD_OF_VIEW = 55;
+const CAMERA_ASPECT_RATIO = 1;
+const CAMERA_NEAR = 0.1;
+const CAMERA_FAR = 100;
+
 describe("projectAnchor", () => {
   it("projects the node bounds from NDC into pixels and inverts y", () => {
     const mesh = new Mesh(new BoxGeometry(2, 2, 2), new MeshBasicMaterial());
-    const LEFT = -5;
-    const RIGHT = 5;
-    const TOP = 5;
-    const BOTTOM = -5;
-    const NEAR = 0.1;
-    const FAR = 100;
-    const camera = new OrthographicCamera(LEFT, RIGHT, TOP, BOTTOM, NEAR, FAR);
+    const camera = new OrthographicCamera(
+      CAMERA_LEFT,
+      CAMERA_RIGHT,
+      CAMERA_TOP,
+      CAMERA_BOTTOM,
+      CAMERA_NEAR,
+      CAMERA_FAR
+    );
     camera.position.z = 5;
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
@@ -29,13 +39,14 @@ describe("projectAnchor", () => {
   it("takes the min and max of all projected corners after rotation", () => {
     const mesh = new Mesh(new BoxGeometry(2, 4, 2), new MeshBasicMaterial());
     mesh.rotation.z = Math.PI / 4;
-    const LEFT = -5;
-    const RIGHT = 5;
-    const TOP = 5;
-    const BOTTOM = -5;
-    const NEAR = 0.1;
-    const FAR = 100;
-    const camera = new OrthographicCamera(LEFT, RIGHT, TOP, BOTTOM, NEAR, FAR);
+    const camera = new OrthographicCamera(
+      CAMERA_LEFT,
+      CAMERA_RIGHT,
+      CAMERA_TOP,
+      CAMERA_BOTTOM,
+      CAMERA_NEAR,
+      CAMERA_FAR
+    );
     camera.position.z = 10;
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
@@ -52,11 +63,12 @@ describe("projectAnchor", () => {
   it("takes screen extrema after projecting a perspective-rotated box", () => {
     const mesh = new Mesh(new BoxGeometry(2, 3, 4), new MeshBasicMaterial());
     mesh.rotation.set(Math.PI / 5, Math.PI / 7, Math.PI / 9);
-    const VERTICAL_FIELD_OF_VIEW = 55;
-    const ASPECT_RATIO = 1;
-    const NEAR = 0.1;
-    const FAR = 100;
-    const camera = new PerspectiveCamera(VERTICAL_FIELD_OF_VIEW, ASPECT_RATIO, NEAR, FAR);
+    const camera = new PerspectiveCamera(
+      CAMERA_VERTICAL_FIELD_OF_VIEW,
+      CAMERA_ASPECT_RATIO,
+      CAMERA_NEAR,
+      CAMERA_FAR
+    );
     camera.position.set(4, 3, 9);
     camera.lookAt(0, 0, 0);
     camera.updateProjectionMatrix();
