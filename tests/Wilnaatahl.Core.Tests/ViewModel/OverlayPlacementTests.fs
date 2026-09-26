@@ -24,5 +24,7 @@ let ``place positions the card beside the node and respects canvas margins``
     expectedLeft
     expectedTop
     =
-    OverlayPlacement.place nodeLeft nodeRight nodeTop nodeBottom canvasWidth canvasHeight cardWidth cardHeight
-    |> fun position -> position =! { Left = expectedLeft; Top = expectedTop }
+    let actual =
+        OverlayPlacement.place nodeLeft nodeRight nodeTop nodeBottom canvasWidth canvasHeight cardWidth cardHeight
+
+    actual =! { Left = expectedLeft; Top = expectedTop }
