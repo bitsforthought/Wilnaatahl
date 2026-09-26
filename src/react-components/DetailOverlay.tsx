@@ -5,6 +5,7 @@ import {
   FamilyGraph_namesHeldBy,
 } from "../generated/Model";
 import { NodeDetailModule_build } from "../generated/ViewModel/NodeContent";
+import { OverlayPlacement_place } from "../generated/ViewModel/OverlayPlacement";
 import { bornText, diedText, kinshipRowText, otherNamesHeading } from "../i18n/format";
 import { useLocale } from "../i18n/hooks";
 import { PersonRef, Selected } from "../ecs";
@@ -30,11 +31,6 @@ export type OverlayAnchor = {
   /** Canvas height in pixels. */
   canvasHeight: number;
 };
-
-// Horizontal offset between the node and the card, and the minimum breathing room
-// kept from every canvas edge. Both are by-eye tuning values.
-const GAP_PX = 16;
-const MARGIN_PX = 12;
 
 const overlayCardStyle: React.CSSProperties = {
   position: "absolute",
@@ -116,21 +112,18 @@ export function DetailOverlay({
     if (!anchor || !cardRef.current) return;
     const { width, height } = cardRef.current.getBoundingClientRect();
 
-    // Offset from the node's right/left edge (not its center) so the card sits
-    // beside the node instead of overlapping it.
-    let left = anchor.nodeRight + GAP_PX;
-    if (anchor.nodeRight + GAP_PX + width + MARGIN_PX > anchor.canvasWidth) {
-      left = anchor.nodeLeft - GAP_PX - width;
-    }
-    left = Math.max(MARGIN_PX, Math.min(left, anchor.canvasWidth - width - MARGIN_PX));
+    const position = OverlayPlacement_place(
+      anchor.nodeLeft,
+      anchor.nodeRight,
+      anchor.nodeTop,
+      anchor.nodeBottom,
+      anchor.canvasWidth,
+      anchor.canvasHeight,
+      width,
+      height
+    );
 
-    let top = anchor.nodeTop;
-    if (anchor.nodeTop + height + MARGIN_PX > anchor.canvasHeight) {
-      top = anchor.nodeBottom - height;
-    }
-    top = Math.max(MARGIN_PX, Math.min(top, anchor.canvasHeight - height - MARGIN_PX));
-
-    setPlacement({ anchor, left, top });
+    setPlacement({ anchor, left: position.Left, top: position.Top });
   }, [anchor]);
 
   if (!anchor || !detail) return null;
