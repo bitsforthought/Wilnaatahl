@@ -43,7 +43,9 @@ export async function importFile(file: Pick<File, "text">, locale: Locale): Prom
   }
 
   const success = result.fields[0] as ImportSuccess;
-  const warnings =
-    ImportWarningModule_summary(locale, success.Warnings) !== "" ? success.Warnings : undefined;
+  // summary is "" exactly when there are no warnings, so it doubles as a
+  // non-emptiness test without reaching into Fable's list representation.
+  const summary = ImportWarningModule_summary(locale, success.Warnings);
+  const warnings = summary !== "" ? success.Warnings : undefined;
   return { kind: "ok", graph: success.Graph, ...(warnings === undefined ? {} : { warnings }) };
 }
