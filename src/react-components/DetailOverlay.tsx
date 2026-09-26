@@ -6,31 +6,11 @@ import {
 } from "../generated/Model";
 import { NodeDetailModule_build } from "../generated/ViewModel/NodeContent";
 import { OverlayPlacement_place } from "../generated/ViewModel/OverlayPlacement";
-import { bornText, diedText, kinshipRowText, otherNamesHeading } from "../i18n/format";
 import { useLocale } from "../i18n/hooks";
 import { PersonRef, Selected } from "../ecs";
 import { dismissButtonStyle } from "./styles";
-
-/**
- * The projected on-screen anchor of the selected node, in canvas pixels. It is
- * reprojected only when the selection, camera, or canvas changes, so an animating
- * selected node leaves the anchor behind — see the accepted gaps in
- * `specs/names-and-detail-overlay.md`.
- */
-export type OverlayAnchor = {
-  /** Screen x of the node's left edge. */
-  nodeLeft: number;
-  /** Screen x of the node's right edge. */
-  nodeRight: number;
-  /** Screen y of the node's top edge. */
-  nodeTop: number;
-  /** Screen y of the node's bottom edge. */
-  nodeBottom: number;
-  /** Canvas width in pixels. */
-  canvasWidth: number;
-  /** Canvas height in pixels. */
-  canvasHeight: number;
-};
+import type { OverlayAnchor } from "./anchor";
+import { buildDetailContent } from "./detailContent";
 
 const overlayCardStyle: React.CSSProperties = {
   position: "absolute",
@@ -128,11 +108,8 @@ export function DetailOverlay({
 
   if (!anchor || !detail) return null;
 
-  const kinshipRows = Array.from(detail.Kinship).map((row) => kinshipRowText(locale, row));
-  const otherNames = Array.from(detail.OtherNames);
-  const born = bornText(locale, detail);
-  const died = diedText(locale, detail);
-  const hasDates = born != null || died != null;
+  const content = buildDetailContent(locale, detail);
+  const hasDates = content.born != null || content.died != null;
 
   // Only reveal the card once its position has been computed for THIS anchor;
   // otherwise it would flash at the top-left corner for one frame.
@@ -154,7 +131,7 @@ export function DetailOverlay({
       onClick={stop}
     >
       <div style={headerStyle}>
-        <span>{detail.Title}</span>
+        <span>{content.title}</span>
         <button
           onClick={onDismiss}
           aria-label="Dismiss detail"
@@ -166,7 +143,7 @@ export function DetailOverlay({
 
       <hr style={dividerStyle} />
       <div>
-        {kinshipRows.map((row, i) => (
+        {content.kinshipRows.map((row, i) => (
           <div key={i}>{row}</div>
         ))}
       </div>
@@ -175,18 +152,18 @@ export function DetailOverlay({
         <>
           <hr style={dividerStyle} />
           <div>
-            {born != null && <div>{born}</div>}
-            {died != null && <div>{died}</div>}
+            {content.born != null && <div>{content.born}</div>}
+            {content.died != null && <div>{content.died}</div>}
           </div>
         </>
       )}
 
-      {otherNames.length > 0 && (
+      {content.otherNames.length > 0 && (
         <>
           <hr style={dividerStyle} />
           <div>
-            <div style={sectionHeadingStyle}>{otherNamesHeading(locale)}</div>
-            {otherNames.map((name, i) => (
+            <div style={sectionHeadingStyle}>{content.otherNamesHeading}</div>
+            {content.otherNames.map((name, i) => (
               <div key={i} style={nameRowStyle}>
                 {name}
               </div>

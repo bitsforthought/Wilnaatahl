@@ -6,7 +6,8 @@ import { Locale } from "../generated/ViewModel/Localization";
 import { Transform_toJson } from "../generated/Persistence/Transform";
 import Toolbar from "./Toolbar";
 import TreeScene from "./TreeScene";
-import { DetailOverlay, OverlayAnchor } from "./DetailOverlay";
+import { DetailOverlay } from "./DetailOverlay";
+import type { OverlayAnchor } from "./anchor";
 import {
   CurrentLocale,
   eventActions,

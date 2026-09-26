@@ -1,36 +1,10 @@
 import React, { useEffect } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import { Box3, Vector3 } from "three";
 import { useHas, useQuery, useWorld } from "koota/react";
 import { DragInFlight, MeshRef, Selected, runSystems, useOverlayVisible } from "../ecs";
 import { HuwilpGroup } from "./HuwilpGroup";
-import type { OverlayAnchor } from "./DetailOverlay";
-
-/**
- * Converts a point in normalized device coordinates (NDC) to canvas pixels.
- *
- * `Vector3.project(camera)` returns NDC: the camera's view volume squashed into a
- * cube spanning -1..1 on every axis, with the origin at the centre of the viewport.
- * Screen pixels instead run 0..width from the left and 0..height from the *top*.
- * So each axis is rescaled from -1..1 to 0..1 and multiplied by the canvas
- * dimension. The y term is negated first because NDC's y grows upward while the
- * screen's grows downward.
- *
- * See https://threejs.org/docs/#api/en/math/Vector3.project and
- * https://learnopengl.com/Getting-started/Coordinate-Systems for background.
- */
-function ndcToScreen(v: Vector3, width: number, height: number): { x: number; y: number } {
-  // One over the -1..1 span, then a shift of half a unit to move the origin from the
-  // centre to the edge. Equal by coincidence: the NDC span is twice the unit range.
-  const NDC_TO_UNIT_SCALE = 0.5;
-  const NDC_TO_UNIT_OFFSET = 0.5;
-
-  return {
-    x: (v.x * NDC_TO_UNIT_SCALE + NDC_TO_UNIT_OFFSET) * width,
-    y: (-v.y * NDC_TO_UNIT_SCALE + NDC_TO_UNIT_OFFSET) * height,
-  };
-}
+import { projectAnchor, OverlayAnchor } from "./anchor";
 
 /**
  * Lives inside the Canvas so it can read the R3F camera and canvas size. When
@@ -58,46 +32,7 @@ function OverlayProjector({ onAnchor }: { onAnchor: (anchor: OverlayAnchor | nul
       onAnchor(null);
       return;
     }
-    // Three.js names these positionally; the call reads as (updateParents, updateChildren).
-    const UPDATE_PARENTS = true;
-    const UPDATE_CHILDREN = false;
-    mesh.updateWorldMatrix(UPDATE_PARENTS, UPDATE_CHILDREN);
-    const box = new Box3().setFromObject(mesh);
-    // Project all eight corners of the node's world-space box and take the
-    // screen-space min/max, so the anchor's left/right/top/bottom are edge-correct
-    // regardless of how the camera was orbited before selection (projecting only
-    // box.min/box.max could swap or collapse the edges under rotation).
-    const corners = [
-      new Vector3(box.min.x, box.min.y, box.min.z),
-      new Vector3(box.min.x, box.min.y, box.max.z),
-      new Vector3(box.min.x, box.max.y, box.min.z),
-      new Vector3(box.min.x, box.max.y, box.max.z),
-      new Vector3(box.max.x, box.min.y, box.min.z),
-      new Vector3(box.max.x, box.min.y, box.max.z),
-      new Vector3(box.max.x, box.max.y, box.min.z),
-      new Vector3(box.max.x, box.max.y, box.max.z),
-    ];
-
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minY = Infinity;
-    let maxY = -Infinity;
-    for (const corner of corners) {
-      const screen = ndcToScreen(corner.project(camera), width, height);
-      minX = Math.min(minX, screen.x);
-      maxX = Math.max(maxX, screen.x);
-      minY = Math.min(minY, screen.y);
-      maxY = Math.max(maxY, screen.y);
-    }
-
-    onAnchor({
-      nodeLeft: minX,
-      nodeRight: maxX,
-      nodeTop: minY,
-      nodeBottom: maxY,
-      canvasWidth: width,
-      canvasHeight: height,
-    });
+    onAnchor(projectAnchor(mesh, camera, width, height));
     // `entityId` stands in for the (stable) selected entity; re-running on the
     // entity object itself would fire every frame as the query array is rebuilt.
     // eslint-disable-next-line react-hooks/exhaustive-deps
