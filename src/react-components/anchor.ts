@@ -21,6 +21,19 @@ export type OverlayAnchor = {
   canvasHeight: number;
 };
 
+/**
+ * Converts a point in normalized device coordinates (NDC) to canvas pixels.
+ *
+ * `Vector3.project(camera)` returns NDC: the camera's view volume squashed into a
+ * cube spanning -1..1 on every axis, with the origin at the centre of the viewport.
+ * Screen pixels instead run 0..width from the left and 0..height from the *top*.
+ * So each axis is rescaled from -1..1 to 0..1 and multiplied by the canvas
+ * dimension. The y term is negated first because NDC's y grows upward while the
+ * screen's grows downward.
+ *
+ * See https://threejs.org/docs/#api/en/math/Vector3.project and
+ * https://learnopengl.com/Getting-started/Coordinate-Systems for background.
+ */
 function ndcToScreen(v: Vector3, width: number, height: number): { x: number; y: number } {
   // One over the -1..1 span, then a shift of half a unit to move the origin from the
   // centre to the edge. Equal by coincidence: the NDC span is twice the unit range.

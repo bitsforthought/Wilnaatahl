@@ -5,7 +5,13 @@ import { projectAnchor } from "../../../src/react-components/anchor";
 describe("projectAnchor", () => {
   it("projects the node bounds from NDC into pixels and inverts y", () => {
     const mesh = new Mesh(new BoxGeometry(2, 2, 2), new MeshBasicMaterial());
-    const camera = new OrthographicCamera(-5, 5, 5, -5, 0.1, 100);
+    const LEFT = -5;
+    const RIGHT = 5;
+    const TOP = 5;
+    const BOTTOM = -5;
+    const NEAR = 0.1;
+    const FAR = 100;
+    const camera = new OrthographicCamera(LEFT, RIGHT, TOP, BOTTOM, NEAR, FAR);
     camera.position.z = 5;
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
@@ -23,7 +29,13 @@ describe("projectAnchor", () => {
   it("takes the min and max of all projected corners after rotation", () => {
     const mesh = new Mesh(new BoxGeometry(2, 4, 2), new MeshBasicMaterial());
     mesh.rotation.z = Math.PI / 4;
-    const camera = new OrthographicCamera(-5, 5, 5, -5, 0.1, 100);
+    const LEFT = -5;
+    const RIGHT = 5;
+    const TOP = 5;
+    const BOTTOM = -5;
+    const NEAR = 0.1;
+    const FAR = 100;
+    const camera = new OrthographicCamera(LEFT, RIGHT, TOP, BOTTOM, NEAR, FAR);
     camera.position.z = 10;
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
@@ -40,7 +52,11 @@ describe("projectAnchor", () => {
   it("takes screen extrema after projecting a perspective-rotated box", () => {
     const mesh = new Mesh(new BoxGeometry(2, 3, 4), new MeshBasicMaterial());
     mesh.rotation.set(Math.PI / 5, Math.PI / 7, Math.PI / 9);
-    const camera = new PerspectiveCamera(55, 1, 0.1, 100);
+    const VERTICAL_FIELD_OF_VIEW = 55;
+    const ASPECT_RATIO = 1;
+    const NEAR = 0.1;
+    const FAR = 100;
+    const camera = new PerspectiveCamera(VERTICAL_FIELD_OF_VIEW, ASPECT_RATIO, NEAR, FAR);
     camera.position.set(4, 3, 9);
     camera.lookAt(0, 0, 0);
     camera.updateProjectionMatrix();
