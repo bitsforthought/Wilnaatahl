@@ -1,19 +1,37 @@
 import { Box3, Camera, Object3D, Vector3 } from "three";
 
-// NDC spans two units; these values rescale it to a unit interval and move its
-// centre to the top-left pixel origin.
-const NDC_TO_UNIT_SCALE = 0.5;
-const NDC_TO_UNIT_OFFSET = 0.5;
-
-/** The projected on-screen bounds of a selected node, in canvas pixels. */
+/**
+ * The projected on-screen anchor of the selected node, in canvas pixels. It is
+ * reprojected only when the selection, camera, or canvas changes, so an animating
+ * selected node leaves the anchor behind — see the accepted gaps in
+ * `specs/names-and-detail-overlay.md`.
+ */
 export type OverlayAnchor = {
+  /** Screen x of the node's left edge. */
   nodeLeft: number;
+  /** Screen x of the node's right edge. */
   nodeRight: number;
+  /** Screen y of the node's top edge. */
   nodeTop: number;
+  /** Screen y of the node's bottom edge. */
   nodeBottom: number;
+  /** Canvas width in pixels. */
   canvasWidth: number;
+  /** Canvas height in pixels. */
   canvasHeight: number;
 };
+
+function ndcToScreen(v: Vector3, width: number, height: number): { x: number; y: number } {
+  // One over the -1..1 span, then a shift of half a unit to move the origin from the
+  // centre to the edge. Equal by coincidence: the NDC span is twice the unit range.
+  const NDC_TO_UNIT_SCALE = 0.5;
+  const NDC_TO_UNIT_OFFSET = 0.5;
+
+  return {
+    x: (v.x * NDC_TO_UNIT_SCALE + NDC_TO_UNIT_OFFSET) * width,
+    y: (-v.y * NDC_TO_UNIT_SCALE + NDC_TO_UNIT_OFFSET) * height,
+  };
+}
 
 /**
  * Projects every corner of an object's world-space bounding box into canvas
@@ -26,10 +44,15 @@ export function projectAnchor(
   canvasWidth: number,
   canvasHeight: number
 ): OverlayAnchor {
+  // Three.js names these positionally; the call reads as (updateParents, updateChildren).
   const UPDATE_PARENTS = true;
   const UPDATE_CHILDREN = false;
   object.updateWorldMatrix(UPDATE_PARENTS, UPDATE_CHILDREN);
   const box = new Box3().setFromObject(object);
+  // Project all eight corners of the node's world-space box and take the
+  // screen-space min/max, so the anchor's left/right/top/bottom are edge-correct
+  // regardless of how the camera was orbited before selection (projecting only
+  // box.min/box.max could swap or collapse the edges under rotation).
   const corners = [
     new Vector3(box.min.x, box.min.y, box.min.z),
     new Vector3(box.min.x, box.min.y, box.max.z),
@@ -41,26 +64,24 @@ export function projectAnchor(
     new Vector3(box.max.x, box.max.y, box.max.z),
   ];
 
-  let nodeLeft = Infinity;
-  let nodeRight = -Infinity;
-  let nodeTop = Infinity;
-  let nodeBottom = -Infinity;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
 
   for (const corner of corners) {
-    corner.project(camera);
-    const x = (corner.x * NDC_TO_UNIT_SCALE + NDC_TO_UNIT_OFFSET) * canvasWidth;
-    const y = (-corner.y * NDC_TO_UNIT_SCALE + NDC_TO_UNIT_OFFSET) * canvasHeight;
-    nodeLeft = Math.min(nodeLeft, x);
-    nodeRight = Math.max(nodeRight, x);
-    nodeTop = Math.min(nodeTop, y);
-    nodeBottom = Math.max(nodeBottom, y);
+    const screen = ndcToScreen(corner.project(camera), canvasWidth, canvasHeight);
+    minX = Math.min(minX, screen.x);
+    maxX = Math.max(maxX, screen.x);
+    minY = Math.min(minY, screen.y);
+    maxY = Math.max(maxY, screen.y);
   }
 
   return {
-    nodeLeft,
-    nodeRight,
-    nodeTop,
-    nodeBottom,
+    nodeLeft: minX,
+    nodeRight: maxX,
+    nodeTop: minY,
+    nodeBottom: maxY,
     canvasWidth,
     canvasHeight,
   };
