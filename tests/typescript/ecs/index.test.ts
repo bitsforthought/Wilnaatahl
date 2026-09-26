@@ -57,12 +57,14 @@ describe("ecs bridge", () => {
   });
 
   test("runSystems wraps the world and delegates the delta", () => {
-    runSystems({ world: world as never, delta: 0.125 });
+    const deltaSeconds = 0.125;
+
+    runSystems({ world: world as never, delta: deltaSeconds });
 
     expect(fromKootaWorld).toHaveBeenCalledOnce();
     expect(fromKootaWorld).toHaveBeenCalledWith(world);
     expect(runFableSystems).toHaveBeenCalledOnce();
-    expect(runFableSystems).toHaveBeenCalledWith(wrappedWorld, 0.125);
+    expect(runFableSystems).toHaveBeenCalledWith(wrappedWorld, deltaSeconds);
   });
 
   test("world actions wrap once and delegate each action with the wrapped world", () => {
@@ -94,12 +96,15 @@ describe("ecs bridge", () => {
   });
 
   test("handleDrag decomposes the matrix and delegates its translation coordinates", () => {
-    const matrix = new Matrix4().makeTranslation(1.25, -2.5, 3.75);
+    const translationX = 1.25;
+    const translationY = -2.5;
+    const translationZ = 3.75;
+    const matrix = new Matrix4().makeTranslation(translationX, translationY, translationZ);
 
     eventActions(world as never).handleDrag(matrix);
 
     expect(handleDrag).toHaveBeenCalledOnce();
-    expect(handleDrag).toHaveBeenCalledWith(wrappedWorld, 1.25, -2.5, 3.75);
+    expect(handleDrag).toHaveBeenCalledWith(wrappedWorld, translationX, translationY, translationZ);
   });
 
   test.each([
