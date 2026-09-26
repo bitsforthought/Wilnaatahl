@@ -3,22 +3,15 @@ import { createWorld, World } from "koota";
 import { WorldProvider } from "koota/react";
 import { FamilyGraph_FamilyGraph as FamilyGraph } from "../generated/Model";
 import { Locale } from "../generated/ViewModel/Localization";
+import { ImportWarning_$union as ImportWarning } from "../generated/Persistence/Transform";
+import { ImportService_loadSampleGraph } from "../generated/Persistence/ImportService";
 import {
-  ImportError_$union as ImportError,
-  ImportWarning_$union as ImportWarning,
-} from "../generated/Persistence/Transform";
-import {
-  ImportService_importJsonText,
-  ImportService_loadSampleGraph,
-  ImportSuccess,
-} from "../generated/Persistence/ImportService";
-import {
-  ImportErrorModule_toMessage,
   ImportWarningModule_summary,
   ImportWarningModule_toMessage,
 } from "../generated/ViewModel/ImportMessages";
 import { FSharpList } from "../generated/fable_modules/fable-library-ts.5.1.0/List";
 import { detectLocale } from "../i18n/format";
+import { importFile as readImportFile, normalizeThrownValue } from "./importFile";
 import { dismissButtonStyle } from "./styles";
 import Visualizer from "./Visualizer";
 
@@ -70,27 +63,20 @@ export default function App() {
   const importFile = useCallback(
     async (file: File) => {
       try {
-        const text = await file.text();
-        const result = ImportService_importJsonText(text);
-        if (result.tag === 0 /* Ok */) {
-          const success = result.fields[0] as ImportSuccess;
-          // summary is "" exactly when there are no warnings, so it doubles as a
-          // non-emptiness test without reaching into Fable's list representation.
-          const summary = ImportWarningModule_summary(locale, success.Warnings);
-
+        const outcome = await readImportFile(file, locale);
+        if (outcome.kind === "ok") {
           const next = createWorld();
           currentWorld.current?.destroy();
           currentWorld.current = next;
 
           setError(undefined);
-          setWarnings(summary !== "" ? success.Warnings : undefined);
-          setSession({ world: next, graph: success.Graph, key: nextKey.current++ });
+          setWarnings(outcome.warnings);
+          setSession({ world: next, graph: outcome.graph, key: nextKey.current++ });
         } else {
-          setError(ImportErrorModule_toMessage(locale, result.fields[0] as ImportError));
+          setError(outcome.message);
         }
       } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        setError(`Could not read file: ${message}`);
+        setError(`Could not read file: ${normalizeThrownValue(e)}`);
       }
     },
     [locale]
