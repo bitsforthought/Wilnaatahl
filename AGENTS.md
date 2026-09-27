@@ -238,14 +238,24 @@ plan (tests before implementation, never batched to the end)
 The adversarial review is **not optional** and **not something to wait to be
 prompted for** — it is part of every change.
 
+### Delivering a plan (outer loop)
+
+After plan approval, use `implement-plan`: each step becomes one reviewed,
+committed `gh stack` layer and PR. Each executor completes the mandatory dev
+loop; the primary session owns state-changing git operations and publishes the
+finished stack.
+
+Write plans bottom-up. Each step must stand alone, leave the repository green,
+and name its branch, acceptance criteria, and executor
+(`fsharp-implementer`, `typescript-implementer`, or `primary` for work outside
+those agents' scopes).
+
 ### Review scope and re-review protocol
 
-The primary agent prepares a compact review packet for every panel: a
-machine-generated full diff and status from the stated base, intended observable
-behaviour, load-bearing invariants, and validation already run. Keep the packet
-focused; link to historical plans or discussion only when an invariant cannot
-otherwise be understood. For a re-review, also name the prior finding, the
-changed files, and the claimed resolution.
+The reviewing agent (the primary agent, or an `implement-plan` executor)
+prepares each packet: the generated diff and status from its base, intended
+behaviour, load-bearing invariants, and validation run. Re-review packets also
+identify the finding, changed files, and claimed resolution.
 
 The first panel reviews the complete candidate diff against the full rubric.
 After fixing a finding, the next panel is a delta review: verify that resolution
@@ -255,8 +265,8 @@ contrary evidence. Include every unresolved deferred finding and the files
 needed to adjudicate it in the delta packet, even when they are otherwise
 unchanged.
 
-Maintain a session-local review outcome ledger while a change is under review.
-For each finding, record the reviewer/model, classification, decision
+The reviewing agent maintains a session-local outcome ledger. For each finding,
+record the reviewer/model, classification, decision
 (accepted, rejected, or deferred), evidence, and the code or test resolving an
 accepted finding. A deferred genuine finding blocks completion and remains in
 each later packet until it is accepted or rejected with evidence. Use the ledger
@@ -283,6 +293,17 @@ or begin a fourth review round.
   enforced by `.editorconfig` (plus `.gitattributes` for line endings). Don't
   fight the formatters — Prettier owns `.ts`/`.tsx`, Fantomas owns `.fs`/`.fsx`.
 
+## Repository administration
+
+- **Never change repository settings or rulesets without explicit human
+  approval.** This covers branch rulesets and their bypass lists, branch
+  protection, default branch, merge options, Actions/workflow permissions,
+  collaborators and teams, webhooks, secrets, and other repository
+  configuration, whether through `gh api`, another `gh` command, or the web UI.
+  Reading settings to answer a question is fine. The rulesets are the safety net
+  for `main` and for published history; do not disable, edit, or work around
+  them to make a push or merge succeed — stop and ask instead.
+
 ## When to use which skill / agent
 
 | Doing this                                                                        | Use                                                            |
@@ -296,6 +317,7 @@ or begin a fourth review round.
 | Adding/editing build/CI/codegen scripts                                           | `infra-scripts-fsharp` skill                                   |
 | Writing/modifying TypeScript / React / Three.js                                   | `typescript-implementer` agent / `typescript-style` skill      |
 | Creating, revising, or reviewing a commit message                                 | `commit-messages` skill                                        |
+| Implementing an approved plan as a stack of reviewed, committed PRs               | `implement-plan` skill                                         |
 | Maintaining a PR stack after a merge, including final cleanup                     | `post-merge-stack-maintenance` skill                           |
 
 Path-scoped custom instructions apply automatically when their `applyTo` pattern

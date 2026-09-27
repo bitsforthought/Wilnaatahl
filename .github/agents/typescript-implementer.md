@@ -27,5 +27,10 @@ during iteration; the final gate is `npm test`.
 Then run the mandatory `adversarial-reviewer` panel exactly as specified by the
 `adversarial-code-review` skill before declaring the change complete.
 
+When dispatched by the primary session following the `implement-plan` skill, run
+the full loop, including review, but leave staging, commits, branch changes, and
+other repository mutations to the primary session. Read-only git commands are
+allowed. Use its required report format.
+
 > This agent is a stub. As project-specific TypeScript conventions accumulate,
 > grow the TypeScript skills and this prompt accordingly.

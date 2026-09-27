@@ -44,5 +44,10 @@ final review has passed:
    panel exactly as specified by the `adversarial-code-review` skill before
    declaring the change complete.
 
+When dispatched by the primary session following the `implement-plan` skill, run
+the full loop, including review, but leave staging, commits, branch changes, and
+other repository mutations to the primary session. Read-only git commands are
+allowed. Use its required report format.
+
 Infrastructure/build scripts follow the `infra-scripts-fsharp` skill (`.fsx` via
 `dotnet fsi`, PascalCase filenames).
