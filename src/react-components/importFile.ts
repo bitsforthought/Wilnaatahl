@@ -19,10 +19,32 @@ export type ImportOutcome =
   | { kind: "error"; message: string };
 
 export function normalizeThrownValue(thrown: unknown): string {
-  return thrown instanceof Error ? thrown.message : String(thrown);
+  if (thrown instanceof Error) return thrown.message;
+
+  if (typeof thrown === "object" && thrown !== null) {
+    try {
+      const message = Reflect.get(thrown, "message");
+      if (typeof message === "string") return message;
+    } catch {
+      // Continue with representations that do not read the property.
+    }
+
+    try {
+      const serialized = JSON.stringify(thrown);
+      if (serialized !== undefined) return serialized;
+    } catch {
+      // Fall through to string conversion.
+    }
+  }
+
+  try {
+    return String(thrown);
+  } catch {
+    return "Unknown error";
+  }
 }
 
-export async function readFileText(file: Pick<File, "text">): Promise<string> {
+async function readFileText(file: Pick<File, "text">): Promise<string> {
   return file.text();
 }
 

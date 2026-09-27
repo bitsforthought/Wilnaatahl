@@ -65,9 +65,44 @@ describe("importFile", () => {
   test.each([
     [new Error("disk offline"), "disk offline"],
     ["permission denied", "permission denied"],
-    [{ code: "EIO" }, "[object Object]"],
+    [{ code: "EIO" }, '{"code":"EIO"}'],
   ])("normalizes thrown value %j", (thrown, expected) => {
     expect(normalizeThrownValue(thrown)).toBe(expected);
+  });
+
+  test("falls back when a thrown object cannot be serialized", () => {
+    const thrown: { self?: unknown } = {};
+    thrown.self = thrown;
+
+    expect(normalizeThrownValue(thrown)).toBe("[object Object]");
+  });
+
+  test("serializes an object whose string conversion throws", () => {
+    const thrown = {
+      code: "EIO",
+      toString: () => {
+        throw new Error("string conversion failed");
+      },
+    };
+
+    expect(normalizeThrownValue(thrown)).toBe('{"code":"EIO"}');
+  });
+
+  test("reads a non-enumerable message from an error-like object", () => {
+    const thrown = Object.defineProperty({}, "message", { value: "foreign error" });
+
+    expect(normalizeThrownValue(thrown)).toBe("foreign error");
+  });
+
+  test("falls back when object serialization returns undefined", () => {
+    expect(normalizeThrownValue({ toJSON: () => undefined })).toBe("[object Object]");
+  });
+
+  test("uses a generic message when a thrown value cannot be serialized or converted", () => {
+    const thrown = Object.create(null) as { self?: unknown };
+    thrown.self = thrown;
+
+    expect(normalizeThrownValue(thrown)).toBe("Unknown error");
   });
 
   test("returns an exact read failure message", async () => {
