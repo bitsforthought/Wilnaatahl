@@ -8,6 +8,7 @@ import Toolbar from "./Toolbar";
 import TreeScene from "./TreeScene";
 import { DetailOverlay } from "./DetailOverlay";
 import type { OverlayAnchor } from "./anchor";
+import { downloadJson, firstSelectedFile } from "./download";
 import {
   CurrentLocale,
   eventActions,
@@ -31,21 +32,6 @@ interface VisualizerProps {
   locale: Locale;
   /** Called with the file the user picks via the hidden file input. */
   onFileSelected: (file: File) => void;
-}
-
-// Serialize a JSON string to a Blob and trigger a portable download. No native
-// save dialog is shown — the browser writes to its download location — which
-// keeps this working across all browsers.
-function downloadJson(json: string, filename: string) {
-  const blob = new Blob([json], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
 }
 
 /**
@@ -108,10 +94,8 @@ export default function Visualizer({ graph, locale, onFileSelected }: Visualizer
   }, [saveRequested, world, graph]);
 
   const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const file = firstSelectedFile(e.target);
     if (file) onFileSelected(file);
-    // Reset so re-picking the same file still fires onChange.
-    e.target.value = "";
   };
 
   return (
