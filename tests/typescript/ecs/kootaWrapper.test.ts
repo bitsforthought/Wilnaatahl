@@ -77,7 +77,7 @@ describe("Koota wrapper contracts", () => {
     const operations = createEntityOperations();
 
     expectExactError(
-      () => operations.Add({ IsTag: false } as never, entity),
+      () => operations.Add({ IsTag: false }, entity),
       "Invalid ITrait implementation passed to toKootaTrait()."
     );
   });

@@ -102,7 +102,7 @@ describe("render", () => {
 
     expect(dispose).toHaveBeenCalledTimes(1);
     expect(lineMesh.geometry).toBeInstanceOf(CylinderGeometry);
-    expect((lineMesh.geometry as CylinderGeometry).parameters.height).toBe(5);
+    expect(lineMesh.geometry.parameters.height).toBe(5);
     expect(lineMesh.position).toStrictEqual(new Vector3(2.5, 4, 3));
     // Three.js cylinders extend along their local Y axis. Rendering stores a quaternion that
     // rotates that default axis onto the line between the endpoints, so applying the stored

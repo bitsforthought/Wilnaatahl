@@ -37,7 +37,7 @@ export const eventActions = createActions((world: World) => {
       Events.handleDragStart(wrappedWorld);
     },
     handleMeshClick: (entity: Entity) => (e: ThreeEvent<MouseEvent>) => {
-      Events.handleClick(wrappedWorld, entity as Entity & EntityId);
+      Events.handleClick(wrappedWorld, entity);
       e.stopPropagation();
     },
     handlePointerMissed: () => Events.handlePointerMissed(wrappedWorld),

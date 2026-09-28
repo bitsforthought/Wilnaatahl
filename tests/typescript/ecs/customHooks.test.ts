@@ -149,7 +149,7 @@ describe("useOverlayVisible", () => {
 
   test("reacts to mode changes while keeping the selection count unchanged", () => {
     world = createWorld();
-    const selectedEntity = world.spawn(Selected);
+    world.spawn(Selected);
     world.add(CurrentMode(AppMode_Moving()));
 
     const { result } = renderHook(() => useOverlayVisible(), {

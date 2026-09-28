@@ -58,9 +58,7 @@ type KootaValueFactory<T> = () => T extends number
 type KootaValueTrait<T> = Trait<KootaSchema<T>>;
 type KootaValueFactoryTrait<T> = Trait<KootaValueFactory<T>>;
 type KootaQueryParameters<S> = S extends QueryParameter[] ? S : [];
-type KootaTracker<TType extends string = string> = <T extends Trait[] = Trait[]>(
-  ...traits: T
-) => Modifier;
+type KootaTracker = <T extends Trait[] = Trait[]>(...traits: T) => Modifier;
 
 type WrappedTracker = { Tracker: TrackerType; kootaTracker: KootaTracker };
 
@@ -246,7 +244,7 @@ export function createEntityOperations(): IEntityOperations {
         `Cannot set a value for a relation that is not present on the subject entity ${entity.id()}`
       );
     }
-    entity.set(pair, value as TraitValue<Schema>);
+    entity.set(pair, value);
   }
 
   function TargetFor<T, TMutable>(
@@ -335,24 +333,20 @@ export function createTraitFactory(): ITraitFactory {
     return getOrCreateWrapper(rel, (r) => ({ IsExclusive: isExclusive, rel: r }));
   }
 
-  // IRelationValue<T, TMutable> adds nothing structurally to IRelation (its T/TMutable are phantom
-  // type parameters used only for F#-side inference), and WrappedRelation already extends IRelation,
-  // so the assertion only supplies the phantom generics — it erases no runtime member.
+  // IRelationValue<T, TMutable> adds nothing structurally to IRelation; its T/TMutable parameters
+  // are phantom types used only for F#-side inference.
   function fromKootaTagRelation(
     rel: Relation<Trait<any>>,
     isExclusive: boolean
   ): IRelationValue<void, void> {
-    return fromKootaRelation(rel, isExclusive) as IRelationValue<void, void>;
+    return fromKootaRelation(rel, isExclusive);
   }
 
   function fromKootaValueRelation<T, TMutable>(
     rel: Relation<KootaValueTrait<T>>,
     isExclusive: boolean
   ): IRelationValue<T, TMutable> {
-    return fromKootaRelation(rel as Relation<Trait<any>>, isExclusive) as IRelationValue<
-      T,
-      TMutable
-    >;
+    return fromKootaRelation(rel as Relation<Trait<any>>, isExclusive);
   }
 
   function CreateAdded(): IAddedTracker {
@@ -431,24 +425,29 @@ export function fromKootaWorld(world: World): IWorld {
         switch (op.type) {
           case "with":
             return toKootaTrait(op.Item);
-          case "not":
+          case "not": {
             const notOperands = Array.from(op.Item, toKootaTrait);
             return Not(...notOperands);
-          case "or":
+          }
+          case "or": {
             const orOperands = Array.from(op.Item, toKootaTrait);
             return Or(...orOperands);
-          case "added":
+          }
+          case "added": {
             const addedOperands = Array.from(op.Item1, toKootaTrait);
             const Added = toKootaTracker(op.Item2);
             return Added(...addedOperands);
-          case "changed":
+          }
+          case "changed": {
             const changedOperands = Array.from(op.Item1, toKootaTrait);
             const Changed = toKootaTracker(op.Item2);
             return Changed(...changedOperands);
-          case "removed":
+          }
+          case "removed": {
             const removedOperands = Array.from(op.Item1, toKootaTrait);
             const Removed = toKootaTracker(op.Item2);
             return Removed(...removedOperands);
+          }
           case "related":
             return toKootaRelation(op.Item1)(op.Item2 as Entity);
           case "relatedToAny":
