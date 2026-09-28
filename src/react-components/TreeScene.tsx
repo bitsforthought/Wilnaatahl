@@ -35,7 +35,6 @@ function OverlayProjector({ onAnchor }: { onAnchor: (anchor: OverlayAnchor | nul
     onAnchor(projectAnchor(mesh, camera, width, height));
     // `entityId` stands in for the (stable) selected entity; re-running on the
     // entity object itself would fire every frame as the query array is rebuilt.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overlayVisible, entityId, camera, width, height, onAnchor]);
 
   return null;
