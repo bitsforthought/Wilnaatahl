@@ -30,10 +30,11 @@ each branch or duplicate already-merged changes.
    If checkout reports that a different local stack already covers those
    branches, switch to the saved merged head branch and run
    `gh stack view --json` to inspect that specific local stack. Compare its
-   composition with GitHub. When GitHub is authoritative, run
-   `gh stack unstack --local` while that branch makes the conflicting stack
-   active, then retry the PR-URL checkout. If the branch cannot be selected or it
-   is not clear which composition to keep, stop and ask the user rather than
+   composition with GitHub. If GitHub is authoritative and **every PR in the
+   conflicting local stack is merged**, run `gh stack unstack --local` while
+   that branch makes the conflicting stack active, then retry the PR-URL
+   checkout. If any PR is unmerged, the branch cannot be selected, or it is not
+   clear which composition to keep, stop and ask the user rather than
    discarding local stack metadata.
 4. **Inspect the stack.** Run `gh stack view --json` and read the reported
    branches in stack order. Retain the trunk name and each branch's name, head
@@ -118,17 +119,20 @@ deleting branches.
    `MERGED` and `git rev-parse <branch>` equals `headRefOid`. A mismatch means the
    local branch contains a commit that is not represented by the merged PR; stop
    and ask the user how to preserve it.
-2. **Prune the completed local stack.** Run `gh stack sync --prune` from the
-   established completed stack. This fast-forwards the trunk, moves the checkout
-   to the trunk when every layer is merged, and deletes local branches for merged
-   PRs. Do not run it while any layer remains unmerged.
+2. **Prune the completed local stack.** Record its stack number before pruning
+   (the GitHub stack UI or an earlier `gh stack submit` result shows it; do not
+   infer it from a PR number). If the number cannot be confirmed, stop before
+   pruning. Run `gh stack sync --prune`
+   from the established completed stack. This fast-forwards the trunk, moves
+   the checkout to the trunk when every layer is merged, and deletes local
+   branches for merged PRs. It is safe to run when the remote branches have
+   already been deleted: it uses the merged PR state, not the continued
+   existence of their remote branches, and does not delete remote branches.
+   Do not run it while any layer remains unmerged.
 3. **Prune stale remote-tracking references.** Run `git fetch --prune`. This
    removes local `origin/...` references only for branches already deleted on the
    remote; it does not delete remote branches.
-4. **Restore an auxiliary starting branch.** If the recorded starting branch was
-   outside the completed stack and still exists, switch back to it. Do not rebase
-   or otherwise modify it unless the user asks.
-5. **Verify cleanup.**
+4. **Verify cleanup.**
    - `git status --short --branch` must be clean.
    - `git rev-list --left-right --count <trunk>...origin/<trunk>` must print
      `0 0`.
@@ -136,6 +140,15 @@ deleting branches.
      completed stack branch, proving each local branch is absent.
    - `gh pr view <number> --json state --jq .state` must print `MERGED` for every
      PR retained from the pre-prune stack view.
+5. **Remove the completed stack's local registration.** Only after verifying
+   that **every PR in this stack is merged**, run
+   `gh stack unstack <stack-number> --local` with the recorded number. The
+   command removes local stack tracking without deleting branches or unstacking
+   PRs on GitHub; `sync --prune` alone leaves that registration behind. Never
+   run bare `gh stack unstack` here, as it also changes the GitHub stack.
+6. **Restore an auxiliary starting branch.** If the recorded starting branch was
+   outside the completed stack and still exists, switch back to it. Do not rebase
+   or otherwise modify it unless the user asks.
 
 Do not manually delete remote branches as part of routine cleanup. Repository
 settings may retain them deliberately; remove them only when the user explicitly
