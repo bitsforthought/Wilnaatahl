@@ -94,6 +94,16 @@ describe("importFile", () => {
     expect(normalizeThrownValue(thrown)).toBe("foreign error");
   });
 
+  test("falls back when reading an error-like message throws", () => {
+    const thrown = Object.defineProperty({ code: "EIO" }, "message", {
+      get: () => {
+        throw new Error("message unavailable");
+      },
+    });
+
+    expect(normalizeThrownValue(thrown)).toBe('{"code":"EIO"}');
+  });
+
   test("falls back when object serialization returns undefined", () => {
     expect(normalizeThrownValue({ toJSON: () => undefined })).toBe("[object Object]");
   });

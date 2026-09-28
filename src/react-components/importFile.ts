@@ -17,7 +17,7 @@ export function normalizeThrownValue(thrown: unknown): string {
 
   if (typeof thrown === "object" && thrown !== null) {
     try {
-      const message = Reflect.get(thrown, "message");
+      const message: unknown = Reflect.get(thrown, "message");
       if (typeof message === "string") return message;
     } catch {
       // Continue with representations that do not read the property.

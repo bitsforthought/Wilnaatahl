@@ -6,7 +6,7 @@ import {
   fromKootaWorld,
   toKootaRelation,
 } from "../../../src/ecs/koota/kootaWrapper";
-import { SpawnSpec_Val } from "../../../src/generated/ECS/Types";
+import { EntityId, SpawnSpec_Val } from "../../../src/generated/ECS/Types";
 
 function expectExactError(action: () => unknown, expectedMessage: string): void {
   let thrown: unknown;
@@ -70,6 +70,24 @@ describe("Koota wrapper contracts", () => {
     expect(fourTraitValues).toEqual([
       [[{ value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }], entity],
     ]);
+  });
+
+  test("passes the single queried value and entity ID to UpdateEachWith", () => {
+    const factory = createTraitFactory();
+    const valueTrait = factory.TraitWith({ value: 1 }, { value: 1 });
+    const wrappedWorld = fromKootaWorld(world);
+    const entity = wrappedWorld.Spawn(SpawnSpec_Val([valueTrait, { value: 1 }]));
+
+    const updatedEntries: [{ value: number }, EntityId][] = [];
+    wrappedWorld
+      .QueryTrait(valueTrait)
+      .UpdateEachWith({ type: "alwaysTrack" }, ([value, queriedEntity]) =>
+        updatedEntries.push([value, queriedEntity])
+      );
+
+    expect(updatedEntries).toHaveLength(1);
+    expect(updatedEntries[0][0]).toStrictEqual({ value: 1 });
+    expect(updatedEntries[0][1]).toBe(entity);
   });
 
   test("rejects an invalid trait implementation with the operation contract", () => {

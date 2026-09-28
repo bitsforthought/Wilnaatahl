@@ -36,11 +36,13 @@ not reimplement domain logic.
 - **All `import` statements at the top of the file.** No inline imports
   (`import("...").T`). Group them at the top so dependencies are visible at a
   glance.
-- **Prefer named public types over type-query indirection.** Import `World`,
-  `Entity`, `IWorld`, and other exported types directly instead of spelling them as
-  `ReturnType<typeof createWorld>`, `ReturnType<World["spawn"]>`, or
-  `Parameters<typeof render>[0]`. Use `ReturnType`/`Parameters` only when the
-  relevant shape genuinely has no named public type.
+- **Prefer named public types over type-query indirection, including in tests.**
+  Import the type matching the contract (`EntityId` for an F# entity ID,
+  `Entity` for a Koota entity object, `World` or `IWorld` for the relevant
+  world) instead of spelling it as `typeof entity`, `ReturnType<typeof createWorld>`,
+  `ReturnType<World["spawn"]>`, or `Parameters<typeof render>[0]`. Use type
+  queries and `ReturnType`/`Parameters` only when the relevant shape genuinely
+  has no named public type.
 - **Name representation conversions.** Replace unexplained transforms such as
   repeated `slice(1)` with a helper whose name states the representation it
   returns.

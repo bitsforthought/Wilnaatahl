@@ -81,13 +81,21 @@ export default function App() {
     },
     [locale]
   );
+  // Visualizer expects a void callback; importFile handles read failures itself,
+  // so the UI can start it without passing its Promise to the event handler.
+  const onFileSelected = useCallback(
+    (file: File): void => {
+      void importFile(file);
+    },
+    [importFile]
+  );
 
   if (!session) return null;
 
   return (
     <>
       <WorldProvider key={session.key} world={session.world}>
-        <Visualizer graph={session.graph} locale={locale} onFileSelected={importFile} />
+        <Visualizer graph={session.graph} locale={locale} onFileSelected={onFileSelected} />
       </WorldProvider>
       {error && <ErrorToast message={error} onDismiss={() => setError(undefined)} />}
       {warnings && (

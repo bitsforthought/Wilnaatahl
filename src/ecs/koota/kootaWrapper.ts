@@ -521,7 +521,8 @@ export function fromKootaWorld(world: World): IWorld {
         callback: (state: [TMutable, EntityId]) => void
       ): void {
         function thunk(state: InstancesFromParameters<KootaQueryParameters<S>>, entity: Entity) {
-          callback([state[0], entity]);
+          const [value] = state as [TMutable];
+          callback([value, entity]);
         }
         result.updateEach(thunk, toKootaQueryResultOptions(changeOption));
       }
