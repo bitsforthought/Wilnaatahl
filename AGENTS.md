@@ -226,6 +226,8 @@ plan (tests before implementation, never batched to the end)
   → npm run build          (Fable can emit bad TS that `dotnet test` misses)
   → npm test  (use test:ts or test:koota for targeted iteration)
   → npm run coverage:check  (separate F# and TypeScript ratchets)
+  → npm run lint  (report findings; rule violations are observational for now,
+                   but configuration/runtime failures block completion)
   → MANDATORY multi-model adversarial review  (run the `adversarial-reviewer`
     agent under several different models — e.g. an Anthropic, an OpenAI, and a
     Google model — never skipped, never gated on perceived risk; WAIT for every

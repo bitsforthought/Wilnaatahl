@@ -95,6 +95,10 @@ The following terminal commands are your dev inner loop:
   `npm test`
 - To run only the TypeScript/Vitest suite: `npm run test:ts`
 - To run only the portable Koota conformance suite: `npm run test:koota`
+- To inspect type-aware ESLint findings in hand-written TypeScript source, tests,
+  and configuration files: `npm run lint`. During rule tuning, violations are
+  reported with a nonzero exit status but do not block build, tests, or coverage.
+  A lint tooling or configuration failure must still be fixed.
 - To enforce the independent F# and TypeScript line/branch coverage baselines:
   `npm run coverage:check`
 - To generate coverage data for both languages: `npm run coverage`
