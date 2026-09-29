@@ -51,8 +51,13 @@ the trait exists can miss a broken subscription path.
 
 ## Commands
 
-- `npm run test:ts` runs the full TypeScript suite, including Koota conformance.
-- `npm run test:koota` runs only the portable Koota conformance subset.
-- `npm run coverage:ts` generates TypeScript coverage data.
-- `npm run report:ts` generates fresh TypeScript coverage data and opens its HTML
-  report.
+- `npm run fake -- --target TestTypeScript` runs the full TypeScript suite,
+  including Koota conformance.
+- `npm run fake -- --target TestKoota` runs only the portable Koota conformance
+  subset.
+- `npm run fake -- --target CoverageTypeScript` generates TypeScript coverage
+  data.
+- `npm run report` generates fresh coverage data and opens both HTML reports.
+
+In Windows PowerShell, use `npm.cmd` rather than `npm` when forwarding target
+arguments, for example `npm.cmd run fake -- --target TestKoota`.

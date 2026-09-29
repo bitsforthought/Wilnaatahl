@@ -39,7 +39,7 @@ final review has passed:
    truthful.
 5. **Validate** with the full gate from the `tdd-coverage-loop` skill.
    `dotnet test` alone is insufficient — Fable can emit invalid TS that only
-   `npm run build` catches.
+   `npm run build` catches. Run `npm run validate` for the complete gate.
 6. **Mandatory multi-model adversarial review.** Run the `adversarial-reviewer`
    panel exactly as specified by the `adversarial-code-review` skill before
    declaring the change complete.

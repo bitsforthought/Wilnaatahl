@@ -6,6 +6,7 @@ open System.ComponentModel
 open System.Diagnostics
 open System.Globalization
 open System.IO
+open System.Text.Json
 open Fake.Core
 open Fake.Core.TargetOperators
 
@@ -89,6 +90,19 @@ let localOnlyTargets =
     [ "Format"; "Dev"; "ReportFSharp"; "ReportTypeScript"; "Report" ]
 
 let defaultWorkerCount processorCount = min processorCount 5
+let targetList = String.concat ", " availableTargets
+
+let helpText () =
+    String.concat
+        Environment.NewLine
+        [ "Usage: dotnet fsi scripts/Build.fsx -- [options]"
+          "Options:"
+          "  --target <target>       Select target (default: Build)"
+          "  --ci                    Use check-only formatting and non-writing coverage"
+          "  --parallel <workers>    Set FAKE worker limit (must be positive)"
+          "  --self-test             Run build command self-tests"
+          "  --help                  Show this help"
+          $"Targets: {targetList}" ]
 
 let parseArguments arguments =
     let rec parse remaining options =
@@ -349,6 +363,40 @@ let assertEqual name expected actual =
 let runSelfTest root =
     assertEqual "default options" (Ok defaultOptions) (parseArguments [])
     assertEqual "default target" (Ok(RunTarget("Build", defaultOptions))) (validateOptions defaultOptions)
+
+    assertEqual
+        "help documents all accepted options and targets"
+        (String.concat
+            Environment.NewLine
+            [ "Usage: dotnet fsi scripts/Build.fsx -- [options]"
+              "Options:"
+              "  --target <target>       Select target (default: Build)"
+              "  --ci                    Use check-only formatting and non-writing coverage"
+              "  --parallel <workers>    Set FAKE worker limit (must be positive)"
+              "  --self-test             Run build command self-tests"
+              "  --help                  Show this help"
+              $"Targets: {targetList}" ])
+        (helpText ())
+
+    use packageManifest =
+        JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "package.json")))
+
+    let actualNpmScripts =
+        packageManifest.RootElement.GetProperty("scripts").EnumerateObject()
+        |> Seq.map (fun property -> property.Name, property.Value.GetString())
+        |> Seq.toList
+
+    let expectedNpmScripts =
+        [ "init", "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Init"
+          "fake", "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx --"
+          "build", "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Build"
+          "dev", "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Dev"
+          "test", "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Test"
+          "validate", "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Validate"
+          "format", "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Format"
+          "report", "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Report" ]
+
+    assertEqual "npm exposes only the eight FAKE command wrappers" expectedNpmScripts actualNpmScripts
 
     assertEqual
         "target, CI, and parallel options"
@@ -851,7 +899,5 @@ Target.create "Report" (fun _ -> printfn "Coverage reports generated and opened.
 
 match invocation with
 | SelfTest -> runSelfTest repoRoot
-| Help ->
-    printfn "Usage: dotnet fsi scripts/Build.fsx [--target <target>] [--ci] [--parallel <workers>]"
-    printfn "Targets: %s" (String.concat ", " availableTargets)
+| Help -> printfn "%s" (helpText ())
 | RunTarget(target, _) -> runTargetWith Target.run workerCount target
