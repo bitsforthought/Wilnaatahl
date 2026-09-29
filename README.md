@@ -95,6 +95,8 @@ The following terminal commands are your dev inner loop:
   `dotnet fsi scripts/Build.fsx -- --help` to list targets. In Windows
   PowerShell, use `npm.cmd run fake -- --target Build` when selecting an npm
   target.
+  `--parallel` sets FAKE's worker limit, not a guarantee of parallel execution:
+  FAKE may serialize sibling targets that share a prerequisite.
 - To host the deployment-ready build locally for testing: `npx serve dist`
 - To run all unit tests (.NET xUnit and Vitest, including Koota conformance):
   `npm test`
