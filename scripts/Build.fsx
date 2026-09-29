@@ -2,6 +2,8 @@
 #r "nuget: Fake.Core.Process, 6.1.4"
 
 open System
+open System.ComponentModel
+open System.Diagnostics
 open System.Globalization
 open System.IO
 open Fake.Core
@@ -30,6 +32,7 @@ type BuildError =
     | LocalTargetInCi of targetName: string
     | MissingTool of path: string
     | ProcessFailure of executable: string * exitCode: int
+    | ReportOpenFailure of path: string * message: string
 
 type NpmAction =
     | Install
@@ -39,6 +42,14 @@ type NpmAction =
 type FormatMode =
     | Write
     | Check
+
+type CoveragePlan =
+    { CleanPaths: string list
+      Commands: ProcessCommand list }
+
+type ReportLauncher =
+    | ShellExecute of reportPath: string
+    | LaunchProcess of reportPath: string * command: ProcessCommand
 
 type Invocation =
     | SelfTest
@@ -64,7 +75,65 @@ let availableTargets =
       "Bundle"
       "Build"
       "Dev"
-      "BuildSelfTest" ]
+      "BuildSelfTest"
+      "TestFSharp"
+      "TestTypeScript"
+      "TestKoota"
+      "Test"
+      "CoverageFSharp"
+      "CoverageTypeScript"
+      "Coverage"
+      "CoverageCheck"
+      "Validate"
+      "ReportFSharp"
+      "ReportTypeScript"
+      "Report" ]
+
+let localOnlyCiTargets = [ "Format"; "ReportFSharp"; "ReportTypeScript"; "Report" ]
+
+let targetDependencies =
+    [ "FormatPolicy", "BuildSelfTest"
+      "FormatPolicy", "Fable"
+      "Fable", "PrepareEcs"
+      "PrepareEcs", "TypeCheck"
+      "PrepareEcs", "Lint"
+      "TypeCheck", "Bundle"
+      "Lint", "Bundle"
+      "Fable", "Bundle"
+      "FormatPolicy", "ValidateAgents"
+      "TypeCheck", "Build"
+      "Lint", "Build"
+      "Bundle", "Build"
+      "ValidateAgents", "Build"
+      "FormatPolicy", "Dev"
+      "Fable", "Dev"
+      "FormatPolicy", "TestFSharp"
+      "FormatPolicy", "TestTypeScript"
+      "FormatPolicy", "TestKoota"
+      "Fable", "TestTypeScript"
+      "PrepareEcs", "TestTypeScript"
+      "Fable", "TestKoota"
+      "PrepareEcs", "TestKoota"
+      "TestFSharp", "Test"
+      "TestTypeScript", "Test"
+      "FormatPolicy", "CoverageFSharp"
+      "FormatPolicy", "CoverageTypeScript"
+      "Fable", "CoverageTypeScript"
+      "PrepareEcs", "CoverageTypeScript"
+      "CoverageFSharp", "Coverage"
+      "CoverageTypeScript", "Coverage"
+      "CoverageFSharp", "CoverageCheck"
+      "CoverageTypeScript", "CoverageCheck"
+      "Build", "Validate"
+      "BuildSelfTest", "Validate"
+      "CoverageCheck", "Validate"
+      "CoverageFSharp", "ReportFSharp"
+      "CoverageTypeScript", "ReportTypeScript"
+      "ReportFSharp", "Report"
+      "ReportTypeScript", "Report" ]
+
+let orderingOnlyDependencies =
+    [ "PrepareEcs", "TestFSharp"; "PrepareEcs", "CoverageFSharp" ]
 
 let defaultWorkerCount processorCount = min processorCount 5
 
@@ -106,7 +175,7 @@ let validateOptions options =
 
     if not (availableTargets |> List.contains target) then
         Error(UnknownTarget target)
-    elif options.Ci && target = "Format" then
+    elif options.Ci && (localOnlyCiTargets |> List.contains target) then
         Error(LocalTargetInCi target)
     elif options.Ci && target = "Dev" then
         Error(LocalTargetInCi target)
@@ -129,6 +198,8 @@ let formatError error =
     | LocalTargetInCi targetName -> $"Target {targetName} is local-only and cannot be combined with --ci."
     | MissingTool path -> $"Required local tool was not found: {path}. Run npm run init."
     | ProcessFailure(executable, exitCode) -> $"{executable} exited with code {exitCode}."
+    | ReportOpenFailure(path, message) ->
+        $"Could not open report at '{path}': {message}. The report remains available at this path."
 
 let repositoryRoot scriptDirectory =
     Path.GetFullPath(Path.Combine(scriptDirectory, ".."))
@@ -222,6 +293,9 @@ let agentValidationCommands root =
     [ dotnetCommand root (fsiArguments @ [ "--self-test" ])
       dotnetCommand root fsiArguments ]
 
+let buildGraphSelfTestCommand root =
+    dotnetCommand root [ "fsi"; "--warnaserror"; "--warnon:3886"; "scripts/BuildGraphSelfTest.fsx" ]
+
 let fableCommands root =
     [ dotnetCommand
           root
@@ -245,7 +319,93 @@ let ecsPreparationCommand root =
           "tests/Wilnaatahl.ECS.Tests/out"
           "--noCache" ]
 
-let runTargetWith run workers targetName = run workers targetName []
+let fSharpTestCommand root = dotnetCommand root [ "test" ]
+
+let typeScriptTestCommand root =
+    nodeCommand root "node_modules/vitest/vitest.mjs" [ "run" ]
+
+let kootaTestCommand root =
+    nodeCommand root "node_modules/vitest/vitest.mjs" [ "run"; "kootaConformance" ]
+
+let reportGeneratorCommand root reportPath targetDirectory reportTypes =
+    dotnetCommand
+        root
+        [ "reportgenerator"
+          $"-reports:{reportPath}"
+          $"-targetdir:{targetDirectory}"
+          $"-reporttypes:{reportTypes}" ]
+
+let fSharpCoveragePlan root =
+    let resultsDirectory = Path.Combine(root, "TestResults")
+    let reportDirectory = Path.Combine(root, "coveragereport")
+    let coverageGlob = Path.Combine(resultsDirectory, "**", "coverage.cobertura.xml")
+
+    { CleanPaths = [ resultsDirectory; reportDirectory ]
+      Commands =
+        [ dotnetCommand
+              root
+              [ "test"
+                "--collect"
+                "XPlat Code Coverage"
+                "--results-directory"
+                "TestResults" ]
+          reportGeneratorCommand root coverageGlob reportDirectory "JsonSummary" ] }
+
+let typeScriptCoveragePlan root =
+    let reportDirectory = Path.Combine(root, "coveragereport-ts")
+    let coberturaPath = Path.Combine(reportDirectory, "cobertura-coverage.xml")
+
+    { CleanPaths = [ reportDirectory ]
+      Commands =
+        [ nodeCommand root "node_modules/vitest/vitest.mjs" [ "run"; "--coverage" ]
+          reportGeneratorCommand root coberturaPath reportDirectory "JsonSummary" ] }
+
+let coverageCheckCommands root ci =
+    let scriptArguments =
+        [ "fsi"; "--warnaserror"; "--warnon:3886"; "scripts/CheckCoverage.fsx" ]
+
+    let policyArguments = if ci then [ "--check-only" ] else []
+
+    [ dotnetCommand root (scriptArguments @ [ "--self-test" ])
+      dotnetCommand root (scriptArguments @ policyArguments) ]
+
+let reportLauncher isWindows isMac root reportPath =
+    if isWindows then
+        ShellExecute reportPath
+    else
+        let executable = if isMac then "open" else "xdg-open"
+        LaunchProcess(reportPath, processCommand root executable [ reportPath ])
+
+let cleanOwnedDirectories paths =
+    paths
+    |> List.iter (fun path ->
+        if Directory.Exists path then
+            Directory.Delete(path, true))
+
+let runCoveragePlan plan =
+    cleanOwnedDirectories plan.CleanPaths
+    runCommands plan.Commands
+
+let runReportLauncher launcher =
+    match launcher with
+    | ShellExecute path ->
+        let startInfo = ProcessStartInfo(path)
+        startInfo.UseShellExecute <- true
+
+        try
+            Process.Start(startInfo) |> ignore
+        with :? Win32Exception as error ->
+            failwith (formatError (ReportOpenFailure(path, error.Message)))
+    | LaunchProcess(path, command) ->
+        match runCheckedWith runProcess command with
+        | Ok() -> ()
+        | Error(ProcessFailure(executable, exitCode)) ->
+            failwith (formatError (ReportOpenFailure(path, $"{executable} exited with code {exitCode}")))
+        | Error error -> failwith (formatError error)
+
+let runTargetWith run workers targetName =
+    Environment.SetEnvironmentVariable("parallel-jobs", string workers)
+    run workers targetName []
 
 let assertEqual name expected actual =
     if expected <> actual then
@@ -254,6 +414,54 @@ let assertEqual name expected actual =
 let runSelfTest root =
     assertEqual "default options" (Ok defaultOptions) (parseArguments [])
     assertEqual "default target" (Ok(RunTarget("Build", defaultOptions))) (validateOptions defaultOptions)
+
+    assertEqual
+        "required target graph edges"
+        [ "FormatPolicy", "BuildSelfTest"
+          "FormatPolicy", "Fable"
+          "Fable", "PrepareEcs"
+          "PrepareEcs", "TypeCheck"
+          "PrepareEcs", "Lint"
+          "TypeCheck", "Bundle"
+          "Lint", "Bundle"
+          "Fable", "Bundle"
+          "FormatPolicy", "ValidateAgents"
+          "TypeCheck", "Build"
+          "Lint", "Build"
+          "Bundle", "Build"
+          "ValidateAgents", "Build"
+          "FormatPolicy", "Dev"
+          "Fable", "Dev"
+          "FormatPolicy", "TestFSharp"
+          "FormatPolicy", "TestTypeScript"
+          "FormatPolicy", "TestKoota"
+          "Fable", "TestTypeScript"
+          "PrepareEcs", "TestTypeScript"
+          "Fable", "TestKoota"
+          "PrepareEcs", "TestKoota"
+          "TestFSharp", "Test"
+          "TestTypeScript", "Test"
+          "FormatPolicy", "CoverageFSharp"
+          "FormatPolicy", "CoverageTypeScript"
+          "Fable", "CoverageTypeScript"
+          "PrepareEcs", "CoverageTypeScript"
+          "CoverageFSharp", "Coverage"
+          "CoverageTypeScript", "Coverage"
+          "CoverageFSharp", "CoverageCheck"
+          "CoverageTypeScript", "CoverageCheck"
+          "Build", "Validate"
+          "BuildSelfTest", "Validate"
+          "CoverageCheck", "Validate"
+          "CoverageFSharp", "ReportFSharp"
+          "CoverageTypeScript", "ReportTypeScript"
+          "ReportFSharp", "Report"
+          "ReportTypeScript", "Report" ]
+        targetDependencies
+
+    assertEqual
+        "dotnet tests are ordered after generated project cracking only when both are selected"
+        [ "PrepareEcs", "TestFSharp"; "PrepareEcs", "CoverageFSharp" ]
+        orderingOnlyDependencies
 
     assertEqual
         "target, CI, and parallel options"
@@ -348,6 +556,14 @@ let runSelfTest root =
         "Target Dev is local-only and cannot be combined with --ci."
         (formatError (LocalTargetInCi "Dev"))
 
+    assertEqual
+        "CI rejects report browser launch"
+        (Error(LocalTargetInCi "Report"))
+        (validateOptions
+            { defaultOptions with
+                Target = Some "Report"
+                Ci = true })
+
     assertEqual "CI selects read-only formatting" Check (formattingMode true)
     assertEqual "local formatting writes" Write (formattingMode false)
 
@@ -390,6 +606,138 @@ let runSelfTest root =
               "--noCache" ])
         (ecsPreparationCommand root)
 
+    assertEqual "F# tests run the complete .NET test solution" (dotnetCommand root [ "test" ]) (fSharpTestCommand root)
+
+    assertEqual
+        "TypeScript tests include full Vitest suite"
+        (nodeCommand root "node_modules/vitest/vitest.mjs" [ "run" ])
+        (typeScriptTestCommand root)
+
+    assertEqual
+        "Koota target selects conformance tests"
+        (nodeCommand root "node_modules/vitest/vitest.mjs" [ "run"; "kootaConformance" ])
+        (kootaTestCommand root)
+
+    let fSharpResultsPath = Path.Combine(root, "TestResults")
+    let fSharpReportPath = Path.Combine(root, "coveragereport")
+    let typeScriptReportPath = Path.Combine(root, "coveragereport-ts")
+
+    let fSharpCoverageGlob =
+        Path.Combine(fSharpResultsPath, "**", "coverage.cobertura.xml")
+
+    let typeScriptCoveragePath =
+        Path.Combine(typeScriptReportPath, "cobertura-coverage.xml")
+
+    assertEqual
+        "F# coverage cleans only its owned output and generates a summary"
+        { CleanPaths = [ fSharpResultsPath; fSharpReportPath ]
+          Commands =
+            [ dotnetCommand
+                  root
+                  [ "test"
+                    "--collect"
+                    "XPlat Code Coverage"
+                    "--results-directory"
+                    "TestResults" ]
+              dotnetCommand
+                  root
+                  [ "reportgenerator"
+                    $"-reports:{fSharpCoverageGlob}"
+                    $"-targetdir:{fSharpReportPath}"
+                    "-reporttypes:JsonSummary" ] ] }
+        (fSharpCoveragePlan root)
+
+    assertEqual
+        "TypeScript coverage cleans only its owned output and runs suite once"
+        { CleanPaths = [ typeScriptReportPath ]
+          Commands =
+            [ nodeCommand root "node_modules/vitest/vitest.mjs" [ "run"; "--coverage" ]
+              dotnetCommand
+                  root
+                  [ "reportgenerator"
+                    $"-reports:{typeScriptCoveragePath}"
+                    $"-targetdir:{typeScriptReportPath}"
+                    "-reporttypes:JsonSummary" ] ] }
+        (typeScriptCoveragePlan root)
+
+    let cleanupDirectory =
+        Path.Combine(Path.GetTempPath(), $"fake-coverage-cleanup-{Guid.NewGuid()}")
+
+    Directory.CreateDirectory(cleanupDirectory) |> ignore
+    let staleOutputPath = Path.Combine(cleanupDirectory, "stale-summary.json")
+    File.WriteAllText(staleOutputPath, "{}")
+
+    try
+        cleanOwnedDirectories [ cleanupDirectory ]
+        assertEqual "coverage cleanup removes stale output" false (Directory.Exists cleanupDirectory)
+        cleanOwnedDirectories [ cleanupDirectory ]
+        assertEqual "coverage cleanup accepts a missing output directory" false (Directory.Exists cleanupDirectory)
+    finally
+        if Directory.Exists cleanupDirectory then
+            Directory.Delete(cleanupDirectory, true)
+
+    assertEqual
+        "local coverage ratchets and CI coverage checks without writing"
+        [ dotnetCommand
+              root
+              [ "fsi"
+                "--warnaserror"
+                "--warnon:3886"
+                "scripts/CheckCoverage.fsx"
+                "--self-test" ]
+          dotnetCommand root [ "fsi"; "--warnaserror"; "--warnon:3886"; "scripts/CheckCoverage.fsx" ] ]
+        (coverageCheckCommands root false)
+
+    assertEqual
+        "CI coverage check uses non-writing mode"
+        [ dotnetCommand
+              root
+              [ "fsi"
+                "--warnaserror"
+                "--warnon:3886"
+                "scripts/CheckCoverage.fsx"
+                "--self-test" ]
+          dotnetCommand
+              root
+              [ "fsi"
+                "--warnaserror"
+                "--warnon:3886"
+                "scripts/CheckCoverage.fsx"
+                "--check-only" ] ]
+        (coverageCheckCommands root true)
+
+    assertEqual
+        "F# HTML report generator"
+        (dotnetCommand
+            root
+            [ "reportgenerator"
+              $"-reports:{fSharpCoverageGlob}"
+              $"-targetdir:{fSharpReportPath}"
+              "-reporttypes:Html" ])
+        (reportGeneratorCommand root fSharpCoverageGlob fSharpReportPath "Html")
+
+    let fSharpReportIndex = Path.Combine(fSharpReportPath, "index.html")
+
+    assertEqual
+        "Windows report launch uses shell association"
+        (ShellExecute fSharpReportIndex)
+        (reportLauncher true false root fSharpReportIndex)
+
+    assertEqual
+        "macOS report launch uses open"
+        (LaunchProcess(fSharpReportIndex, processCommand root "open" [ fSharpReportIndex ]))
+        (reportLauncher false true root fSharpReportIndex)
+
+    assertEqual
+        "Linux report launch uses xdg-open"
+        (LaunchProcess(fSharpReportIndex, processCommand root "xdg-open" [ fSharpReportIndex ]))
+        (reportLauncher false false root fSharpReportIndex)
+
+    assertEqual
+        "report opening failure identifies the generated report"
+        $"Could not open report at '{fSharpReportIndex}': xdg-open exited with code 3. The report remains available at this path."
+        (formatError (ReportOpenFailure(fSharpReportIndex, "xdg-open exited with code 3")))
+
     assertEqual
         "agent validation self-test precedes validation"
         [ dotnetCommand
@@ -406,6 +754,11 @@ let runSelfTest root =
                 "--warnon:3886"
                 "scripts/ValidateAgentDefinitions.fsx" ] ]
         (agentValidationCommands root)
+
+    assertEqual
+        "build self-test invokes the real FAKE scheduler fixture"
+        (dotnetCommand root [ "fsi"; "--warnaserror"; "--warnon:3886"; "scripts/BuildGraphSelfTest.fsx" ])
+        (buildGraphSelfTestCommand root)
 
     let spacedRoot = Path.Combine(Path.GetTempPath(), "fake build test with spaces")
     let viteScript = "node_modules/vite/bin/vite.js"
@@ -459,8 +812,12 @@ let runSelfTest root =
 
     assertEqual
         "FAKE receives the requested worker count"
-        (4, "Build", [])
-        (runTargetWith (fun workers targetName arguments -> workers, targetName, arguments) 4 "Build")
+        ("4", (4, "Build", []))
+        (runTargetWith
+            (fun workers targetName arguments ->
+                Environment.GetEnvironmentVariable("parallel-jobs"), (workers, targetName, arguments))
+            4
+            "Build")
 
     assertEqual
         "repository root resolves from script directory"
@@ -526,7 +883,39 @@ let runFable () = fableCommands repoRoot |> runCommands
 let runEcsPreparation () =
     ecsPreparationCommand repoRoot |> runOrFail
 
-Target.create "BuildSelfTest" (fun _ -> runSelfTest repoRoot)
+let runFSharpCoverage () =
+    fSharpCoveragePlan repoRoot |> runCoveragePlan
+
+let runTypeScriptCoverage () =
+    typeScriptCoveragePlan repoRoot |> runCoveragePlan
+
+let runCoverageCheck () =
+    coverageCheckCommands repoRoot ciMode |> runCommands
+
+let runFSharpReport () =
+    let resultsDirectory = Path.Combine(repoRoot, "TestResults")
+    let reportDirectory = Path.Combine(repoRoot, "coveragereport")
+    let reportPath = Path.Combine(reportDirectory, "index.html")
+    let coverageGlob = Path.Combine(resultsDirectory, "**", "coverage.cobertura.xml")
+
+    reportGeneratorCommand repoRoot coverageGlob reportDirectory "Html" |> runOrFail
+
+    reportLauncher (OperatingSystem.IsWindows()) (OperatingSystem.IsMacOS()) repoRoot reportPath
+    |> runReportLauncher
+
+let runTypeScriptReport () =
+    let reportDirectory = Path.Combine(repoRoot, "coveragereport-ts")
+    let coveragePath = Path.Combine(reportDirectory, "cobertura-coverage.xml")
+    let reportPath = Path.Combine(reportDirectory, "index.html")
+
+    reportGeneratorCommand repoRoot coveragePath reportDirectory "Html" |> runOrFail
+
+    reportLauncher (OperatingSystem.IsWindows()) (OperatingSystem.IsMacOS()) repoRoot reportPath
+    |> runReportLauncher
+
+Target.create "BuildSelfTest" (fun _ ->
+    runSelfTest repoRoot
+    buildGraphSelfTestCommand repoRoot |> runOrFail)
 
 Target.create "Init" (fun _ ->
     npmCommand repoRoot (if ciMode then CiInstall else Install) |> runOrFail
@@ -550,25 +939,24 @@ Target.create "TypeCheck" (fun _ -> runNode repoRoot "node_modules/typescript/bi
 Target.create "Bundle" (fun _ -> runNode repoRoot "node_modules/vite/bin/vite.js" [ "build" ])
 Target.create "Build" (fun _ -> printfn "Build checks completed.")
 Target.create "Dev" (fun _ -> runNode repoRoot "node_modules/vite/bin/vite.js" [])
+Target.create "TestFSharp" (fun _ -> fSharpTestCommand repoRoot |> runOrFail)
+Target.create "TestTypeScript" (fun _ -> typeScriptTestCommand repoRoot |> runCommand)
+Target.create "TestKoota" (fun _ -> kootaTestCommand repoRoot |> runCommand)
+Target.create "Test" (fun _ -> printfn "All test suites completed.")
+Target.create "CoverageFSharp" (fun _ -> runFSharpCoverage ())
+Target.create "CoverageTypeScript" (fun _ -> runTypeScriptCoverage ())
+Target.create "Coverage" (fun _ -> printfn "Coverage reports generated.")
+Target.create "CoverageCheck" (fun _ -> runCoverageCheck ())
+Target.create "Validate" (fun _ -> printfn "Build, tests, and coverage validation completed.")
+Target.create "ReportFSharp" (fun _ -> runFSharpReport ())
+Target.create "ReportTypeScript" (fun _ -> runTypeScriptReport ())
+Target.create "Report" (fun _ -> printfn "Coverage reports generated and opened.")
 
-"BuildSelfTest" ==> "Init"
-"BuildSelfTest" ==> "Format"
-"BuildSelfTest" ==> "FormatCheck"
-"BuildSelfTest" ==> "FormatPolicy"
-"FormatPolicy" ==> "Fable"
-"Fable" ==> "PrepareEcs"
-"PrepareEcs" ==> "TypeCheck"
-"PrepareEcs" ==> "Lint"
-"TypeCheck" ==> "Bundle"
-"Lint" ==> "Bundle"
-"Fable" ==> "Bundle"
-"FormatPolicy" ==> "ValidateAgents"
-"TypeCheck" ==> "Build"
-"Lint" ==> "Build"
-"Bundle" ==> "Build"
-"ValidateAgents" ==> "Build"
-"FormatPolicy" ==> "Dev"
-"Fable" ==> "Dev"
+targetDependencies
+|> List.iter (fun (before, after) -> before ==> after |> ignore)
+
+orderingOnlyDependencies
+|> List.iter (fun (before, after) -> before ?=> after |> ignore)
 
 match invocation with
 | SelfTest -> runSelfTest repoRoot
