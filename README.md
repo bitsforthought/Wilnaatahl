@@ -90,6 +90,11 @@ The following terminal commands are your dev inner loop:
 
 - To build and run in the dev server for iterative development: `npm run dev`
 - To build for deployment, including enforced TypeScript linting: `npm run build`
+- During the FAKE migration, targets are also available with
+  `dotnet fsi scripts/Build.fsx -- --target Build --parallel 1`; use
+  `dotnet fsi scripts/Build.fsx -- --help` to list targets. In Windows
+  PowerShell, use `npm.cmd run fake -- --target Build` when selecting an npm
+  target.
 - To host the deployment-ready build locally for testing: `npx serve dist`
 - To run all unit tests (.NET xUnit and Vitest, including Koota conformance):
   `npm test`
