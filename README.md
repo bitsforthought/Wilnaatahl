@@ -98,8 +98,10 @@ The following terminal commands are your dev inner loop:
 - To enforce type-aware ESLint checks in hand-written TypeScript source, tests,
   and configuration files: `npm run lint`. Violations fail this command and
   `npm run build`.
-- To enforce the independent F# and TypeScript line/branch coverage baselines:
+- To enforce the independent F# and TypeScript line/branch coverage baselines.
+  By default, improvements raise the tracked `coverage-baseline.json` ratchet:
   `npm run coverage:check`
+  - CI can run `dotnet fsi --warnaserror --warnon:3886 scripts/CheckCoverage.fsx --check-only` to enforce the same baselines without updating `coverage-baseline.json`.
 - To generate coverage data for both languages: `npm run coverage`
   - F# only: `npm run coverage:fsharp`
   - TypeScript only: `npm run coverage:ts`

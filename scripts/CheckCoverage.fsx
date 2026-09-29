@@ -29,6 +29,21 @@ type CoverageSuite =
       SummaryPath: string
       Metrics: Metric list }
 
+type BaselinePolicy =
+    | Ratchet
+    | CheckOnly
+
+type BaselineAction =
+    | RejectRegression
+    | KeepBaseline
+    | UpdateBaseline of results: (CoverageSuite * Metric * float * float * CheckResult) list
+
+type CoverageGateError = | CoverageRegressed
+
+type Command =
+    | RunCoverageCheck of BaselinePolicy
+    | RunSelfTest
+
 let lineMetric =
     { Label = "Line coverage"
       BaselineKey = "lineCoverage"
@@ -93,6 +108,31 @@ let checkCoverage current baseline =
     if current < baseline then Regressed(current, baseline)
     elif current > baseline then Improved current
     else Pass
+
+let parseArguments arguments =
+    match arguments with
+    | [] -> Ok(RunCoverageCheck Ratchet)
+    | [ "--check-only" ] -> Ok(RunCoverageCheck CheckOnly)
+    | [ "--self-test" ] -> Ok RunSelfTest
+    | _ -> Error "Usage: CheckCoverage.fsx [--check-only | --self-test]"
+
+let baselineAction policy results =
+    let hasRegression, hasImprovement =
+        results
+        |> List.fold
+            (fun (hasRegression, hasImprovement) (_, _, _, _, result) ->
+                match result with
+                | Regressed _ -> true, hasImprovement
+                | Improved _ -> hasRegression, true
+                | Pass -> hasRegression, hasImprovement)
+            (false, false)
+
+    if hasRegression then
+        RejectRegression
+    elif policy = Ratchet && hasImprovement then
+        UpdateBaseline results
+    else
+        KeepBaseline
 
 let sequenceResults results =
     List.fold
@@ -161,10 +201,32 @@ let writeBaseline path results =
 
     File.WriteAllText(path, $"{{\n{properties}\n}}\n")
 
+let applyBaselineAction path action : Result<unit, CoverageGateError> =
+    match action with
+    | RejectRegression -> Error CoverageRegressed
+    | KeepBaseline -> Ok()
+    | UpdateBaseline results ->
+        writeBaseline path results
+        printfn "Updated %s with new baseline." path
+        Ok()
+
 let runSelfTest () =
     let assertEqual name expected actual =
         if expected <> actual then
             failwith (sprintf "Self-test failed: %s. Expected %A, got %A." name expected actual)
+
+    assertEqual "default arguments ratchet" (Ok(RunCoverageCheck Ratchet)) (parseArguments [])
+
+    assertEqual
+        "check-only arguments do not ratchet"
+        (Ok(RunCoverageCheck CheckOnly))
+        (parseArguments [ "--check-only" ])
+
+    assertEqual "self-test arguments" (Ok RunSelfTest) (parseArguments [ "--self-test" ])
+    let expectedUsage = Error "Usage: CheckCoverage.fsx [--check-only | --self-test]"
+    assertEqual "unknown arguments fail" expectedUsage (parseArguments [ "--unknown" ])
+
+    assertEqual "combined arguments fail" expectedUsage (parseArguments [ "--check-only"; "--self-test" ])
 
     let fSharpSuite =
         { Label = "F#"
@@ -324,6 +386,74 @@ let runSelfTest () =
               ("tsBranchCoverage", 76.0) ])
         (rewrittenKeys |> Result.bind sequenceResults)
 
+    let improvedResults =
+        [ (fSharpSuite, lineMetric, 99.0, 98.6, Improved 99.0)
+          (fSharpSuite, branchMetric, 94.0, 93.2, Improved 94.0)
+          (typeScriptSuite, typeScriptLineMetric, 88.0, 87.5, Improved 88.0)
+          (typeScriptSuite, typeScriptBranchMetric, 77.0, 76.0, Improved 77.0) ]
+
+    let regressedResults =
+        [ (fSharpSuite, branchMetric, 92.0, 93.2, Regressed(92.0, 93.2)) ]
+
+    let temporaryPath = Path.GetTempFileName()
+    let originalBaseline = baseline
+    File.WriteAllText(temporaryPath, originalBaseline)
+
+    let checkOnlyResult =
+        improvedResults |> baselineAction CheckOnly |> applyBaselineAction temporaryPath
+
+    assertEqual "check-only action succeeds" (Ok()) checkOnlyResult
+    assertEqual "check-only preserves baseline bytes" originalBaseline (File.ReadAllText temporaryPath)
+
+    let ratchetResult =
+        improvedResults |> baselineAction Ratchet |> applyBaselineAction temporaryPath
+
+    assertEqual "ratchet action succeeds" (Ok()) ratchetResult
+
+    assertEqual
+        "ratchet writes all improved metrics"
+        """{
+  "lineCoverage": 99.0,
+  "branchCoverage": 94.0,
+  "tsLineCoverage": 88.0,
+  "tsBranchCoverage": 77.0
+}
+"""
+        (File.ReadAllText temporaryPath)
+
+    let ratchetedBaseline = File.ReadAllText temporaryPath
+
+    let regressionResult =
+        (regressedResults @ improvedResults)
+        |> baselineAction Ratchet
+        |> applyBaselineAction temporaryPath
+
+    assertEqual "regressed action fails the gate" (Error CoverageRegressed) regressionResult
+    assertEqual "regressed results preserve baseline bytes" ratchetedBaseline (File.ReadAllText temporaryPath)
+    File.Delete temporaryPath
+
+    assertEqual "check-only never writes improvements" KeepBaseline (baselineAction CheckOnly improvedResults)
+
+    assertEqual
+        "check-only rejects regressed results without writing"
+        RejectRegression
+        (baselineAction CheckOnly regressedResults)
+
+    assertEqual
+        "ratchet rejects any regressed metric"
+        RejectRegression
+        (baselineAction Ratchet (regressedResults @ improvedResults))
+
+    assertEqual
+        "ratchet writes improvements when no metric regresses"
+        (UpdateBaseline improvedResults)
+        (baselineAction Ratchet improvedResults)
+
+    assertEqual
+        "ratchet keeps the baseline when metrics are equal"
+        KeepBaseline
+        (baselineAction Ratchet [ (fSharpSuite, lineMetric, 98.6, 98.6, Pass) ])
+
     printfn "Self-test: passed."
 
 // --- Top-level I/O and control flow ---
@@ -337,9 +467,12 @@ let typeScriptSummaryPath =
 
 let scriptArgs = fsi.CommandLineArgs |> Array.skip 1
 
-if scriptArgs |> Array.contains "--self-test" then
-    runSelfTest ()
-else
+match parseArguments (scriptArgs |> Array.toList) with
+| Error usage ->
+    eprintfn "%s" usage
+    exit 2
+| Ok RunSelfTest -> runSelfTest ()
+| Ok(RunCoverageCheck policy) ->
     let baselineTextResult =
         if File.Exists baselinePath then
             Ok(File.ReadAllText baselinePath)
@@ -393,21 +526,6 @@ else
         | Improved current -> printfn "PASS: %s %s improved to %.1f%%." suite.Label metric.Label current
         | Pass -> printfn "PASS: %s %s meets or exceeds baseline." suite.Label metric.Label
 
-    let anyRegressed =
-        results
-        |> List.exists (fun (_, _, _, _, result) ->
-            match result with
-            | Regressed _ -> true
-            | _ -> false)
-
-    if anyRegressed then
-        exit 1
-    elif
-        results
-        |> List.exists (fun (_, _, _, _, result) ->
-            match result with
-            | Improved _ -> true
-            | _ -> false)
-    then
-        writeBaseline baselinePath results
-        printfn "Updated %s with new baseline." baselinePath
+    match baselineAction policy results |> applyBaselineAction baselinePath with
+    | Ok() -> ()
+    | Error CoverageRegressed -> exit 1
