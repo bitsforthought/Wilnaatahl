@@ -62,7 +62,10 @@ type KootaTracker = <T extends Trait[] = Trait[]>(...traits: T) => Modifier;
 
 type WrappedTracker = { Tracker: TrackerType; kootaTracker: KootaTracker };
 
-type WrappedTrait<TKootaTrait extends Trait<any>> = { IsTag: boolean; trait: TKootaTrait };
+// Koota's public erased Trait type is the common type for heterogeneous traits. Its schema parameter
+// is invariant in the declaration, so Trait<Schema> cannot represent this F# ITrait boundary.
+type KootaTrait = Trait;
+type WrappedTrait<TKootaTrait extends KootaTrait> = { IsTag: boolean; trait: TKootaTrait };
 type WrappedTagTrait = WrappedTrait<TagTrait>;
 type WrappedValueTrait<T> = WrappedTrait<KootaValueTrait<T>>;
 type WrappedValueFactoryTrait<T> = WrappedTrait<KootaValueFactoryTrait<T>>;
@@ -71,7 +74,7 @@ type WrappedValueFactoryTrait<T> = WrappedTrait<KootaValueFactoryTrait<T>>;
 // (rel(target)) on demand for entity ops and target-specific queries. A relation is a query filter
 // plus a per-(subject, target) value store, not a trait, so it never flows through the trait wrappers.
 type WrappedRelation = IRelation & {
-  rel: Relation<Trait<any>>;
+  rel: Relation<KootaTrait>;
 };
 
 // The $wrapper symbol allows us to cache wrappers directly on Koota objects without conflicting
@@ -98,7 +101,7 @@ function getOrCreateWrapper<T extends object, TWrapper>(
   return objWithWrapper[$wrapper];
 }
 
-function validateWrappedTrait<TKootaTrait extends Trait<any>, T extends WrappedTrait<TKootaTrait>>(
+function validateWrappedTrait<TKootaTrait extends KootaTrait, T extends WrappedTrait<TKootaTrait>>(
   trait: ITrait,
   method: string
 ): T {
@@ -109,7 +112,7 @@ function validateWrappedTrait<TKootaTrait extends Trait<any>, T extends WrappedT
   return trait as T;
 }
 
-function toKootaTrait<T>(trait: ITrait): Trait<any> {
+function toKootaTrait<T>(trait: ITrait): KootaTrait {
   const method = "toKootaTrait";
   const traitWrapper = trait.IsTag
     ? validateWrappedTrait<TagTrait, WrappedTagTrait>(trait, method)
@@ -146,7 +149,7 @@ export function toKootaTagTrait(trait: ITagTrait): TagTrait {
   return validateWrappedTrait<TagTrait, WrappedTagTrait>(trait, "toKootaTagTrait").trait;
 }
 
-export function toKootaRelation(r: IRelation): Relation<Trait<any>> {
+export function toKootaRelation(r: IRelation): Relation<KootaTrait> {
   if (!("rel" in r)) {
     throw new Error("Invalid IRelation implementation passed to toKootaRelation().");
   }
@@ -302,7 +305,7 @@ export function createTraitFactory(): ITraitFactory {
     }));
   }
 
-  function fromKootaTrait<TKootaTrait extends Trait<any>>(
+  function fromKootaTrait<TKootaTrait extends KootaTrait>(
     trait: TKootaTrait,
     isTag: boolean
   ): ITrait {
@@ -325,7 +328,7 @@ export function createTraitFactory(): ITraitFactory {
     return fromKootaTrait(trait, false);
   }
 
-  function fromKootaRelation(rel: Relation<Trait<any>>, isExclusive: boolean): WrappedRelation {
+  function fromKootaRelation(rel: Relation<KootaTrait>, isExclusive: boolean): WrappedRelation {
     // The relation function is a stable object created once per Relation/RelationWith call, so we
     // cache the wrapper on it. A relation is a query filter plus a per-(subject, target) value
     // store, not a trait, so it never flows through the trait wrappers or produces a pair here;
@@ -336,7 +339,7 @@ export function createTraitFactory(): ITraitFactory {
   // IRelationValue<T, TMutable> adds nothing structurally to IRelation; its T/TMutable parameters
   // are phantom types used only for F#-side inference.
   function fromKootaTagRelation(
-    rel: Relation<Trait<any>>,
+    rel: Relation<KootaTrait>,
     isExclusive: boolean
   ): IRelationValue<void, void> {
     return fromKootaRelation(rel, isExclusive);
@@ -346,7 +349,7 @@ export function createTraitFactory(): ITraitFactory {
     rel: Relation<KootaValueTrait<T>>,
     isExclusive: boolean
   ): IRelationValue<T, TMutable> {
-    return fromKootaRelation(rel as Relation<Trait<any>>, isExclusive);
+    return fromKootaRelation(rel as Relation<KootaTrait>, isExclusive);
   }
 
   function CreateAdded(): IAddedTracker {
@@ -744,32 +747,31 @@ export function fromKootaWorld(world: World): IWorld {
       }
 
       Spawn(...specs: SpawnSpec[]): EntityId {
-        function unwrapValueSpec([traitWrapper, value]: [ITrait, unknown]): ConfigurableTrait<
-          Trait<any>
-        > {
-          return [toKootaTrait(traitWrapper), value] as ConfigurableTrait<Trait<any>>;
+        function unwrapValueSpec([traitWrapper, value]: [
+          ITrait,
+          unknown,
+        ]): ConfigurableTrait<KootaTrait> {
+          return [toKootaTrait(traitWrapper), value] as ConfigurableTrait<KootaTrait>;
         }
 
-        function unwrapRel([relation, target]: [IRelation, EntityId]): ConfigurableTrait<
-          Trait<any>
-        > {
-          return toKootaRelation(relation)(target as Entity) as ConfigurableTrait<Trait<any>>;
+        function unwrapRel([relation, target]: [
+          IRelation,
+          EntityId,
+        ]): ConfigurableTrait<KootaTrait> {
+          return toKootaRelation(relation)(target as Entity);
         }
 
         function unwrapValRel([relation, target, value]: [
           IRelation,
           EntityId,
           unknown,
-        ]): ConfigurableTrait<Trait<any>> {
+        ]): ConfigurableTrait<KootaTrait> {
           // Koota requires the params form rel(target, value) for a value pair at spawn/add; a
           // [pair, value] tuple throws.
-          return toKootaRelation(relation)(
-            target as Entity,
-            value as Record<string, unknown>
-          ) as ConfigurableTrait<Trait<any>>;
+          return toKootaRelation(relation)(target as Entity, value as Record<string, unknown>);
         }
 
-        function unwrapSpawnSpec(c: SpawnSpec): ConfigurableTrait<Trait<any>> {
+        function unwrapSpawnSpec(c: SpawnSpec): ConfigurableTrait<KootaTrait> {
           return SpawnSpec_Map(toKootaTrait, unwrapValueSpec, unwrapRel, unwrapValRel, c);
         }
 
