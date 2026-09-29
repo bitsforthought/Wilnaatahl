@@ -223,11 +223,10 @@ plan (tests before implementation, never batched to the end)
   → RED   (test compiles, runs, and fails for the right reason against a stub)
   → GREEN (smallest idiomatic-F# change that passes)
   → REFACTOR (deep dead-code removal, truthful comments)
-  → npm run build          (Fable can emit bad TS that `dotnet test` misses)
+  → npm run build          (Fable output, TypeScript, ESLint, and Vite)
   → npm test  (use test:ts or test:koota for targeted iteration)
   → npm run coverage:check  (separate F# and TypeScript ratchets)
-  → npm run lint  (report findings; rule violations are observational for now,
-                   but configuration/runtime failures block completion)
+  → npm run lint  (enforced; also runs in build, available directly for fast feedback)
   → MANDATORY multi-model adversarial review  (run the `adversarial-reviewer`
     agent under several different models — e.g. an Anthropic, an OpenAI, and a
     Google model — never skipped, never gated on perceived risk; WAIT for every

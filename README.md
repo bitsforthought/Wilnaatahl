@@ -89,16 +89,15 @@ dotnet tool restore
 The following terminal commands are your dev inner loop:
 
 - To build and run in the dev server for iterative development: `npm run dev`
-- To build for deployment: `npm run build`
+- To build for deployment, including enforced TypeScript linting: `npm run build`
 - To host the deployment-ready build locally for testing: `npx serve dist`
 - To run all unit tests (.NET xUnit and Vitest, including Koota conformance):
   `npm test`
 - To run only the TypeScript/Vitest suite: `npm run test:ts`
 - To run only the portable Koota conformance suite: `npm run test:koota`
-- To inspect type-aware ESLint findings in hand-written TypeScript source, tests,
-  and configuration files: `npm run lint`. During rule tuning, violations are
-  reported with a nonzero exit status but do not block build, tests, or coverage.
-  A lint tooling or configuration failure must still be fixed.
+- To enforce type-aware ESLint checks in hand-written TypeScript source, tests,
+  and configuration files: `npm run lint`. Violations fail this command and
+  `npm run build`.
 - To enforce the independent F# and TypeScript line/branch coverage baselines:
   `npm run coverage:check`
 - To generate coverage data for both languages: `npm run coverage`

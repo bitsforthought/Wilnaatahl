@@ -10,7 +10,7 @@
     "lint": "eslint src tests/typescript vite.config.ts vitest.config.ts",
     "validate:agents": "dotnet fsi --warnaserror --warnon:3886 scripts/ValidateAgentDefinitions.fsx --self-test && dotnet fsi --warnaserror --warnon:3886 scripts/ValidateAgentDefinitions.fsx",
     "fable": "npm run fantomas && dotnet fable --lang typescript --outDir ../generated --cwd ./src/Wilnaatahl.Core && dotnet fsi --warnaserror --warnon:3886 scripts/PatchFableModules.fsx",
-    "build": "npm run validate:agents && npm run fable && npm run test:koota:prepare && npm run prettier && tsc && vite build",
+    "build": "npm run validate:agents && npm run fable && npm run test:koota:prepare && npm run prettier && tsc && npm run lint && vite build",
     "dev": "npm run fable && npm run prettier && vite",
     "preview": "npm run fable && npm run prettier && vite preview",
     "test": "dotnet test && npm run test:ts",
