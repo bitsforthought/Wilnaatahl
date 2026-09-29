@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "init": "npm install && dotnet restore && dotnet tool restore",
+    "fake": "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx --",
     "fantomas": "dotnet fantomas .",
     "prettier": "prettier --write .",
     "lint": "eslint src tests/typescript vite.config.ts vitest.config.ts",
