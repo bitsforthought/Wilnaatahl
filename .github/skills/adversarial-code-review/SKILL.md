@@ -164,8 +164,9 @@ concrete failure or regression it would cause.
   subscribers without diffing, so a system that writes a recomputed value every
   frame re-renders subscribed components at 60 fps. Flag writes in per-frame
   systems that aren't guarded on an actual change.
-- Were `npm run build`, `npm test`/`test:koota`, and `npm run coverage:check`
-  run and green? (Fable can emit bad TS that `dotnet test` misses.)
+- Was `npm run validate` run and green? For focused iteration, were the relevant
+  FAKE test/build/coverage targets run? (Fable can emit bad TS that
+  `dotnet test` misses.)
 - For ECS tests: are they portable across the .NET mock and real Koota, and
   constrained to the lowest common denominator Koota supports?
 

@@ -100,8 +100,7 @@ Process steps in position order. For each step:
    - avoid staging, committing, switching branches, and other state-changing
      git or `gh stack` commands;
    - report changed files, decisions or deviations, the final output tail for
-     `npm run build`, `npm test`, and `npm run coverage:check`, and review
-     rounds, models, and finding counts;
+     `npm run validate`, and review rounds, models, and finding counts;
    - report `blocked`, not `done`, if a genuine finding remains.
 3. **Check the report.** Confirm it says `done`, includes the required passing
    results, and matches the worktree: no new commits and only in-scope files
