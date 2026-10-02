@@ -47,10 +47,6 @@ type CoveragePlan =
     { CleanPaths: string list
       Commands: ProcessCommand list }
 
-type ReportLauncher =
-    | ShellExecute of reportPath: string
-    | LaunchProcess of reportPath: string * command: ProcessCommand
-
 type Invocation =
     | SelfTest
     | Help
@@ -89,51 +85,8 @@ let availableTargets =
       "ReportTypeScript"
       "Report" ]
 
-let localOnlyCiTargets = [ "Format"; "ReportFSharp"; "ReportTypeScript"; "Report" ]
-
-let targetDependencies =
-    [ "FormatPolicy", "BuildSelfTest"
-      "FormatPolicy", "Fable"
-      "Fable", "PrepareEcs"
-      "PrepareEcs", "TypeCheck"
-      "PrepareEcs", "Lint"
-      "TypeCheck", "Bundle"
-      "Lint", "Bundle"
-      "Fable", "Bundle"
-      "FormatPolicy", "ValidateAgents"
-      "TypeCheck", "Build"
-      "Lint", "Build"
-      "Bundle", "Build"
-      "ValidateAgents", "Build"
-      "FormatPolicy", "Dev"
-      "Fable", "Dev"
-      "FormatPolicy", "TestFSharp"
-      "FormatPolicy", "TestTypeScript"
-      "FormatPolicy", "TestKoota"
-      "Fable", "TestTypeScript"
-      "PrepareEcs", "TestTypeScript"
-      "Fable", "TestKoota"
-      "PrepareEcs", "TestKoota"
-      "TestFSharp", "Test"
-      "TestTypeScript", "Test"
-      "FormatPolicy", "CoverageFSharp"
-      "FormatPolicy", "CoverageTypeScript"
-      "Fable", "CoverageTypeScript"
-      "PrepareEcs", "CoverageTypeScript"
-      "CoverageFSharp", "Coverage"
-      "CoverageTypeScript", "Coverage"
-      "CoverageFSharp", "CoverageCheck"
-      "CoverageTypeScript", "CoverageCheck"
-      "Build", "Validate"
-      "BuildSelfTest", "Validate"
-      "CoverageCheck", "Validate"
-      "CoverageFSharp", "ReportFSharp"
-      "CoverageTypeScript", "ReportTypeScript"
-      "ReportFSharp", "Report"
-      "ReportTypeScript", "Report" ]
-
-let orderingOnlyDependencies =
-    [ "PrepareEcs", "TestFSharp"; "PrepareEcs", "CoverageFSharp" ]
+let localOnlyTargets =
+    [ "Format"; "Dev"; "ReportFSharp"; "ReportTypeScript"; "Report" ]
 
 let defaultWorkerCount processorCount = min processorCount 5
 
@@ -175,9 +128,7 @@ let validateOptions options =
 
     if not (availableTargets |> List.contains target) then
         Error(UnknownTarget target)
-    elif options.Ci && (localOnlyCiTargets |> List.contains target) then
-        Error(LocalTargetInCi target)
-    elif options.Ci && target = "Dev" then
+    elif options.Ci && (localOnlyTargets |> List.contains target) then
         Error(LocalTargetInCi target)
     elif options.SelfTest then
         Ok SelfTest
@@ -369,13 +320,6 @@ let coverageCheckCommands root ci =
     [ dotnetCommand root (scriptArguments @ [ "--self-test" ])
       dotnetCommand root (scriptArguments @ policyArguments) ]
 
-let reportLauncher isWindows isMac root reportPath =
-    if isWindows then
-        ShellExecute reportPath
-    else
-        let executable = if isMac then "open" else "xdg-open"
-        LaunchProcess(reportPath, processCommand root executable [ reportPath ])
-
 let cleanOwnedDirectories paths =
     paths
     |> List.iter (fun path ->
@@ -386,22 +330,14 @@ let runCoveragePlan plan =
     cleanOwnedDirectories plan.CleanPaths
     runCommands plan.Commands
 
-let runReportLauncher launcher =
-    match launcher with
-    | ShellExecute path ->
-        let startInfo = ProcessStartInfo(path)
-        startInfo.UseShellExecute <- true
+let openReport path =
+    let startInfo = ProcessStartInfo(path)
+    startInfo.UseShellExecute <- true
 
-        try
-            Process.Start(startInfo) |> ignore
-        with :? Win32Exception as error ->
-            failwith (formatError (ReportOpenFailure(path, error.Message)))
-    | LaunchProcess(path, command) ->
-        match runCheckedWith runProcess command with
-        | Ok() -> ()
-        | Error(ProcessFailure(executable, exitCode)) ->
-            failwith (formatError (ReportOpenFailure(path, $"{executable} exited with code {exitCode}")))
-        | Error error -> failwith (formatError error)
+    try
+        Process.Start(startInfo) |> ignore
+    with :? Win32Exception as error ->
+        failwith (formatError (ReportOpenFailure(path, error.Message)))
 
 let runTargetWith run workers targetName =
     Environment.SetEnvironmentVariable("parallel-jobs", string workers)
@@ -414,54 +350,6 @@ let assertEqual name expected actual =
 let runSelfTest root =
     assertEqual "default options" (Ok defaultOptions) (parseArguments [])
     assertEqual "default target" (Ok(RunTarget("Build", defaultOptions))) (validateOptions defaultOptions)
-
-    assertEqual
-        "required target graph edges"
-        [ "FormatPolicy", "BuildSelfTest"
-          "FormatPolicy", "Fable"
-          "Fable", "PrepareEcs"
-          "PrepareEcs", "TypeCheck"
-          "PrepareEcs", "Lint"
-          "TypeCheck", "Bundle"
-          "Lint", "Bundle"
-          "Fable", "Bundle"
-          "FormatPolicy", "ValidateAgents"
-          "TypeCheck", "Build"
-          "Lint", "Build"
-          "Bundle", "Build"
-          "ValidateAgents", "Build"
-          "FormatPolicy", "Dev"
-          "Fable", "Dev"
-          "FormatPolicy", "TestFSharp"
-          "FormatPolicy", "TestTypeScript"
-          "FormatPolicy", "TestKoota"
-          "Fable", "TestTypeScript"
-          "PrepareEcs", "TestTypeScript"
-          "Fable", "TestKoota"
-          "PrepareEcs", "TestKoota"
-          "TestFSharp", "Test"
-          "TestTypeScript", "Test"
-          "FormatPolicy", "CoverageFSharp"
-          "FormatPolicy", "CoverageTypeScript"
-          "Fable", "CoverageTypeScript"
-          "PrepareEcs", "CoverageTypeScript"
-          "CoverageFSharp", "Coverage"
-          "CoverageTypeScript", "Coverage"
-          "CoverageFSharp", "CoverageCheck"
-          "CoverageTypeScript", "CoverageCheck"
-          "Build", "Validate"
-          "BuildSelfTest", "Validate"
-          "CoverageCheck", "Validate"
-          "CoverageFSharp", "ReportFSharp"
-          "CoverageTypeScript", "ReportTypeScript"
-          "ReportFSharp", "Report"
-          "ReportTypeScript", "Report" ]
-        targetDependencies
-
-    assertEqual
-        "dotnet tests are ordered after generated project cracking only when both are selected"
-        [ "PrepareEcs", "TestFSharp"; "PrepareEcs", "CoverageFSharp" ]
-        orderingOnlyDependencies
 
     assertEqual
         "target, CI, and parallel options"
@@ -719,24 +607,9 @@ let runSelfTest root =
     let fSharpReportIndex = Path.Combine(fSharpReportPath, "index.html")
 
     assertEqual
-        "Windows report launch uses shell association"
-        (ShellExecute fSharpReportIndex)
-        (reportLauncher true false root fSharpReportIndex)
-
-    assertEqual
-        "macOS report launch uses open"
-        (LaunchProcess(fSharpReportIndex, processCommand root "open" [ fSharpReportIndex ]))
-        (reportLauncher false true root fSharpReportIndex)
-
-    assertEqual
-        "Linux report launch uses xdg-open"
-        (LaunchProcess(fSharpReportIndex, processCommand root "xdg-open" [ fSharpReportIndex ]))
-        (reportLauncher false false root fSharpReportIndex)
-
-    assertEqual
         "report opening failure identifies the generated report"
-        $"Could not open report at '{fSharpReportIndex}': xdg-open exited with code 3. The report remains available at this path."
-        (formatError (ReportOpenFailure(fSharpReportIndex, "xdg-open exited with code 3")))
+        $"Could not open report at '{fSharpReportIndex}': No application is associated with the specified file. The report remains available at this path."
+        (formatError (ReportOpenFailure(fSharpReportIndex, "No application is associated with the specified file.")))
 
     assertEqual
         "agent validation self-test precedes validation"
@@ -900,8 +773,7 @@ let runFSharpReport () =
 
     reportGeneratorCommand repoRoot coverageGlob reportDirectory "Html" |> runOrFail
 
-    reportLauncher (OperatingSystem.IsWindows()) (OperatingSystem.IsMacOS()) repoRoot reportPath
-    |> runReportLauncher
+    openReport reportPath
 
 let runTypeScriptReport () =
     let reportDirectory = Path.Combine(repoRoot, "coveragereport-ts")
@@ -910,8 +782,7 @@ let runTypeScriptReport () =
 
     reportGeneratorCommand repoRoot coveragePath reportDirectory "Html" |> runOrFail
 
-    reportLauncher (OperatingSystem.IsWindows()) (OperatingSystem.IsMacOS()) repoRoot reportPath
-    |> runReportLauncher
+    openReport reportPath
 
 Target.create "BuildSelfTest" (fun _ ->
     runSelfTest repoRoot
@@ -952,11 +823,47 @@ Target.create "ReportFSharp" (fun _ -> runFSharpReport ())
 Target.create "ReportTypeScript" (fun _ -> runTypeScriptReport ())
 Target.create "Report" (fun _ -> printfn "Coverage reports generated and opened.")
 
-targetDependencies
-|> List.iter (fun (before, after) -> before ==> after |> ignore)
-
-orderingOnlyDependencies
-|> List.iter (fun (before, after) -> before ?=> after |> ignore)
+"FormatPolicy" ==> "BuildSelfTest" |> ignore
+"FormatPolicy" ==> "Fable" |> ignore
+"Fable" ==> "PrepareEcs" |> ignore
+"PrepareEcs" ==> "TypeCheck" |> ignore
+"PrepareEcs" ==> "Lint" |> ignore
+"TypeCheck" ==> "Bundle" |> ignore
+"Lint" ==> "Bundle" |> ignore
+"Fable" ==> "Bundle" |> ignore
+"FormatPolicy" ==> "ValidateAgents" |> ignore
+"TypeCheck" ==> "Build" |> ignore
+"Lint" ==> "Build" |> ignore
+"Bundle" ==> "Build" |> ignore
+"ValidateAgents" ==> "Build" |> ignore
+"FormatPolicy" ==> "Dev" |> ignore
+"Fable" ==> "Dev" |> ignore
+"FormatPolicy" ==> "TestFSharp" |> ignore
+"FormatPolicy" ==> "TestTypeScript" |> ignore
+"FormatPolicy" ==> "TestKoota" |> ignore
+"Fable" ==> "TestTypeScript" |> ignore
+"PrepareEcs" ==> "TestTypeScript" |> ignore
+"Fable" ==> "TestKoota" |> ignore
+"PrepareEcs" ==> "TestKoota" |> ignore
+"TestFSharp" ==> "Test" |> ignore
+"TestTypeScript" ==> "Test" |> ignore
+"FormatPolicy" ==> "CoverageFSharp" |> ignore
+"FormatPolicy" ==> "CoverageTypeScript" |> ignore
+"Fable" ==> "CoverageTypeScript" |> ignore
+"PrepareEcs" ==> "CoverageTypeScript" |> ignore
+"CoverageFSharp" ==> "Coverage" |> ignore
+"CoverageTypeScript" ==> "Coverage" |> ignore
+"CoverageFSharp" ==> "CoverageCheck" |> ignore
+"CoverageTypeScript" ==> "CoverageCheck" |> ignore
+"Build" ==> "Validate" |> ignore
+"BuildSelfTest" ==> "Validate" |> ignore
+"CoverageCheck" ==> "Validate" |> ignore
+"CoverageFSharp" ==> "ReportFSharp" |> ignore
+"CoverageTypeScript" ==> "ReportTypeScript" |> ignore
+"ReportFSharp" ==> "Report" |> ignore
+"ReportTypeScript" ==> "Report" |> ignore
+"PrepareEcs" ?=> "TestFSharp" |> ignore
+"PrepareEcs" ?=> "CoverageFSharp" |> ignore
 
 match invocation with
 | SelfTest -> runSelfTest repoRoot
