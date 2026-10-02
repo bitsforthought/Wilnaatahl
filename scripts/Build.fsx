@@ -487,8 +487,10 @@ let runSelfTest root =
 
 let repoRoot = repositoryRoot __SOURCE_DIRECTORY__
 
+let isCachedExecution = false
+
 let executionContext =
-    Context.FakeExecutionContext.Create false "scripts/Build.fsx" []
+    Context.FakeExecutionContext.Create isCachedExecution "scripts/Build.fsx" []
 
 Context.setExecutionContext (Context.RuntimeContext.Fake executionContext)
 
