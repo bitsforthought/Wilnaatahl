@@ -42,7 +42,8 @@ This convention does not apply to Sim Algyax/Gitxsanimx text.
 - **Core Logic:** F# domain model, view model, ECS traits, entities, and systems
   in `src/Wilnaatahl.Core/`, compiled to JS via Fable.
 - **Interop:** TypeScript types in `src/generated/` are auto-generated from F# for
-  type-safe interop. Never hand-edit these files — regenerate with `npm run fable`.
+  type-safe interop. Never hand-edit these files — regenerate with
+  `npm run fake -- --target Fable`.
 - **State Management:** Uses [Koota](https://github.com/pmndrs/koota), an ECS
   library. `src/main.tsx` provides a Koota `World` via `<WorldProvider>`. React
   components access state through Koota hooks (`useWorld()`, `useQuery()`,
@@ -155,18 +156,22 @@ This convention does not apply to Sim Algyax/Gitxsanimx text.
 - **Setup:** `npm run init` (installs npm packages, restores .NET tools/packages)
 - **Dev server:** `npm run dev` (runs Fable then Vite with hot reload)
 - **Build for deploy:** `npm run build`
-- **Unit tests:** `npm test` (.NET xUnit, then the full Vitest suite, including
-  Koota conformance)
-- **TypeScript tests:** `npm run test:ts` (full Vitest suite, including Koota
+- **Unit tests:** `npm test` (.NET xUnit and Vitest, including Koota
   conformance)
-- **Koota tests only:** `npm run test:koota`
-- **Coverage gate:** `npm run coverage:check` (F# and TypeScript are gated
-  separately through the same `CheckCoverage.fsx`)
-- **Coverage data:** `npm run coverage` (both languages), or
-  `npm run coverage:fsharp` / `npm run coverage:ts`
-- **Coverage reports:** `npm run report` (opens both reports), or
-  `npm run report:fsharp` / `npm run report:ts`
+- **Full validation:** `npm run validate` (build checks, infrastructure
+  self-tests, each test suite once with coverage, and both coverage ratchets)
+- **Focused targets:** `npm run fake -- --target <Target>` (for example
+  `TestKoota`, `CoverageCheck`, `Lint`, or `FormatCheck`)
+- **Coverage reports:** `npm run report` (generates and opens both reports
+  locally)
 - **Format code:** `npm run format` (Prettier for TS, Fantomas for F#)
+- **CI mode:** append `-- --ci` to `build` or `validate`; format checks do not
+  write, coverage does not update the baseline, and local-only targets are
+  rejected. Use `.nvmrc` as the Node-version source when provisioning future CI.
+- **Shell note:** In Windows PowerShell, use `npm.cmd` whenever forwarding
+  target or CI options (for example, `npm.cmd run fake -- --target TestKoota`);
+  the `npm` PowerShell shim can consume flags before they reach FAKE. On
+  Unix-like shells, use `npm`.
 
 ## Keeping token cost down
 
@@ -223,10 +228,7 @@ plan (tests before implementation, never batched to the end)
   → RED   (test compiles, runs, and fails for the right reason against a stub)
   → GREEN (smallest idiomatic-F# change that passes)
   → REFACTOR (deep dead-code removal, truthful comments)
-  → npm run build          (Fable output, TypeScript, ESLint, and Vite)
-  → npm test  (use test:ts or test:koota for targeted iteration)
-  → npm run coverage:check  (separate F# and TypeScript ratchets)
-  → npm run lint  (enforced; also runs in build, available directly for fast feedback)
+  → npm run validate       (build, lint, full suites once with coverage, ratchets)
   → MANDATORY multi-model adversarial review  (run the `adversarial-reviewer`
     agent under several different models — e.g. an Anthropic, an OpenAI, and a
     Google model — never skipped, never gated on perceived risk; WAIT for every
@@ -331,7 +333,8 @@ the table.
 
 ## Examples
 
-- **Add a domain property:** Update F# in `Model.fs`, run `npm run fable` to
+- **Add a domain property:** Update F# in `Model.fs`, run
+  `npm run fake -- --target Fable` to
   regenerate TS types, and use via the view model or ECS traits in React.
 - **Add a UI feature:** Add or update a React component that reads Koota traits via
   hooks, with logic driven by F# systems.

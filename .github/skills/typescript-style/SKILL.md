@@ -16,8 +16,8 @@ not reimplement domain logic.
 
 ## General TS conventions
 
-- **Never hand-edit `src/generated/`.** Regenerate with `npm run fable` after F#
-  changes.
+- **Never hand-edit `src/generated/`.** Regenerate with
+  `npm run fake -- --target Fable` after F# changes.
 - **No duplication of business logic.** React components use the F#-generated view
   model and ECS systems for state and actions; do not reimplement domain rules in
   TypeScript.

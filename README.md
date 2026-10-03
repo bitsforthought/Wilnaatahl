@@ -40,18 +40,20 @@ These instructions assume **Git** and **Visual Studio Code** are already install
 1. Download and install the latest `nvm-setup.exe` from:  
    👉 https://github.com/coreybutler/nvm-windows/releases
 
-2. Open a new PowerShell window, then install and use a stable Node.js version:
+2. Open a new PowerShell window, then install and use the Node.js version
+   recorded in `.nvmrc` (currently Node 24 LTS):
 
 ```powershell
-nvm install 23.11.0
-nvm use 23.11.0
+$nodeVersion = (Get-Content .nvmrc).Trim()
+nvm install $nodeVersion
+nvm use $nodeVersion
 ```
 
 3. Verify the installation:
 
 ```powershell
-node -v    # Should return v23.11.0
-npm -v     # Should return a recent npm version (e.g. 10.x)
+node -v    # Should match .nvmrc
+npm -v
 ```
 
 #### ✅ 2. Install the .NET SDK
@@ -76,45 +78,71 @@ From the project root, run:
 npm run init
 ```
 
-This will run the following commands:
-
-```powershell
-npm install
-dotnet restore
-dotnet tool restore
-```
+This installs npm dependencies and restores the .NET solution and local tools.
+For CI-style clean initialization, use `npm.cmd run init -- --ci`; that selects
+`npm ci` before the same .NET restores.
 
 ### Commands for Dev Inner Loop
 
-The following terminal commands are your dev inner loop:
+The npm scripts are a thin facade over the FAKE target graph:
 
-- To build and run in the dev server for iterative development: `npm run dev`
-- To build for deployment, including enforced TypeScript linting: `npm run build`
-- During the FAKE migration, targets are also available with
-  `dotnet fsi scripts/Build.fsx -- --target Build --parallel 1`; use
-  `dotnet fsi scripts/Build.fsx -- --help` to list targets. In Windows
-  PowerShell, use `npm.cmd run fake -- --target Build` when selecting an npm
-  target.
-  `--parallel` sets FAKE's worker limit, not a guarantee of parallel execution:
-  FAKE may serialize sibling targets that share a prerequisite.
-- To host the deployment-ready build locally for testing: `npx serve dist`
-- To run all unit tests (.NET xUnit and Vitest, including Koota conformance):
-  `npm test`
-- To run only the TypeScript/Vitest suite: `npm run test:ts`
-- To run only the portable Koota conformance suite: `npm run test:koota`
-- To enforce type-aware ESLint checks in hand-written TypeScript source, tests,
-  and configuration files: `npm run lint`. Violations fail this command and
-  `npm run build`.
-- To enforce the independent F# and TypeScript line/branch coverage baselines.
-  By default, improvements raise the tracked `coverage-baseline.json` ratchet:
-  `npm run coverage:check`
-  - CI can run `dotnet fsi --warnaserror --warnon:3886 scripts/CheckCoverage.fsx --check-only` to enforce the same baselines without updating `coverage-baseline.json`.
-- To generate coverage data for both languages: `npm run coverage`
-  - F# only: `npm run coverage:fsharp`
-  - TypeScript only: `npm run coverage:ts`
-- To generate and open both language-specific coverage reports: `npm run report`
-  - F# only: `npm run report:fsharp`
-  - TypeScript only: `npm run report:ts`
-- To format the TypeScript code with Prettier and F# code with Fantomas: `npm run format`
-  - Prettier is configured via the `.prettierrc` file in the project root. Files and folders to ignore are listed in `.prettierignore`.
-  - Fantomas is configured via the `.editorconfig` file in the project root.
+| Command                             | Behaviour                                                                                 |
+| ----------------------------------- | ----------------------------------------------------------------------------------------- |
+| `npm run init`                      | Install npm packages and restore .NET packages and tools.                                 |
+| `npm run fake -- --target <Target>` | Run a focused target or list targets with `--help`.                                       |
+| `npm run build`                     | Format locally, validate agent definitions, type-check, lint and bundle for deployment.   |
+| `npm run dev`                       | Format locally, generate/patch Fable output and start Vite.                               |
+| `npm test`                          | Run both complete test suites, including Koota conformance.                               |
+| `npm run validate`                  | Run build checks, infrastructure self-tests, instrumented suites and coverage gates once. |
+| `npm run format`                    | Format authored files with Fantomas and Prettier.                                         |
+| `npm run report`                    | Generate fresh coverage and open both HTML reports locally.                               |
+
+Use `npm run validate` as the complete build/test/coverage gate; it avoids
+re-running suites just to collect coverage. For local diagnosis, choose a target
+such as `TestKoota`, `CoverageCheck`, `Lint`, or `FormatCheck` through the `fake`
+command. CI-style validation is explicit:
+
+```powershell
+npm.cmd run validate -- --ci
+npm.cmd run validate -- --ci --parallel 1
+```
+
+In Windows PowerShell, use `npm.cmd` rather than the `npm` PowerShell shim when
+forwarding FAKE options, for example `npm.cmd run validate -- --ci`. The shim
+can consume flags such as `--ci` or `--target` before they reach FAKE. On
+Unix-like shells, use `npm run validate -- --ci` and
+`npm run fake -- --target TestKoota`.
+
+In `--ci` mode formatting is check-only, coverage improvements do not update
+`coverage-baseline.json`, and report/browser and development-server targets are
+rejected. Use `npm.cmd run fake -- --help` in PowerShell or
+`npm run fake -- --help` in Unix-like shells to list targets and options.
+`--parallel` sets FAKE's worker limit, not a guarantee of parallel execution:
+FAKE may serialize sibling targets that share a prerequisite. The same direct
+entry point works before npm dependencies are installed:
+`dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Init --ci`.
+
+Former focused npm commands map to FAKE targets as follows:
+
+| Former command                                           | Replacement target                      |
+| -------------------------------------------------------- | --------------------------------------- |
+| `npm run fantomas` / `npm run prettier`                  | `Format` or `FormatCheck`               |
+| `npm run fable`                                          | `Fable`                                 |
+| `npm run lint`                                           | `Lint`                                  |
+| `npm run validate:agents`                                | `ValidateAgents`                        |
+| `npm run test:ts` / `npm run test:koota`                 | `TestTypeScript` / `TestKoota`          |
+| `npm run coverage`                                       | `Coverage`                              |
+| `npm run coverage:fsharp` / `npm run coverage:ts`        | `CoverageFSharp` / `CoverageTypeScript` |
+| `npm run coverage:check`                                 | `CoverageCheck`                         |
+| `npm run report:fsharp` / `npm run report:ts`            | `ReportFSharp` / `ReportTypeScript`     |
+| `npm run test:ts:prepare` / `npm run test:koota:prepare` | `Fable` and `PrepareEcs`                |
+
+Use `npm.cmd run fake -- --target <Target>` in PowerShell or
+`npm run fake -- --target <Target>` in Unix-like shells to select the named
+target. `preview` was unused and has been removed without replacement.
+
+For future GitHub Actions setup, read the Node version from `.nvmrc`, then run
+the direct `Init --ci` and `Validate --ci` targets; this repository does not yet
+include an Actions workflow.
+
+To host the deployment-ready build locally for testing: `npx serve dist`.

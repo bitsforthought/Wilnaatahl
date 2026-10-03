@@ -14,34 +14,40 @@ class of failure the others miss.
 
 ## Commands
 
-| Step             | Command                  | Purpose                                                                                                                                                               |
-| ---------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Build (full)     | `npm run build`          | Invokes Fable, TypeScript, ESLint, then Vite. Catches Fable-emitted invalid TS and lint violations that `dotnet test` cannot.                                         |
-| Tests            | `npm test`               | Runs .NET xUnit tests, then the full Vitest suite, including Koota conformance.                                                                                       |
-| TypeScript       | `npm run test:ts`        | Runs the full Vitest suite from `tests/typescript`, including Koota conformance.                                                                                      |
-| Koota only       | `npm run test:koota`     | Runs only the portable Koota conformance suite; use for faster targeted iteration.                                                                                    |
-| Coverage data    | `npm run coverage`       | Generates F# and TypeScript coverage data. Use `coverage:fsharp` or `coverage:ts` for one language.                                                                   |
-| Coverage gate    | `npm run coverage:check` | Runs F# and TypeScript coverage separately, then applies both ratchets through the same `CheckCoverage.fsx` script. The baseline auto-updates when coverage improves. |
-| Lint (enforced)  | `npm run lint`           | Fails on ESLint's type-aware findings in hand-written TypeScript; also runs during `npm run build`.                                                                   |
-| Coverage reports | `npm run report`         | Generates fresh data and opens both language-specific HTML reports. Use `report:fsharp` or `report:ts` for one language.                                              |
-| Format           | `npm run format`         | Prettier for TS, Fantomas for F#.                                                                                                                                     |
+| Step          | Command                                                                        | Purpose                                                                                          |
+| ------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| Full gate     | `npm run validate`                                                             | Build checks, infrastructure self-tests, both full suites once with coverage, and both ratchets. |
+| Build only    | `npm run build`                                                                | Fable output, TypeScript, ESLint, and Vite.                                                      |
+| Tests only    | `npm test`                                                                     | .NET xUnit and the full Vitest suite, including Koota conformance.                               |
+| Focused tests | `npm run fake -- --target TestFSharp`, `TestTypeScript`, or `TestKoota`        | Run only the selected suite.                                                                     |
+| Coverage only | `npm run fake -- --target CoverageFSharp`, `CoverageTypeScript`, or `Coverage` | Generate fresh coverage data without running the ratchet.                                        |
+| Coverage gate | `npm run fake -- --target CoverageCheck`                                       | Apply F# and TypeScript ratchets to existing summaries.                                          |
+| Lint          | `npm run fake -- --target Lint`                                                | Run ESLint on application, tests, and configuration.                                             |
+| Reports       | `npm run report`                                                               | Generate fresh data and open both HTML reports locally.                                          |
+| Format        | `npm run format`                                                               | Fantomas for F# and Prettier for authored files.                                                 |
+
+On Windows PowerShell, use `npm.cmd` instead of `npm` when forwarding FAKE
+options such as `--target` or `--ci`; the PowerShell shim may consume them.
 
 ## Rules
 
 - **Validate end-to-end before declaring done.** `dotnet test` alone is **not**
-  sufficient — it only exercises the .NET-targeted F# build. Always run **`npm run
-build`** and **`npm test`** before considering a change complete. Fable can emit
+  sufficient — it only exercises the .NET-targeted F# build. Run **`npm run
+validate`** before considering a change complete; it includes the deployment
+  build checks, full tests with coverage, and coverage ratchets without running
+  the suites a second time. Fable can emit
   invalid TypeScript for code that compiles cleanly under `dotnet test` (e.g.
   nested generics with concrete-plus-generic tuple element types — see
   `compareCouplesByEffectiveDate` and Fable issue fable-compiler/Fable#3586), so
   skipping the npm side lets those failures escape the change.
-- **Check coverage after every change.** Run `npm run coverage:check` after making
-  code changes and before committing. The TypeScript denominator is hand-written
+- **Check coverage after every change.** `npm run validate` runs the coverage
+  gate after fresh instrumented suites. For a focused check, generate reports
+  with `Coverage` and then run `CoverageCheck`. The TypeScript denominator is hand-written
   `src/**/*.ts`, excluding `src/generated/**`, `src/**/*.tsx`, and
   `src/vite-env.d.ts`; `.tsx` is excluded because it must contain no logic.
-- **Enforce TypeScript lint after every change.** Run `npm run lint` directly
-  for targeted feedback; `npm run build` also runs it after Fable generation and
-  TypeScript checking. Rule violations, parser errors, and configuration failures
+- **Enforce TypeScript lint after every change.** `npm run validate` and
+  `npm run build` run lint after Fable generation and TypeScript checking. Use
+  `npm run fake -- --target Lint` for targeted feedback. Rule violations, parser errors, and configuration failures
   all fail the gate. Fix findings rather than suppressing the exit status.
 - **Run the smallest targeted selection that covers the change**, then escalate to
   full-suite runs only when targeted validation shows they're needed.
