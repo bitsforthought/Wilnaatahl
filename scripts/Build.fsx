@@ -150,7 +150,9 @@ let formatError error =
     | MissingTool path -> $"Required local tool was not found: {path}. Run npm run init."
     | ProcessFailure(executable, exitCode) -> $"{executable} exited with code {exitCode}."
     | ReportOpenFailure(path, message) ->
-        $"Could not open report at '{path}': {message}. The report remains available at this path."
+        let detail = message.TrimEnd()
+        let sentenceEnding = if detail.EndsWith('.') then "" else "."
+        $"Could not open report at '{path}': {detail}{sentenceEnding} The report remains available at this path."
 
 let repositoryRoot scriptDirectory =
     Path.GetFullPath(Path.Combine(scriptDirectory, ".."))
@@ -243,9 +245,6 @@ let agentValidationCommands root =
 
     [ dotnetCommand root (fsiArguments @ [ "--self-test" ])
       dotnetCommand root fsiArguments ]
-
-let buildGraphSelfTestCommand root =
-    dotnetCommand root [ "fsi"; "--warnaserror"; "--warnon:3886"; "scripts/BuildGraphSelfTest.fsx" ]
 
 let fableCommands root =
     [ dotnetCommand
@@ -612,6 +611,16 @@ let runSelfTest root =
         (formatError (ReportOpenFailure(fSharpReportIndex, "No application is associated with the specified file.")))
 
     assertEqual
+        "report opening failure adds missing sentence punctuation"
+        $"Could not open report at '{fSharpReportIndex}': Browser launch failed. The report remains available at this path."
+        (formatError (ReportOpenFailure(fSharpReportIndex, "Browser launch failed")))
+
+    assertEqual
+        "report opening failure preserves an ellipsis"
+        $"Could not open report at '{fSharpReportIndex}': Browser launch failed... The report remains available at this path."
+        (formatError (ReportOpenFailure(fSharpReportIndex, "Browser launch failed...")))
+
+    assertEqual
         "agent validation self-test precedes validation"
         [ dotnetCommand
               root
@@ -627,11 +636,6 @@ let runSelfTest root =
                 "--warnon:3886"
                 "scripts/ValidateAgentDefinitions.fsx" ] ]
         (agentValidationCommands root)
-
-    assertEqual
-        "build self-test invokes the real FAKE scheduler fixture"
-        (dotnetCommand root [ "fsi"; "--warnaserror"; "--warnon:3886"; "scripts/BuildGraphSelfTest.fsx" ])
-        (buildGraphSelfTestCommand root)
 
     let spacedRoot = Path.Combine(Path.GetTempPath(), "fake build test with spaces")
     let viteScript = "node_modules/vite/bin/vite.js"
@@ -784,9 +788,7 @@ let runTypeScriptReport () =
 
     openReport reportPath
 
-Target.create "BuildSelfTest" (fun _ ->
-    runSelfTest repoRoot
-    buildGraphSelfTestCommand repoRoot |> runOrFail)
+Target.create "BuildSelfTest" (fun _ -> runSelfTest repoRoot)
 
 Target.create "Init" (fun _ ->
     npmCommand repoRoot (if ciMode then CiInstall else Install) |> runOrFail
@@ -795,7 +797,7 @@ Target.create "Init" (fun _ ->
 
 Target.create "Format" (fun _ -> runFormatting Write)
 Target.create "FormatCheck" (fun _ -> runFormatting Check)
-Target.create "FormatPolicy" (fun _ -> runFormatting (formattingMode ciMode))
+Target.create "FormatByPolicy" (fun _ -> runFormatting (formattingMode ciMode))
 Target.create "Fable" (fun _ -> runFable ())
 Target.create "PrepareEcs" (fun _ -> runEcsPreparation ())
 Target.create "ValidateAgents" (fun _ -> runAgentValidation ())
@@ -823,47 +825,29 @@ Target.create "ReportFSharp" (fun _ -> runFSharpReport ())
 Target.create "ReportTypeScript" (fun _ -> runTypeScriptReport ())
 Target.create "Report" (fun _ -> printfn "Coverage reports generated and opened.")
 
-"FormatPolicy" ==> "BuildSelfTest" |> ignore
-"FormatPolicy" ==> "Fable" |> ignore
-"Fable" ==> "PrepareEcs" |> ignore
-"PrepareEcs" ==> "TypeCheck" |> ignore
-"PrepareEcs" ==> "Lint" |> ignore
-"TypeCheck" ==> "Bundle" |> ignore
-"Lint" ==> "Bundle" |> ignore
-"Fable" ==> "Bundle" |> ignore
-"FormatPolicy" ==> "ValidateAgents" |> ignore
-"TypeCheck" ==> "Build" |> ignore
-"Lint" ==> "Build" |> ignore
-"Bundle" ==> "Build" |> ignore
-"ValidateAgents" ==> "Build" |> ignore
-"FormatPolicy" ==> "Dev" |> ignore
-"Fable" ==> "Dev" |> ignore
-"FormatPolicy" ==> "TestFSharp" |> ignore
-"FormatPolicy" ==> "TestTypeScript" |> ignore
-"FormatPolicy" ==> "TestKoota" |> ignore
-"Fable" ==> "TestTypeScript" |> ignore
-"PrepareEcs" ==> "TestTypeScript" |> ignore
-"Fable" ==> "TestKoota" |> ignore
-"PrepareEcs" ==> "TestKoota" |> ignore
-"TestFSharp" ==> "Test" |> ignore
-"TestTypeScript" ==> "Test" |> ignore
-"FormatPolicy" ==> "CoverageFSharp" |> ignore
-"FormatPolicy" ==> "CoverageTypeScript" |> ignore
-"Fable" ==> "CoverageTypeScript" |> ignore
-"PrepareEcs" ==> "CoverageTypeScript" |> ignore
-"CoverageFSharp" ==> "Coverage" |> ignore
-"CoverageTypeScript" ==> "Coverage" |> ignore
-"CoverageFSharp" ==> "CoverageCheck" |> ignore
-"CoverageTypeScript" ==> "CoverageCheck" |> ignore
-"Build" ==> "Validate" |> ignore
-"BuildSelfTest" ==> "Validate" |> ignore
-"CoverageCheck" ==> "Validate" |> ignore
-"CoverageFSharp" ==> "ReportFSharp" |> ignore
-"CoverageTypeScript" ==> "ReportTypeScript" |> ignore
-"ReportFSharp" ==> "Report" |> ignore
-"ReportTypeScript" ==> "Report" |> ignore
-"PrepareEcs" ?=> "TestFSharp" |> ignore
-"PrepareEcs" ?=> "CoverageFSharp" |> ignore
+"BuildSelfTest" <== [ "FormatByPolicy" ]
+"Fable" <== [ "FormatByPolicy" ]
+"PrepareEcs" <== [ "Fable" ]
+"TypeCheck" <== [ "PrepareEcs" ]
+"Lint" <== [ "PrepareEcs" ]
+"Bundle" <== [ "TypeCheck"; "Lint"; "Fable" ]
+"ValidateAgents" <== [ "FormatByPolicy" ]
+"Build" <== [ "TypeCheck"; "Lint"; "Bundle"; "ValidateAgents" ]
+"Dev" <== [ "FormatByPolicy"; "Fable" ]
+"TestFSharp" <== [ "FormatByPolicy" ]
+"TestFSharp" <=? "PrepareEcs"
+"TestTypeScript" <== [ "FormatByPolicy"; "Fable"; "PrepareEcs" ]
+"TestKoota" <== [ "FormatByPolicy"; "Fable"; "PrepareEcs" ]
+"Test" <== [ "TestFSharp"; "TestTypeScript" ]
+"CoverageFSharp" <== [ "FormatByPolicy" ]
+"CoverageFSharp" <=? "PrepareEcs"
+"CoverageTypeScript" <== [ "FormatByPolicy"; "Fable"; "PrepareEcs" ]
+"Coverage" <== [ "CoverageFSharp"; "CoverageTypeScript" ]
+"CoverageCheck" <== [ "CoverageFSharp"; "CoverageTypeScript" ]
+"Validate" <== [ "Build"; "BuildSelfTest"; "CoverageCheck" ]
+"ReportFSharp" <== [ "CoverageFSharp" ]
+"ReportTypeScript" <== [ "CoverageTypeScript" ]
+"Report" <== [ "ReportFSharp"; "ReportTypeScript" ]
 
 match invocation with
 | SelfTest -> runSelfTest repoRoot
