@@ -153,24 +153,9 @@ This convention does not apply to Sim Algyax/Gitxsanimx text.
 
 ## Developer Workflows
 
-- **Setup:** `npm run init` (installs npm packages, restores .NET tools/packages)
-- **Dev server:** `npm run dev` (runs Fable then Vite with hot reload)
-- **Build for deploy:** `npm run build`
-- **Unit tests:** `npm test` (.NET xUnit and Vitest, including Koota
-  conformance)
-- **Full validation:** `npm run validate` (build checks, infrastructure
-  self-tests, each test suite once with coverage, and both coverage ratchets)
-- **Focused targets:** `npm run fake "--" --target <Target>` (for example
-  `TestKoota`, `CoverageCheck`, `Lint`, or `FormatCheck`)
-- **Coverage reports:** `npm run report` (generates and opens both reports
-  locally)
-- **Format code:** `npm run format` (Prettier for TS, Fantomas for F#)
-- **CI mode:** append `"--" --ci` to `build` or `validate`; format checks do not
-  write, coverage does not update the baseline, and local-only targets are
-  rejected. Use `.nvmrc` as the Node-version source when provisioning future CI.
-- **Shell note:** Quote npm's argument separator when forwarding target or CI
-  options (for example, `npm run fake "--" --target TestKoota`). The same form
-  works in PowerShell, `cmd.exe`, and Unix-like shells.
+The supported npm command facade is defined in `package.json`. See the README
+for setup and common commands, and `docs/build.md` for focused targets, CI mode,
+parallelism, and argument-forwarding syntax.
 
 ## Keeping token cost down
 
