@@ -43,7 +43,7 @@ This convention does not apply to Sim Algyax/Gitxsanimx text.
   in `src/Wilnaatahl.Core/`, compiled to JS via Fable.
 - **Interop:** TypeScript types in `src/generated/` are auto-generated from F# for
   type-safe interop. Never hand-edit these files — regenerate with
-  `npm run fake -- --target Fable`.
+  `npm run fake "--" --target Fable`.
 - **State Management:** Uses [Koota](https://github.com/pmndrs/koota), an ECS
   library. `src/main.tsx` provides a Koota `World` via `<WorldProvider>`. React
   components access state through Koota hooks (`useWorld()`, `useQuery()`,
@@ -160,18 +160,17 @@ This convention does not apply to Sim Algyax/Gitxsanimx text.
   conformance)
 - **Full validation:** `npm run validate` (build checks, infrastructure
   self-tests, each test suite once with coverage, and both coverage ratchets)
-- **Focused targets:** `npm run fake -- --target <Target>` (for example
+- **Focused targets:** `npm run fake "--" --target <Target>` (for example
   `TestKoota`, `CoverageCheck`, `Lint`, or `FormatCheck`)
 - **Coverage reports:** `npm run report` (generates and opens both reports
   locally)
 - **Format code:** `npm run format` (Prettier for TS, Fantomas for F#)
-- **CI mode:** append `-- --ci` to `build` or `validate`; format checks do not
+- **CI mode:** append `"--" --ci` to `build` or `validate`; format checks do not
   write, coverage does not update the baseline, and local-only targets are
   rejected. Use `.nvmrc` as the Node-version source when provisioning future CI.
-- **Shell note:** In Windows PowerShell, use `npm.cmd` whenever forwarding
-  target or CI options (for example, `npm.cmd run fake -- --target TestKoota`);
-  the `npm` PowerShell shim can consume flags before they reach FAKE. On
-  Unix-like shells, use `npm`.
+- **Shell note:** Quote npm's argument separator when forwarding target or CI
+  options (for example, `npm run fake "--" --target TestKoota`). The same form
+  works in PowerShell, `cmd.exe`, and Unix-like shells.
 
 ## Keeping token cost down
 
@@ -334,7 +333,7 @@ the table.
 ## Examples
 
 - **Add a domain property:** Update F# in `Model.fs`, run
-  `npm run fake -- --target Fable` to
+  `npm run fake "--" --target Fable` to
   regenerate TS types, and use via the view model or ECS traits in React.
 - **Add a UI feature:** Add or update a React component that reads Koota traits via
   hooks, with logic driven by F# systems.

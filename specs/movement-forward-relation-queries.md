@@ -183,11 +183,11 @@ manual reverse index.
 
 1. Make the Movement (and `BoundingBox.updateCorners`/`CornerOf`) changes.
 2. `dotnet test` (mock + non-ECS F#) and
-   `npm run fake -- --target TestKoota` (Koota-backed ECS).
+   `npm run fake "--" --target TestKoota` (Koota-backed ECS).
 3. `npm run build` (Fable → TS → Vite) — Fable can emit invalid TS for code that
    compiles under `dotnet test`, so this is mandatory.
-4. `npm run fake -- --target Coverage`, then
-   `npm run fake -- --target CoverageCheck`.
+4. `npm run fake "--" --target Coverage`, then
+   `npm run fake "--" --target CoverageCheck`.
 5. Manual repro of the original bug: load a file, then re-import the same file 3×;
    confirm no progressive slowdown and no main-thread stall.
 6. Optionally, confirm the leak is gone with the standalone Node probe in
