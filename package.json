@@ -4,14 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "init": "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Init",
     "fake": "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx --",
-    "build": "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Build",
-    "dev": "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Dev",
-    "test": "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Test",
-    "validate": "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Validate",
-    "format": "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Format",
-    "report": "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Report"
+    "init": "npm run fake -- --target Init",
+    "build": "npm run fake -- --target Build",
+    "dev": "npm run fake -- --target Dev",
+    "test": "npm run fake -- --target Test",
+    "validate": "npm run fake -- --target Validate",
+    "format": "npm run fake -- --target Format",
+    "report": "npm run fake -- --target Report"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

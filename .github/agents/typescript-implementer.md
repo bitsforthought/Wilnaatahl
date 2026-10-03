@@ -15,7 +15,7 @@ You implement and modify the TypeScript frontend in `src/react-components/` and
 `src/ecs/`. This layer is deliberately thin: it consumes the F#-generated view
 model and the F# ECS systems and must not reimplement domain logic. Business-logic
 changes belong in F# (use the `fsharp-implementer` agent), after which
-`npm run fake -- --target Fable` regenerates `src/generated/` — never hand-edit
+`npm run fake "--" --target Fable` regenerates `src/generated/` — never hand-edit
 generated files.
 
 Apply the `typescript-style` skill (named hot-path callbacks, imports at top, the
@@ -23,11 +23,9 @@ React/Three.js and Koota `useTrait` rules). Keep `.tsx` limited to presentation
 wiring; put domain/layout logic in F# and browser-specific logic in tested `.ts`.
 Apply the `typescript-testing` skill when adding or modifying tests. TypeScript
 tests live under `tests/typescript` and use Vitest. Use
-`npm run fake -- --target TestTypeScript` for the full TypeScript suite or
-`npm run fake -- --target TestKoota` for the portable conformance subset during
+`npm run fake "--" --target TestTypeScript` for the full TypeScript suite or
+`npm run fake "--" --target TestKoota` for the portable conformance subset during
 iteration; the final gate is `npm run validate`.
-In Windows PowerShell, use `npm.cmd` instead of `npm` for these forwarded target
-arguments; on Unix-like shells, use `npm`.
 Then run the mandatory `adversarial-reviewer` panel exactly as specified by the
 `adversarial-code-review` skill before declaring the change complete.
 

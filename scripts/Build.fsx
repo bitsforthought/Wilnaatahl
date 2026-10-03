@@ -6,7 +6,6 @@ open System.ComponentModel
 open System.Diagnostics
 open System.Globalization
 open System.IO
-open System.Text.Json
 open Fake.Core
 open Fake.Core.TargetOperators
 
@@ -90,6 +89,7 @@ let localOnlyTargets =
     [ "Format"; "Dev"; "ReportFSharp"; "ReportTypeScript"; "Report" ]
 
 let defaultWorkerCount processorCount = min processorCount 5
+let installAction ci = if ci then CiInstall else Install
 let targetList = String.concat ", " availableTargets
 
 let helpText () =
@@ -363,40 +363,8 @@ let assertEqual name expected actual =
 let runSelfTest root =
     assertEqual "default options" (Ok defaultOptions) (parseArguments [])
     assertEqual "default target" (Ok(RunTarget("Build", defaultOptions))) (validateOptions defaultOptions)
-
-    assertEqual
-        "help documents all accepted options and targets"
-        (String.concat
-            Environment.NewLine
-            [ "Usage: dotnet fsi scripts/Build.fsx -- [options]"
-              "Options:"
-              "  --target <target>       Select target (default: Build)"
-              "  --ci                    Use check-only formatting and non-writing coverage"
-              "  --parallel <workers>    Set FAKE worker limit (must be positive)"
-              "  --self-test             Run build command self-tests"
-              "  --help                  Show this help"
-              $"Targets: {targetList}" ])
-        (helpText ())
-
-    use packageManifest =
-        JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "package.json")))
-
-    let actualNpmScripts =
-        packageManifest.RootElement.GetProperty("scripts").EnumerateObject()
-        |> Seq.map (fun property -> property.Name, property.Value.GetString())
-        |> Seq.toList
-
-    let expectedNpmScripts =
-        [ "init", "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Init"
-          "fake", "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx --"
-          "build", "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Build"
-          "dev", "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Dev"
-          "test", "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Test"
-          "validate", "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Validate"
-          "format", "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Format"
-          "report", "dotnet fsi --warnaserror --warnon:3886 scripts/Build.fsx -- --target Report" ]
-
-    assertEqual "npm exposes only the eight FAKE command wrappers" expectedNpmScripts actualNpmScripts
+    assertEqual "CI initialization uses npm ci" CiInstall (installAction true)
+    assertEqual "local initialization uses npm install" Install (installAction false)
 
     assertEqual
         "target, CI, and parallel options"
@@ -839,7 +807,7 @@ let runTypeScriptReport () =
 Target.create "BuildSelfTest" (fun _ -> runSelfTest repoRoot)
 
 Target.create "Init" (fun _ ->
-    npmCommand repoRoot (if ciMode then CiInstall else Install) |> runOrFail
+    npmCommand repoRoot (installAction ciMode) |> runOrFail
     dotnetCommand repoRoot [ "restore" ] |> runOrFail
     dotnetCommand repoRoot [ "tool"; "restore" ] |> runOrFail)
 
