@@ -33,6 +33,13 @@ Order steps from the bottom of the stack upward. Every step needs:
   `typescript-implementer` for the TypeScript/React layer, or `primary` for work
   outside those scopes, such as documentation, instructions, skills, or scripts.
 
+A primary-owned step that changes build, CI, coverage, code-generation
+infrastructure, or the package-command facade must load
+`infra-scripts-fsharp`. It must also load `fsharp-style` when changing `.fs` or
+`.fsx`. Its acceptance criteria must identify the repository behaviour each
+self-test protects and the available native platform or shell evidence for any
+portability claim; unavailable environments remain explicitly unverified.
+
 Put foundations below their dependants. Consult the `gh-stack` stack-design
 reference when the layers are unclear. If the plan lacks required details,
 derive them without changing scope and show the completed step list before
@@ -101,6 +108,9 @@ Process steps in position order. For each step:
      git or `gh stack` commands;
    - report changed files, decisions or deviations, the final output tail for
      `npm run validate`, and review rounds, models, and finding counts;
+   - for infrastructure changes, report the regression protected by each new
+     self-test, distinguish repository policy from dependency behaviour, and list
+     the native platform/shell checks run or explicitly left unverified;
    - report `blocked`, not `done`, if a genuine finding remains.
 3. **Check the report.** Confirm it says `done`, includes the required passing
    results, and matches the worktree: no new commits and only in-scope files

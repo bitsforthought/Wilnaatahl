@@ -157,6 +157,24 @@ The supported npm command facade is defined in `package.json`. See the README
 for setup and common commands, and `docs/build.md` for focused targets, CI mode,
 parallelism, and argument-forwarding syntax.
 
+## Documentation ownership
+
+- `package.json` and `scripts/Build.fsx` define the executable build contract.
+- README is a current quick-start guide for people setting up and using the
+  repository.
+- `docs/` contains detailed current operational guidance.
+- `specs/` contains future requirements and design decisions that are not yet
+  implemented.
+- `AGENTS.md`, skills, agents, and path instructions contain constraints for
+  automated contributors; link to human documentation rather than copying its
+  command manual.
+- PRs and git history record migrations. Current-state documentation describes
+  the repository as it works now, not the sequence of commands or designs it
+  replaced.
+
+When guidance belongs to more than one audience, keep the complete explanation
+in its owning surface and link to it elsewhere.
+
 ## Keeping token cost down
 
 Every tool call re-sends the whole context window, so keeping the working context
@@ -296,12 +314,12 @@ or begin a fourth review round.
 | Doing this                                                                        | Use                                                            |
 | --------------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | Implementing/modifying F# core (Model, ViewModel, Traits, Entities, Systems, ECS) | `fsharp-implementer` agent                                     |
-| Writing/editing any `.fs` file                                                    | `fsharp-style` skill                                           |
+| Writing/editing any `.fs` or `.fsx` file                                          | `fsharp-style` skill                                           |
 | Writing or strengthening F# tests                                                 | `fsharp-testing` skill                                         |
 | Writing or strengthening TypeScript tests                                         | `typescript-testing` skill                                     |
 | Running the build/test/coverage gate                                              | `tdd-coverage-loop` skill                                      |
 | Reviewing a change (the mandatory step)                                           | `adversarial-reviewer` agent / `adversarial-code-review` skill |
-| Adding/editing build/CI/codegen scripts                                           | `infra-scripts-fsharp` skill                                   |
+| Changing build/CI/codegen infrastructure or the package-command facade            | `infra-scripts-fsharp` skill                                   |
 | Writing/modifying TypeScript / React / Three.js                                   | `typescript-implementer` agent / `typescript-style` skill      |
 | Creating, revising, or reviewing a commit message                                 | `commit-messages` skill                                        |
 | Implementing an approved plan as a stack of reviewed, committed PRs               | `implement-plan` skill                                         |

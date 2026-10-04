@@ -17,10 +17,11 @@ that) or trivia. For each finding, state the concrete failure it would cause.
 
 Apply the repository's code-quality custom instructions and the language-specific
 skills that match the diff: `typescript-style` for TypeScript production code,
-`typescript-testing` for TypeScript tests, `fsharp-style` for F# production code,
-and `fsharp-testing` for F# tests.
+`typescript-testing` for TypeScript tests, `fsharp-style` for `.fs` and `.fsx`
+files, `fsharp-testing` for F# tests, and `infra-scripts-fsharp` for build, CI,
+coverage, code-generation, and package-command changes.
 
-This rubric is deliberately tuned to the three failure modes most often seen in
+This rubric is deliberately tuned to the four failure modes most often seen in
 generated changes here.
 
 ## 1. Logic coverage vs line coverage
@@ -35,6 +36,11 @@ touched, ask:
 - Are tests **strong** — would each assertion actually fail if the code were
   broken? Flag tautological assertions (checking a value didn't change when
   nothing could have changed it).
+- **Implementation-echoing tests.** Flag expected values reconstructed from the
+  same declarations, graph builder, command table, or output strings as the code
+  under test. These tests agree with any coordinated mistake and protect no
+  independent behaviour. Require an observable repository contract and a
+  concrete regression mechanism.
 - For TypeScript tests, apply the `typescript-testing` skill in full.
 - Does any new `.tsx` contain computation rather than hook/state/props/style
   wiring? Because `.tsx` is excluded from the coverage denominator, arithmetic,
@@ -132,7 +138,13 @@ Apply the `typescript-style` skill in full. Keep the canonical TypeScript checkl
 there rather than duplicating it in this rubric; report each violation through the
 concrete failure or regression it would cause.
 
-## 4. Comments, dead code, and drift
+## 4. Build and infrastructure changes
+
+Apply `infra-scripts-fsharp` to build, CI, coverage, code-generation, and package
+command-facade changes in full. Report each violation through its concrete
+failure or regression rather than duplicating that skill's checklist here.
+
+## 5. Comments, documentation, dead code, and drift
 
 - **Duplicated explanation is drift waiting to happen.** If the same mechanism is
   explained at more than one use site, flag it: the explanation belongs once, on
@@ -150,8 +162,12 @@ concrete failure or regression it would cause.
 - Comments/specs that assert a property ("single-pass", "matches spec rule X")
   are backed up by the code. Behaviour changes are reflected in comments; dead
   paths `failwith` rather than silently returning defaults.
+- **Keep documentation in its owning surface.** Apply the documentation-ownership
+  policy in `AGENTS.md`. Flag migration history in current-state documentation,
+  audience mismatches, and copied command manuals that should link to their
+  executable or documented source of truth.
 
-## 5. Correctness and validation
+## 6. Correctness and validation
 
 - Does the change actually solve the stated problem, including edge cases?
 - **Redundant state.** Flag any new trait/field that is recomputed each frame from

@@ -1,10 +1,10 @@
 ---
 name: fsharp-style
 description: >-
-  F# code-style conventions for the Wilnaatahl Core project — how to write
-  idiomatic, functional-first F# and avoid C#/OOP-style code. Use whenever
-  writing or modifying any `.fs` source file (Model, ViewModel, Traits,
-  Entities, Systems, ECS) or reviewing F# for idiom violations.
+  F# code-style conventions for Wilnaatahl — how to write idiomatic,
+  functional-first F# and avoid C#/OOP-style code. Use whenever writing or
+  modifying any `.fs` source file or `.fsx` script, or reviewing F# for idiom
+  violations.
 ---
 
 # F# Code Style
