@@ -9,12 +9,6 @@ open System.IO
 open Fake.Core
 open Fake.Core.TargetOperators
 
-type ProcessCommand =
-    { Executable: string
-      Arguments: string list
-      WorkingDirectory: string
-      RequiredFile: string option }
-
 type Options =
     { Target: string option
       Ci: bool
@@ -33,19 +27,6 @@ type BuildError =
     | MissingTool of path: string
     | ProcessFailure of executable: string * exitCode: int
     | ReportOpenFailure of path: string * message: string
-
-type NpmAction =
-    | Install
-    | CiInstall
-    | Version
-
-type FormatMode =
-    | Write
-    | Check
-
-type CoveragePlan =
-    { CleanPaths: string list
-      Commands: ProcessCommand list }
 
 type Invocation =
     | SelfTest
@@ -88,8 +69,6 @@ let availableTargets =
 let localOnlyTargets =
     [ "Format"; "Dev"; "ReportFSharp"; "ReportTypeScript"; "Report" ]
 
-let defaultWorkerCount processorCount = min processorCount 5
-let installAction ci = if ci then CiInstall else Install
 let targetList = String.concat ", " availableTargets
 
 let helpText () =
@@ -168,6 +147,19 @@ let formatError error =
         let sentenceEnding = if detail.EndsWith('.') then "" else "."
         $"Could not open report at '{path}': {detail}{sentenceEnding} The report remains available at this path."
 
+type ProcessCommand =
+    { Executable: string
+      Arguments: string list
+      WorkingDirectory: string
+      RequiredFile: string option }
+
+type NpmAction =
+    | Install
+    | CiInstall
+    | Version
+
+let installAction ci = if ci then CiInstall else Install
+
 let repositoryRoot scriptDirectory =
     Path.GetFullPath(Path.Combine(scriptDirectory, ".."))
 
@@ -236,6 +228,14 @@ let runNode root scriptPath arguments =
     nodeCommand root scriptPath arguments |> runCommand
 
 let runCommands commands = commands |> List.iter runCommand
+
+type FormatMode =
+    | Write
+    | Check
+
+type CoveragePlan =
+    { CleanPaths: string list
+      Commands: ProcessCommand list }
 
 let formattingMode ci = if ci then Check else Write
 
@@ -351,6 +351,8 @@ let openReport path =
         Process.Start(startInfo) |> ignore
     with :? Win32Exception as error ->
         failwith (formatError (ReportOpenFailure(path, error.Message)))
+
+let defaultWorkerCount processorCount = min processorCount 5
 
 let runTargetWith run workers targetName =
     Environment.SetEnvironmentVariable("parallel-jobs", string workers)
