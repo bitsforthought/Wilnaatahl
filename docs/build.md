@@ -43,6 +43,19 @@ baseline updates, and rejects targets that launch a development server or open a
 report. Local development should normally use `npm run init` and
 `npm run validate` without this option.
 
+## Continuous Integration
+
+`.github/workflows/validate.yml` runs the CI-mode commands above on Ubuntu and
+Windows for every pull request, every push to `main`, and on manual dispatch. It
+installs the Node.js version in `.nvmrc` and the .NET SDK selected by
+`global.json`, then delegates everything else to the FAKE target graph; build,
+test, lint, and coverage steps are not duplicated in the workflow. Each OS
+reports a `Validate (<os>)` check on the pull request. To reproduce a failure
+locally, run the two CI-mode commands from the repository root.
+
+Third-party actions are pinned to full commit SHAs, with the release tag in a
+trailing comment.
+
 ## Parallelism
 
 FAKE uses up to five workers by default. Override the worker limit when
