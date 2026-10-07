@@ -54,7 +54,9 @@ reports a `Validate (<os>)` check on the pull request. To reproduce a failure
 locally, run the two CI-mode commands from the repository root.
 
 Third-party actions are pinned to full commit SHAs, with the release tag in a
-trailing comment.
+trailing comment. Dependabot (.github/dependabot.yml) checks for new action
+releases weekly and opens one grouped pull request that updates both the SHA and
+the comment.
 
 ## Parallelism
 
