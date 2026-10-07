@@ -23,6 +23,11 @@ sample data.
 
 For the supported file format, see [`specs/json-parser.md`](specs/json-parser.md).
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes and the
+validation gate that pull requests must pass.
+
 ## Development Instructions
 
 These instructions assume Windows 11 and PowerShell, but should be easily adaptable to other environments.
