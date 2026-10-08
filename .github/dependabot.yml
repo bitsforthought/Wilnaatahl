@@ -23,6 +23,11 @@ updates:
           - version-update:semver-patch
           - version-update:semver-minor
           - version-update:semver-major
+      - dependency-name: prettier
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
+          - version-update:semver-major
     groups:
       npm-patch-and-minor:
         applies-to: version-updates
@@ -47,6 +52,11 @@ updates:
           - version-update:semver-minor
           - version-update:semver-major
       - dependency-name: Fable.Core
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
+          - version-update:semver-major
+      - dependency-name: fantomas
         update-types:
           - version-update:semver-patch
           - version-update:semver-minor

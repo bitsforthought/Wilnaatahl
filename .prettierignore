@@ -3,3 +3,5 @@ node_modules/
 dist/
 bin/
 obj/
+# Written by dotnet CLI and Dependabot, not Prettier.
+.config/dotnet-tools.json
