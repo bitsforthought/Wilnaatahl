@@ -14,7 +14,7 @@
     <PackageVersion Include="Thoth.Json.Core" Version="0.9.0" />
     <PackageVersion Include="Thoth.Json.Newtonsoft" Version="0.3.3" />
     <PackageVersion Include="Thoth.Json.JavaScript" Version="0.4.1" />
-    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="coverlet.collector" Version="10.1.0" />
     <PackageVersion Include="FsCheck.Xunit.v3" Version="3.3.3" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
