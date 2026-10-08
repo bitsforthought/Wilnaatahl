@@ -3,18 +3,24 @@
   "isRoot": true,
   "tools": {
     "dotnet-reportgenerator-globaltool": {
-      "version": "5.1.18",
-      "commands": ["reportgenerator"],
+      "version": "5.5.11",
+      "commands": [
+        "reportgenerator"
+      ],
       "rollForward": false
     },
     "fantomas": {
       "version": "7.0.3",
-      "commands": ["fantomas"],
+      "commands": [
+        "fantomas"
+      ],
       "rollForward": false
     },
     "fable": {
       "version": "5.1.0",
-      "commands": ["fable"],
+      "commands": [
+        "fable"
+      ],
       "rollForward": false
     }
   }
