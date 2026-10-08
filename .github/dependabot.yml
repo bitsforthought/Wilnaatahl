@@ -7,3 +7,54 @@ updates:
     groups:
       github-actions:
         patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    allow:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
+    ignore:
+      - dependency-name: koota
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
+          - version-update:semver-major
+    groups:
+      npm-patch-and-minor:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types:
+          - patch
+          - minor
+
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    allow:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
+    ignore:
+      - dependency-name: fable
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
+          - version-update:semver-major
+      - dependency-name: Fable.Core
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
+          - version-update:semver-major
+    groups:
+      nuget-patch-and-minor:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types:
+          - patch
+          - minor
