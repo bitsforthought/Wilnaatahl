@@ -39,11 +39,10 @@ let marker =
 // inside that package that are known to emit the `$a` codegen bug. Keep this
 // list as narrow as possible — every entry suppresses type-checking on the
 // matching file, so additions should be backed by a reproducible `tsc` error.
-let bugTriggers =
-    [
-        "Thoth.Json.Core.*", [ "Decode.fs.ts"; "Encode.fs.ts" ]
-        "Thoth.Json.JavaScript.*", [ "Encode.fs.ts" ]
-    ]
+let bugTriggers = [
+    "Thoth.Json.Core.*", [ "Decode.fs.ts"; "Encode.fs.ts" ]
+    "Thoth.Json.JavaScript.*", [ "Encode.fs.ts" ]
+]
 
 // First-party generated files (relative to `src/generated`) that inherit the
 // `$a` bug by consuming Thoth's inline Encode combinators. Keep this list as

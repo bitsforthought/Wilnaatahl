@@ -5,7 +5,7 @@ root = true
 end_of_line = lf
 indent_style = space
 
-[*.fs]
+[*.{fs,fsx}]
 max_line_length = 120
 fsharp_max_record_width = 70
 fsharp_multiline_bracket_style = stroustrup
