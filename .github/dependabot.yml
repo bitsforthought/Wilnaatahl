@@ -19,6 +19,41 @@ updates:
           - version-update:semver-minor
           - version-update:semver-major
     groups:
+      vite-toolchain:
+        applies-to: version-updates
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "vitest"
+          - "@vitest/*"
+      react-rendering:
+        applies-to: version-updates
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+          - "@react-three/*"
+          - "three"
+      typescript-tooling:
+        applies-to: version-updates
+        patterns:
+          - "typescript"
+          - "typescript-eslint"
+          - "eslint"
+          - "@eslint/*"
+      testing-library:
+        applies-to: version-updates
+        patterns:
+          - "@testing-library/*"
+      koota:
+        applies-to: version-updates
+        patterns:
+          - "koota"
+      prettier:
+        applies-to: version-updates
+        patterns:
+          - "prettier"
       npm-patch-and-minor:
         applies-to: version-updates
         patterns: ["*"]
@@ -37,6 +72,27 @@ updates:
           - version-update:semver-minor
           - version-update:semver-major
     groups:
+      fable:
+        applies-to: version-updates
+        patterns:
+          - "fable"
+          - "Fable.Core"
+      thoth-json:
+        applies-to: version-updates
+        patterns:
+          - "Thoth.Json.Core"
+          - "Thoth.Json.Newtonsoft"
+          - "Thoth.Json.JavaScript"
+      test-platform:
+        applies-to: version-updates
+        patterns:
+          - "xunit.v3"
+          - "FsCheck.Xunit.v3"
+          - "coverlet.MTP"
+      fantomas:
+        applies-to: version-updates
+        patterns:
+          - "fantomas"
       nuget-patch-and-minor:
         applies-to: version-updates
         patterns: ["*"]
