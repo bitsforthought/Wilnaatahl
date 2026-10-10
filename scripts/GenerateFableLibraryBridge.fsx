@@ -13,7 +13,10 @@
 //
 // This script runs as a post-fable step in scripts/Build.fsx.
 
+open System.ComponentModel
+open System.Diagnostics
 open System.IO
+open System.Text.Json
 open System.Text.RegularExpressions
 
 module internal CommandLine =
@@ -42,9 +45,6 @@ module internal Bridge =
     let runtimeImportPattern =
         Regex($"{fableModulesDirectoryName}/{Regex.Escape runtimePackagePrefix}([^/\"']+)/")
 
-    /// \b is a regex word boundary, not a backspace in this verbatim string.
-    let defaultExportPattern = Regex(@"^export\s+default\b", RegexOptions.Multiline)
-
     // Excludes Fable's package output and this script's own output, relative to
     // src/generated.
     let isFirstPartySource (relativePath: string) =
@@ -60,8 +60,6 @@ module internal Bridge =
         | [] -> Error NoRuntimeImports
         | [ version ] -> Ok version
         | several -> Error(ConflictingVersions several)
-
-    let hasDefaultExport (source: string) = defaultExportPattern.IsMatch source
 
     let renderBridge version bridgeModule =
         let specifier =
@@ -86,6 +84,162 @@ export * from "{specifier}";
             $"ERROR: generated code imports several Fable runtime versions (%s{versionList}). Delete src/generated and run the Fable target again."
         | RuntimeDirectoryMissing path -> $"ERROR: Fable runtime directory %s{path} is missing."
 
+module internal TypeScript =
+    type ModuleSource = { Name: string; Source: string }
+
+    type ParserField =
+        | ModuleName
+        | DefaultExport
+
+    type ParserError =
+        | MalformedJson
+        | ExpectedArray
+        | InvalidModuleCount
+        | ExpectedObject of moduleName: string
+        | MissingField of moduleName: string * field: ParserField
+        | WrongFieldType of moduleName: string * field: ParserField
+        | NameMismatch of expected: string * actual: string
+
+    let private fieldName =
+        function
+        | ModuleName -> "Name"
+        | DefaultExport -> "HasDefaultExport"
+
+    let errorMessage error =
+        let invalidResults detail =
+            $"ERROR: TypeScript parser returned invalid JSON results: {detail}"
+
+        match error with
+        | MalformedJson -> invalidResults "malformed JSON."
+        | ExpectedArray -> invalidResults "expected an array."
+        | InvalidModuleCount -> "ERROR: TypeScript parser returned an invalid module count."
+        | ExpectedObject name -> invalidResults $"module '{name}' must be an object."
+        | MissingField(name, field) -> invalidResults $"module '{name}' is missing '{fieldName field}'."
+        | WrongFieldType(name, field) ->
+            let expectedType =
+                match field with
+                | ModuleName -> "string"
+                | DefaultExport -> "boolean"
+
+            invalidResults $"module '{name}' field '{fieldName field}' must be a {expectedType}."
+        | NameMismatch(expected, actual) -> invalidResults $"expected module '{expected}', got '{actual}'."
+
+    // Use the project's installed compiler, with one stdin batch rather than
+    // command-line source arguments or a process per runtime module.
+    let private parserScript =
+        """
+const sources = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
+const ts = require("typescript");
+const results = sources.map(({ Name, Source }) => {
+   const file = ts.createSourceFile(Name + ".ts", Source, ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
+   const HasDefaultExport = file.statements.some(statement =>
+       (ts.isExportAssignment(statement) && !statement.isExportEquals) ||
+       (ts.canHaveModifiers(statement) &&
+           ts.getModifiers(statement)?.some(modifier => modifier.kind === ts.SyntaxKind.DefaultKeyword)) ||
+       (ts.isExportDeclaration(statement) && !statement.isTypeOnly &&
+           statement.exportClause &&
+           ((ts.isNamedExports(statement.exportClause) &&
+               statement.exportClause.elements.some(specifier => !specifier.isTypeOnly && specifier.name.text === "default")) ||
+            (ts.isNamespaceExport(statement.exportClause) && statement.exportClause.name.text === "default")))
+   );
+   return { Name, HasDefaultExport };
+});
+process.stdout.write(JSON.stringify(results));
+"""
+
+    let private parseDocument (output: string) =
+        try
+            JsonDocument.Parse output |> Ok
+        with :? JsonException ->
+            Error MalformedJson
+
+    let private readField name field (result: JsonElement) =
+        match result.TryGetProperty(fieldName field) with
+        | false, _ -> Error(MissingField(name, field))
+        | true, value ->
+            match field, value.ValueKind with
+            | ModuleName, JsonValueKind.String
+            | DefaultExport, JsonValueKind.True
+            | DefaultExport, JsonValueKind.False -> Ok value
+            | _ -> Error(WrongFieldType(name, field))
+
+    let private decodeModule (source: ModuleSource) (result: JsonElement) =
+        if result.ValueKind <> JsonValueKind.Object then
+            Error(ExpectedObject source.Name)
+        else
+            result
+            |> readField source.Name ModuleName
+            |> Result.bind (fun name ->
+                let actualName = name.GetString()
+
+                if actualName <> source.Name then
+                    Error(NameMismatch(source.Name, actualName))
+                else
+                    result
+                    |> readField source.Name DefaultExport
+                    |> Result.map (fun classification -> {
+                        Bridge.BridgeModule.Name = source.Name
+                        Bridge.BridgeModule.HasDefaultExport = classification.GetBoolean()
+                    }))
+
+    let decodeResults (sources: ModuleSource array) (output: string) =
+        output
+        |> parseDocument
+        |> Result.bind (fun parsed ->
+            use document = parsed
+            let root = document.RootElement
+
+            if root.ValueKind <> JsonValueKind.Array then
+                Error ExpectedArray
+            elif root.GetArrayLength() <> sources.Length then
+                Error InvalidModuleCount
+            else
+                let results =
+                    root.EnumerateArray() |> Seq.toArray |> Array.map2 decodeModule sources
+
+                Array.foldBack
+                    (fun result accumulated ->
+                        result
+                        |> Result.bind (fun bridgeModule ->
+                            accumulated |> Result.map (fun rest -> bridgeModule :: rest)))
+                    results
+                    (Ok [])
+                |> Result.map List.toArray)
+        |> Result.mapError errorMessage
+
+    let parseSources sources =
+        try
+            let startInfo = ProcessStartInfo "node"
+            startInfo.WorkingDirectory <- Path.GetDirectoryName(Path.GetFullPath(__SOURCE_DIRECTORY__))
+            startInfo.UseShellExecute <- false
+            startInfo.RedirectStandardInput <- true
+            startInfo.RedirectStandardOutput <- true
+            startInfo.RedirectStandardError <- true
+            startInfo.ArgumentList.Add "-e"
+            startInfo.ArgumentList.Add parserScript
+            use parser = Process.Start startInfo
+            let output = parser.StandardOutput.ReadToEndAsync()
+            let errors = parser.StandardError.ReadToEndAsync()
+
+            let input =
+                sources
+                |> Array.map (fun source -> dict [ "Name", source.Name; "Source", source.Source ])
+                |> JsonSerializer.Serialize
+
+            parser.StandardInput.Write input
+            parser.StandardInput.Close()
+            parser.WaitForExit()
+            let output = output.GetAwaiter().GetResult()
+            let errors = errors.GetAwaiter().GetResult()
+
+            if parser.ExitCode <> 0 then
+                Error $"ERROR: TypeScript parser failed (exit {parser.ExitCode}): {errors.Trim()}"
+            else
+                output |> decodeResults sources
+        with
+        | :? Win32Exception as error -> Error $"ERROR: could not run the TypeScript parser: {error.Message}"
+        | :? IOException as error -> Error $"ERROR: could not run the TypeScript parser: {error.Message}"
+
 module internal FileSystem =
     let scanRuntimeVersions generatedRoot =
         Directory.EnumerateFiles(generatedRoot, "*.ts", SearchOption.AllDirectories)
@@ -104,20 +258,18 @@ module internal FileSystem =
 
     let readBridgeModules runtimePath =
         Directory.EnumerateFiles(runtimePath, "*.ts", SearchOption.TopDirectoryOnly)
-        |> Seq.map (fun path ->
-            ({
-                Name = Path.GetFileNameWithoutExtension path
-                HasDefaultExport = path |> File.ReadAllText |> Bridge.hasDefaultExport
-            }
-            : Bridge.BridgeModule))
+        |> Seq.map (fun path -> {
+            TypeScript.ModuleSource.Name = Path.GetFileNameWithoutExtension path
+            TypeScript.ModuleSource.Source = File.ReadAllText path
+        })
         |> Seq.sortBy _.Name
-        |> List.ofSeq
 
-    let writeBridge generatedRoot version (bridgeModules: Bridge.BridgeModule list) =
+    let writeBridgeModules generatedRoot version (bridgeModules: Bridge.BridgeModule seq) =
         let bridgeRoot = Path.Combine(generatedRoot, Bridge.bridgeDirectoryName)
 
         if Directory.Exists bridgeRoot then
-            Directory.Delete(bridgeRoot, true)
+            let recursive = true
+            Directory.Delete(bridgeRoot, recursive)
 
         Directory.CreateDirectory bridgeRoot |> ignore
 
@@ -127,7 +279,7 @@ module internal FileSystem =
                 Bridge.renderBridge version bridgeModule
             )
 
-    let generate generatedRoot =
+    let readBridgePlan generatedRoot =
         if not (Directory.Exists generatedRoot) then
             Error Bridge.NoRuntimeImports
         else
@@ -193,27 +345,99 @@ import { Decoder } from "./fable_modules/Thoth.Json.Core.0.9.1/Types.fs.ts";
             (Error(Bridge.ConflictingVersions [ "5.1.0"; "5.20.0" ]))
             (Bridge.resolveVersion (Set [ "5.20.0"; "5.1.0" ]))
 
-        assertEqual "a default export is detected" true (Bridge.hasDefaultExport "class A {}\nexport default A;\n")
+        let parserSources: TypeScript.ModuleSource array = [|
+            { Name = "Assignment"; Source = "class A {}\nexport default A;\n" }
+            { Name = "Function"; Source = "export default function f() {}\n" }
+            { Name = "DefaultValue"; Source = "export defaultValue;\n" }
+            {
+                Name = "Named"
+                Source = "export function f() {}\nexport const defaultValue = 1;\n"
+            }
+            { Name = "LineComment"; Source = "// export default A;\n" }
+            { Name = "BlockComment"; Source = "/*\nexport default A;\n*/\n" }
+            {
+                Name = "AfterComment"
+                Source = "/*\nexport default A;\n*/\nexport default class B {}\n"
+            }
+            { Name = "ExportEquals"; Source = "class A {}\nexport = A;\n" }
+            {
+                Name = "ReExport"
+                Source = "export { value as default } from './Other.ts';\n"
+            }
+            {
+                Name = "NamespaceDefault"
+                Source = "export * as default from './Other.ts';\n"
+            }
+            {
+                Name = "TypeOnlyNamespaceDefault"
+                Source = "export type * as default from './Other.ts';\n"
+            }
+        |]
+
+        let expectedParserModules: Bridge.BridgeModule array = [|
+            { Name = "Assignment"; HasDefaultExport = true }
+            { Name = "Function"; HasDefaultExport = true }
+            { Name = "DefaultValue"; HasDefaultExport = false }
+            { Name = "Named"; HasDefaultExport = false }
+            { Name = "LineComment"; HasDefaultExport = false }
+            { Name = "BlockComment"; HasDefaultExport = false }
+            { Name = "AfterComment"; HasDefaultExport = true }
+            { Name = "ExportEquals"; HasDefaultExport = false }
+            { Name = "ReExport"; HasDefaultExport = true }
+            { Name = "NamespaceDefault"; HasDefaultExport = true }
+            { Name = "TypeOnlyNamespaceDefault"; HasDefaultExport = false }
+        |]
 
         assertEqual
-            "a default function export is detected"
-            true
-            (Bridge.hasDefaultExport "export default function f() {}\n")
+            "compiler results preserve each module's name and default-export classification across a batch"
+            (Ok expectedParserModules)
+            (TypeScript.parseSources parserSources)
 
         assertEqual
-            "an identifier beginning with default is not a default export"
-            false
-            (Bridge.hasDefaultExport "export defaultValue;\n")
+            "an incomplete parser response fails instead of silently omitting modules"
+            (Error "ERROR: TypeScript parser returned an invalid module count.")
+            (TypeScript.decodeResults parserSources "[]")
+
+        let invalidParserResults = [
+            "malformed parser output fails",
+            "not JSON",
+            "ERROR: TypeScript parser returned invalid JSON results: malformed JSON."
+            "a non-array response fails",
+            "{}",
+            "ERROR: TypeScript parser returned invalid JSON results: expected an array."
+            "a non-object module fails",
+            "[null]",
+            "ERROR: TypeScript parser returned invalid JSON results: module 'Assignment' must be an object."
+            "a missing name fails",
+            """[{"HasDefaultExport":true}]""",
+            "ERROR: TypeScript parser returned invalid JSON results: module 'Assignment' is missing 'Name'."
+            "a missing classification fails",
+            """[{"Name":"Assignment"}]""",
+            "ERROR: TypeScript parser returned invalid JSON results: module 'Assignment' is missing 'HasDefaultExport'."
+            "a non-string name fails",
+            """[{"Name":1,"HasDefaultExport":true}]""",
+            "ERROR: TypeScript parser returned invalid JSON results: module 'Assignment' field 'Name' must be a string."
+            "a null name fails",
+            """[{"Name":null,"HasDefaultExport":true}]""",
+            "ERROR: TypeScript parser returned invalid JSON results: module 'Assignment' field 'Name' must be a string."
+            "a non-boolean classification fails",
+            """[{"Name":"Assignment","HasDefaultExport":"true"}]""",
+            "ERROR: TypeScript parser returned invalid JSON results: module 'Assignment' field 'HasDefaultExport' must be a boolean."
+            "misassociated parser results fail",
+            """[{"Name":"Other","HasDefaultExport":true}]""",
+            "ERROR: TypeScript parser returned invalid JSON results: expected module 'Assignment', got 'Other'."
+        ]
+
+        for name, output, message in invalidParserResults do
+            assertEqual name (Error message) (TypeScript.decodeResults [| parserSources[0] |] output)
+
+        assertEqual "an empty parser batch succeeds" (Ok [||]) (TypeScript.parseSources [||])
+        assertEqual "an empty response matches an empty batch" (Ok [||]) (TypeScript.decodeResults [||] "[]")
 
         assertEqual
-            "named exports alone are not default exports"
-            false
-            (Bridge.hasDefaultExport "export function f() {}\nexport const defaultValue = 1;\n")
-
-        assertEqual
-            "a commented-out default export is not detected"
-            false
-            (Bridge.hasDefaultExport "// export default A;\n")
+            "extra parser modules fail"
+            (Error "ERROR: TypeScript parser returned an invalid module count.")
+            (TypeScript.decodeResults [||] """[{"Name":"Other","HasDefaultExport":true}]""")
 
         assertEqual
             "a module without a default export re-exports its named exports"
@@ -246,8 +470,8 @@ import { Decoder } from "./fable_modules/Thoth.Json.Core.0.9.1/Types.fs.ts";
         let root =
             Path.Combine(Path.GetTempPath(), "fable-bridge-self-test-" + string (System.Guid.NewGuid()))
 
-        let write relativePath (content: string) =
-            let path = Path.Combine(Array.append [| root |] relativePath)
+        let write (relativePath: string array) (content: string) =
+            let path = Path.Combine(root, Path.Combine relativePath)
             Directory.CreateDirectory(Path.GetDirectoryName path) |> ignore
             File.WriteAllText(path, content)
 
@@ -255,14 +479,17 @@ import { Decoder } from "./fable_modules/Thoth.Json.Core.0.9.1/Types.fs.ts";
             $"import {{ a }} from \"./fable_modules/fable-library-ts.%s{version}/List.ts\";\n"
 
         try
-            assertEqual "a missing generated root fails" (Error Bridge.NoRuntimeImports) (FileSystem.generate root)
+            assertEqual
+                "a missing generated root fails"
+                (Error Bridge.NoRuntimeImports)
+                (FileSystem.readBridgePlan root)
 
             write [| "Model.ts" |] "export const x = 1;\n"
 
             assertEqual
                 "a tree without runtime imports fails"
                 (Error Bridge.NoRuntimeImports)
-                (FileSystem.generate root)
+                (FileSystem.readBridgePlan root)
 
             write [| "Model.ts" |] (runtimeImport "5.1.0")
             let missingRuntime = Path.Combine(root, "fable_modules", "fable-library-ts.5.1.0")
@@ -270,31 +497,44 @@ import { Decoder } from "./fable_modules/Thoth.Json.Core.0.9.1/Types.fs.ts";
             assertEqual
                 "an imported runtime directory that does not exist fails"
                 (Error(Bridge.RuntimeDirectoryMissing missingRuntime))
-                (FileSystem.generate root)
+                (FileSystem.readBridgePlan root)
 
             write [| "fable_modules"; "fable-library-ts.5.1.0"; "List.ts" |] "export function f() {}\n"
             write [| "fable_modules"; "fable-library-ts.5.1.0"; "Date.ts" |] "export default class D {}\n"
+            write [| "fable_modules"; "fable-library-ts.5.1.0"; "Commented.ts" |] "/*\nexport default A;\n*/\n"
             write [| "fable_modules"; "fable-library-ts.5.1.0"; "lib"; "big.ts" |] "export default 1;\n"
             write [| "fable_modules"; "fable-library-ts.9.9.9"; "List.ts" |] "export function g() {}\n"
             write [| "fable_modules"; "fable-library-ts.5.1.0"; "Stale.ts" |] (runtimeImport "9.9.9")
             write [| "fable-library"; "Removed.ts" |] (runtimeImport "9.9.9")
 
-            let expectedModules: Bridge.BridgeModule list = [
+            let expectedModules: Bridge.BridgeModule array = [|
+                { Name = "Commented"; HasDefaultExport = false }
                 { Name = "Date"; HasDefaultExport = true }
                 { Name = "List"; HasDefaultExport = false }
                 { Name = "Stale"; HasDefaultExport = false }
-            ]
+            |]
+
+            let plan =
+                FileSystem.readBridgePlan root
+                |> Result.mapError Bridge.errorMessage
+                |> Result.bind (fun (version, sources) ->
+                    sources
+                    |> Seq.toArray
+                    |> TypeScript.parseSources
+                    |> Result.map (fun bridgeModules -> version, bridgeModules))
 
             assertEqual
                 "only first-party imports choose the version, and only top-level runtime modules are bridged"
                 (Ok("5.1.0", expectedModules))
-                (FileSystem.generate root)
+                plan
 
-            FileSystem.writeBridge root "5.1.0" expectedModules
+            match plan with
+            | Ok(version, bridgeModules) -> FileSystem.writeBridgeModules root version bridgeModules
+            | Error message -> failwith message
 
             assertEqual
                 "the bridge directory is recreated, removing stale modules"
-                [ "Date.ts"; "List.ts"; "Stale.ts" ]
+                [ "Commented.ts"; "Date.ts"; "List.ts"; "Stale.ts" ]
                 (Directory.GetFiles(Path.Combine(root, "fable-library"))
                  |> Array.map Path.GetFileName
                  |> Array.sort
@@ -302,18 +542,29 @@ import { Decoder } from "./fable_modules/Thoth.Json.Core.0.9.1/Types.fs.ts";
 
             assertEqual
                 "written bridges match the rendered contents"
-                (Bridge.renderBridge "5.1.0" { Name = "Date"; HasDefaultExport = true })
+                ("// Generated by scripts/GenerateFableLibraryBridge.fsx. Do not edit.\n"
+                 + "export * from \"../fable_modules/fable-library-ts.5.1.0/Date.ts\";\n"
+                 + "export { default } from \"../fable_modules/fable-library-ts.5.1.0/Date.ts\";\n")
                 (File.ReadAllText(Path.Combine(root, "fable-library", "Date.ts")))
+
+            assertEqual
+                "a commented-out default export produces only a named-export bridge"
+                ("// Generated by scripts/GenerateFableLibraryBridge.fsx. Do not edit.\n"
+                 + "export * from \"../fable_modules/fable-library-ts.5.1.0/Commented.ts\";\n")
+                (File.ReadAllText(Path.Combine(root, "fable-library", "Commented.ts")))
 
             write [| "Other.ts" |] (runtimeImport "9.9.9")
 
             assertEqual
                 "first-party imports of two versions fail"
                 (Error(Bridge.ConflictingVersions [ "5.1.0"; "9.9.9" ]))
-                (FileSystem.generate root)
+                (FileSystem.readBridgePlan root)
         finally
             if Directory.Exists root then
-                Directory.Delete(root, true)
+                let recursive = true
+                Directory.Delete(root, recursive)
+
+        assertEqual "self-test fixtures are deleted" false (Directory.Exists root)
 
         printfn "Self-test: passed."
 
@@ -330,12 +581,21 @@ match CommandLine.parseArguments (scriptArgs |> Array.toList) with
     let repoRoot = Path.GetDirectoryName(Path.GetFullPath(__SOURCE_DIRECTORY__))
     let generatedRoot = Path.Combine(repoRoot, "src", "generated")
 
-    match FileSystem.generate generatedRoot with
-    | Error error ->
-        eprintfn "%s" (Bridge.errorMessage error)
+    let plan =
+        FileSystem.readBridgePlan generatedRoot
+        |> Result.mapError Bridge.errorMessage
+        |> Result.bind (fun (version, sources) ->
+            sources
+            |> Seq.toArray
+            |> TypeScript.parseSources
+            |> Result.map (fun bridgeModules -> version, bridgeModules))
+
+    match plan with
+    | Error message ->
+        eprintfn "%s" message
         exit 1
     | Ok(version, bridgeModules) ->
-        FileSystem.writeBridge generatedRoot version bridgeModules
+        FileSystem.writeBridgeModules generatedRoot version bridgeModules
 
         printfn
             $"GenerateFableLibraryBridge: wrote %d{bridgeModules.Length} bridge module(s) for fable-library-ts %s{version}."
