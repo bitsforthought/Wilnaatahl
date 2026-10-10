@@ -1,4 +1,4 @@
-// Workaround for a Fable TypeScript codegen bug (still present in Fable 5.1.0):
+// Workaround for a Fable TypeScript codegen bug:
 // generic methods on generic interfaces (e.g. Thoth.Json.Core's
 // `IRequiredGetter.Field`, `IEncoder<JsonValue>.Encode<T>`) emit an unbound
 // `$a` in parameter type annotations. The runtime JS is correct; only tsc
