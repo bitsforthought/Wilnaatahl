@@ -17,6 +17,7 @@ updates:
         update-types:
           - version-update:semver-patch
           - version-update:semver-minor
+          - version-update:semver-major
     ignore:
       - dependency-name: koota
         update-types:
@@ -45,6 +46,7 @@ updates:
         update-types:
           - version-update:semver-patch
           - version-update:semver-minor
+          - version-update:semver-major
     ignore:
       - dependency-name: fable
         update-types:
