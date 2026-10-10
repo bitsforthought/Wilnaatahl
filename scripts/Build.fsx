@@ -307,20 +307,20 @@ module BuildCommands =
               $"-targetdir:{targetDirectory}"
               $"-reporttypes:{reportTypes}" ]
 
+    /// Coverlet names each F# test project's report
+    /// `<project>.coverage.cobertura.<timestamp>.xml`; the project prefix keeps
+    /// reports written to one results directory from overwriting one another.
+    let fSharpCoverageGlob resultsDirectory =
+        Path.Combine(resultsDirectory, "**", "*.coverage.cobertura.*.xml")
+
     let fSharpCoveragePlan root =
         let resultsDirectory = Path.Combine(root, "TestResults")
         let reportDirectory = Path.Combine(root, "coveragereport")
-        let coverageGlob = Path.Combine(resultsDirectory, "**", "coverage.cobertura.xml")
+        let coverageGlob = fSharpCoverageGlob resultsDirectory
 
         { CleanPaths = [ resultsDirectory; reportDirectory ]
           Commands =
-            [ dotnetCommand
-                  root
-                  [ "test"
-                    "--collect"
-                    "XPlat Code Coverage"
-                    "--results-directory"
-                    "TestResults" ]
+            [ dotnetCommand root [ "test"; "--coverlet"; "--results-directory"; "TestResults" ]
               reportGeneratorCommand root coverageGlob reportDirectory "JsonSummary" ] }
 
     let typeScriptCoveragePlan root =
@@ -556,7 +556,7 @@ module BuildSelfTest =
         let typeScriptReportPath = Path.Combine(root, "coveragereport-ts")
 
         let fSharpCoverageGlob =
-            Path.Combine(fSharpResultsPath, "**", "coverage.cobertura.xml")
+            Path.Combine(fSharpResultsPath, "**", "*.coverage.cobertura.*.xml")
 
         let typeScriptCoveragePath =
             Path.Combine(typeScriptReportPath, "cobertura-coverage.xml")
@@ -565,13 +565,7 @@ module BuildSelfTest =
             "F# coverage cleans only its owned output and generates a summary"
             { CleanPaths = [ fSharpResultsPath; fSharpReportPath ]
               Commands =
-                [ dotnetCommand
-                      root
-                      [ "test"
-                        "--collect"
-                        "XPlat Code Coverage"
-                        "--results-directory"
-                        "TestResults" ]
+                [ dotnetCommand root [ "test"; "--coverlet"; "--results-directory"; "TestResults" ]
                   dotnetCommand
                       root
                       [ "reportgenerator"
@@ -829,7 +823,7 @@ module Build =
         let resultsDirectory = Path.Combine(repoRoot, "TestResults")
         let reportDirectory = Path.Combine(repoRoot, "coveragereport")
         let reportPath = Path.Combine(reportDirectory, "index.html")
-        let coverageGlob = Path.Combine(resultsDirectory, "**", "coverage.cobertura.xml")
+        let coverageGlob = fSharpCoverageGlob resultsDirectory
 
         reportGeneratorCommand repoRoot coverageGlob reportDirectory "Html" |> runOrFail
 

@@ -143,7 +143,8 @@ never produce the collision, so the interesting branch stays untested. **Scope t
 property to the cases where it actually holds** and say why in the doc comment —
 an invariant quietly widened to cases it doesn't cover is worse than no property.
 
-PBT is **.NET-only** via `FsCheck.Xunit.v3` (3.3.x with xunit.v3); the F# API —
+PBT is **.NET-only** via `FsCheck.Xunit.v3`, whose xUnit v3 integration must match
+the project's `xunit.v3` major version; the F# API —
 `Gen`, `Arb`, `Prop`, `gen { }`, `==>` — lives under `open FsCheck.FSharp`. Never
 add FsCheck to the Fable-portable `Wilnaatahl.ECS.Tests`. For float properties use
 epsilon comparisons and bounded, NaN/infinity-free generators; over `internal`
