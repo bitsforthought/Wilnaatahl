@@ -83,11 +83,9 @@ let handleDragEnd (world: IWorld) = world |> raiseInput DragEnded
 /// would leave that drag running with no release left to end it.
 let handleDragStart (world: IWorld) =
     (world |> queue)
-        .RemoveAll(
-            function
+        .RemoveAll(function
             | Clicked(_, _) -> true
-            | _ -> false
-        )
+            | _ -> false)
     |> ignore
 
     if not (dragInFlight world) then

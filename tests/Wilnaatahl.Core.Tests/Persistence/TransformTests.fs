@@ -965,12 +965,13 @@ let ``pdeek recognition is invariant to case, noise, and underlined-k spelling``
                 Kinship = Wilp { Name = WilpName "House"; Pdeek = expected }
         }
 
-        transform (rawFile [ aliceWithWilp ] [] [ w ]) = Ok {
-            PeopleAndCoupleIds = [ (expectedAlice, None) ]
-            NameHoldings = []
-            Couples = []
-            Warnings = []
-        })
+        transform (rawFile [ aliceWithWilp ] [] [ w ]) =
+            Ok {
+                PeopleAndCoupleIds = [ (expectedAlice, None) ]
+                NameHoldings = []
+                Couples = []
+                Warnings = []
+            })
 
 // ---------------------------------------------------------------------------
 // transform: new person fields (colonial name, dates, kinship note, birth wilp)

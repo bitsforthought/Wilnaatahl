@@ -18,8 +18,8 @@ module private KootaWrapper =
 module internal TestSupport =
     /// A default implementation of ITraitProvider that always throws.
     /// This ensures that unit tests exercising the ECS don't forget to install a mock.
-    let defaultTraitFactory =
-        { new ITraitFactory with
+    let defaultTraitFactory = {
+        new ITraitFactory with
             member _.CreateAdded() = raise (NotImplementedException())
             member _.CreateChanged() = raise (NotImplementedException())
             member _.CreateRemoved() = raise (NotImplementedException())
@@ -31,12 +31,12 @@ module internal TestSupport =
                 raise (NotImplementedException())
 
             member _.TraitWithRef<'T> _ : IMutableValueTrait<'T, 'T> = raise (NotImplementedException())
-        }
+    }
 
     /// A default implementation of IEntityOperations that always throws.
     /// This ensures that unit tests exercising the ECS don't forget to install a mock.
-    let defaultEntityOperations =
-        { new IEntityOperations with
+    let defaultEntityOperations = {
+        new IEntityOperations with
             member _.Add _ _ = raise (NotImplementedException())
             member _.Destroy _ = raise (NotImplementedException())
             member _.Get _ _ = raise (NotImplementedException())
@@ -52,7 +52,7 @@ module internal TestSupport =
             member _.SetRelationValue _ _ _ _ = raise (NotImplementedException())
             member _.TargetFor _ _ = raise (NotImplementedException())
             member _.TargetsFor _ _ = raise (NotImplementedException())
-        }
+    }
 
 #endif
 
