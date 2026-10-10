@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { empty } from "../../../src/generated/fable_modules/fable-library-ts.5.1.0/List";
+import { empty } from "../../../src/generated/fable-library/List";
 import { LocaleModule_parse } from "../../../src/generated/ViewModel/Localization";
 import {
   DisplayDate,

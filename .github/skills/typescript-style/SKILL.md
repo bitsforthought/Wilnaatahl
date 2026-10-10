@@ -18,6 +18,9 @@ not reimplement domain logic.
 
 - **Never hand-edit `src/generated/`.** Regenerate with
   `npm run fake "--" --target Fable` after F# changes.
+- **Import the Fable runtime through `src/generated/fable-library/`.** The
+  versioned `fable_modules/fable-library-ts.<version>/` path breaks on every
+  Fable upgrade; ESLint rejects it.
 - **No duplication of business logic.** React components use the F#-generated view
   model and ECS systems for state and actions; do not reimplement domain rules in
   TypeScript.

@@ -9,7 +9,7 @@ import {
   ImportWarningModule_summary,
   ImportWarningModule_toMessage,
 } from "../generated/ViewModel/ImportMessages";
-import { FSharpList } from "../generated/fable_modules/fable-library-ts.5.1.0/List";
+import { FSharpList } from "../generated/fable-library/List";
 import { detectLocale } from "../i18n/format";
 import { importFile as readImportFile, normalizeThrownValue } from "./importFile";
 import { dismissButtonStyle } from "./styles";

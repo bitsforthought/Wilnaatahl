@@ -6,7 +6,7 @@ import {
   ImportWarningModule_summary,
 } from "../generated/ViewModel/ImportMessages";
 import { Locale } from "../generated/ViewModel/Localization";
-import { FSharpList } from "../generated/fable_modules/fable-library-ts.5.1.0/List";
+import { FSharpList } from "../generated/fable-library/List";
 
 export type ImportOutcome =
   | { kind: "ok"; graph: FamilyGraph; warnings?: FSharpList<ImportWarning> }

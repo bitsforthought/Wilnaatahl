@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ofArray } from "../../../src/generated/fable_modules/fable-library-ts.5.1.0/List.js";
+import { ofArray } from "../../../src/generated/fable-library/List";
 import { NodeDetail } from "../../../src/generated/ViewModel/NodeContent";
 import { EN } from "../../../src/i18n/format";
 import { buildDetailContent } from "../../../src/react-components/detailContent";

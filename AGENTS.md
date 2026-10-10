@@ -43,7 +43,10 @@ This convention does not apply to Sim Algyax/Gitxsanimx text.
   in `src/Wilnaatahl.Core/`, compiled to JS via Fable.
 - **Interop:** TypeScript types in `src/generated/` are auto-generated from F# for
   type-safe interop. Never hand-edit these files — regenerate with
-  `npm run fake "--" --target Fable`.
+  `npm run fake "--" --target Fable`. Import the Fable runtime library from
+  `src/generated/fable-library/`, never from the versioned
+  `fable_modules/fable-library-ts.<version>/` path; the bridge is regenerated
+  for whichever runtime Fable emits, so Fable upgrades don't break imports.
 - **State Management:** Uses [Koota](https://github.com/pmndrs/koota), an ECS
   library. `src/main.tsx` provides a Koota `World` via `<WorldProvider>`. React
   components access state through Koota hooks (`useWorld()`, `useQuery()`,
