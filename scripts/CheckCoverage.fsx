@@ -19,28 +19,17 @@ type CheckResult =
     | Regressed of current: float * baseline: float
 
 /// A coverage metric tracked against a watermark in a summary document.
-type Metric =
-    {
-        Label: string
-        BaselineKey: string
-        SummaryKey: string
-    }
+type Metric = { Label: string; BaselineKey: string; SummaryKey: string }
 
-type CoverageSuite =
-    {
-        Label: string
-        SummaryPath: string
-        Metrics: Metric list
-    }
+type CoverageSuite = { Label: string; SummaryPath: string; Metrics: Metric list }
 
-type CoverageResult =
-    {
-        Suite: CoverageSuite
-        Metric: Metric
-        Current: float
-        Baseline: float
-        Result: CheckResult
-    }
+type CoverageResult = {
+    Suite: CoverageSuite
+    Metric: Metric
+    Current: float
+    Baseline: float
+    Result: CheckResult
+}
 
 type BaselinePolicy =
     | Ratchet
@@ -57,33 +46,29 @@ type Command =
     | RunCoverageCheck of BaselinePolicy
     | RunSelfTest
 
-let lineMetric =
-    {
-        Label = "Line coverage"
-        BaselineKey = "lineCoverage"
-        SummaryKey = "linecoverage"
-    }
+let lineMetric = {
+    Label = "Line coverage"
+    BaselineKey = "lineCoverage"
+    SummaryKey = "linecoverage"
+}
 
-let branchMetric =
-    {
-        Label = "Branch coverage"
-        BaselineKey = "branchCoverage"
-        SummaryKey = "branchcoverage"
-    }
+let branchMetric = {
+    Label = "Branch coverage"
+    BaselineKey = "branchCoverage"
+    SummaryKey = "branchcoverage"
+}
 
-let typeScriptLineMetric =
-    {
-        Label = "Line coverage"
-        BaselineKey = "tsLineCoverage"
-        SummaryKey = "linecoverage"
-    }
+let typeScriptLineMetric = {
+    Label = "Line coverage"
+    BaselineKey = "tsLineCoverage"
+    SummaryKey = "linecoverage"
+}
 
-let typeScriptBranchMetric =
-    {
-        Label = "Branch coverage"
-        BaselineKey = "tsBranchCoverage"
-        SummaryKey = "branchcoverage"
-    }
+let typeScriptBranchMetric = {
+    Label = "Branch coverage"
+    BaselineKey = "tsBranchCoverage"
+    SummaryKey = "branchcoverage"
+}
 
 let fSharpMetrics = [ lineMetric; branchMetric ]
 let typeScriptMetrics = [ typeScriptLineMetric; typeScriptBranchMetric ]
@@ -186,14 +171,13 @@ let evaluateCoverage baselineText suites summaries =
             parseJson suite.SummaryPath summaryText
             |> Result.bind (fun summaryDocument ->
                 parseSummary metric summaryDocument suite.SummaryPath
-                |> Result.map (fun current ->
-                    {
-                        Suite = suite
-                        Metric = metric
-                        Current = current
-                        Baseline = baseline
-                        Result = checkCoverage current baseline
-                    }))
+                |> Result.map (fun current -> {
+                    Suite = suite
+                    Metric = metric
+                    Current = current
+                    Baseline = baseline
+                    Result = checkCoverage current baseline
+                }))
 
     parseJson "coverage-baseline.json" baselineText
     |> Result.bind (fun baselineDocument ->
@@ -266,66 +250,62 @@ let runSelfTest () =
 
     assertEqual "combined arguments fail" expectedUsage (parseArguments [ "--check-only"; "--self-test" ])
 
-    let fSharpSuite =
-        {
-            Label = "F#"
-            SummaryPath = "fsharp/Summary.json"
-            Metrics = fSharpMetrics
-        }
+    let fSharpSuite = {
+        Label = "F#"
+        SummaryPath = "fsharp/Summary.json"
+        Metrics = fSharpMetrics
+    }
 
-    let typeScriptSuite =
-        {
-            Label = "TypeScript"
-            SummaryPath = "typescript/Summary.json"
-            Metrics = typeScriptMetrics
-        }
+    let typeScriptSuite = {
+        Label = "TypeScript"
+        SummaryPath = "typescript/Summary.json"
+        Metrics = typeScriptMetrics
+    }
 
     let baseline =
         """{"lineCoverage":98.6,"branchCoverage":93.2,"tsLineCoverage":87.5,"tsBranchCoverage":76.0}"""
 
     let summaries =
-        Map
-            [
-                ("fsharp/Summary.json", """{"summary":{"linecoverage":99.0,"branchcoverage":92.0}}""")
-                ("typescript/Summary.json", """{"summary":{"linecoverage":88.0,"branchcoverage":76.0}}""")
-            ]
+        Map [
+            ("fsharp/Summary.json", """{"summary":{"linecoverage":99.0,"branchcoverage":92.0}}""")
+            ("typescript/Summary.json", """{"summary":{"linecoverage":88.0,"branchcoverage":76.0}}""")
+        ]
 
     let mixedResults =
         evaluateCoverage baseline [ fSharpSuite; typeScriptSuite ] summaries
 
     assertEqual
         "mixed improvement and regression"
-        (Ok
-            [
-                {
-                    Suite = fSharpSuite
-                    Metric = lineMetric
-                    Current = 99.0
-                    Baseline = 98.6
-                    Result = Improved 99.0
-                }
-                {
-                    Suite = fSharpSuite
-                    Metric = branchMetric
-                    Current = 92.0
-                    Baseline = 93.2
-                    Result = Regressed(92.0, 93.2)
-                }
-                {
-                    Suite = typeScriptSuite
-                    Metric = typeScriptLineMetric
-                    Current = 88.0
-                    Baseline = 87.5
-                    Result = Improved 88.0
-                }
-                {
-                    Suite = typeScriptSuite
-                    Metric = typeScriptBranchMetric
-                    Current = 76.0
-                    Baseline = 76.0
-                    Result = Pass
-                }
-            ])
+        (Ok [
+            {
+                Suite = fSharpSuite
+                Metric = lineMetric
+                Current = 99.0
+                Baseline = 98.6
+                Result = Improved 99.0
+            }
+            {
+                Suite = fSharpSuite
+                Metric = branchMetric
+                Current = 92.0
+                Baseline = 93.2
+                Result = Regressed(92.0, 93.2)
+            }
+            {
+                Suite = typeScriptSuite
+                Metric = typeScriptLineMetric
+                Current = 88.0
+                Baseline = 87.5
+                Result = Improved 88.0
+            }
+            {
+                Suite = typeScriptSuite
+                Metric = typeScriptBranchMetric
+                Current = 76.0
+                Baseline = 76.0
+                Result = Pass
+            }
+        ])
         mixedResults
 
     assertEqual
@@ -447,57 +427,54 @@ let runSelfTest () =
 
     assertEqual
         "rewriting retains all four keys"
-        (Ok
-            [
-                ("lineCoverage", 99.0)
-                ("branchCoverage", 92.0)
-                ("tsLineCoverage", 88.0)
-                ("tsBranchCoverage", 76.0)
-            ])
+        (Ok [
+            ("lineCoverage", 99.0)
+            ("branchCoverage", 92.0)
+            ("tsLineCoverage", 88.0)
+            ("tsBranchCoverage", 76.0)
+        ])
         (rewrittenKeys |> Result.bind sequenceResults)
 
-    let improvedResults =
-        [
-            {
-                Suite = fSharpSuite
-                Metric = lineMetric
-                Current = 99.0
-                Baseline = 98.6
-                Result = Improved 99.0
-            }
-            {
-                Suite = fSharpSuite
-                Metric = branchMetric
-                Current = 94.0
-                Baseline = 93.2
-                Result = Improved 94.0
-            }
-            {
-                Suite = typeScriptSuite
-                Metric = typeScriptLineMetric
-                Current = 88.0
-                Baseline = 87.5
-                Result = Improved 88.0
-            }
-            {
-                Suite = typeScriptSuite
-                Metric = typeScriptBranchMetric
-                Current = 77.0
-                Baseline = 76.0
-                Result = Improved 77.0
-            }
-        ]
+    let improvedResults = [
+        {
+            Suite = fSharpSuite
+            Metric = lineMetric
+            Current = 99.0
+            Baseline = 98.6
+            Result = Improved 99.0
+        }
+        {
+            Suite = fSharpSuite
+            Metric = branchMetric
+            Current = 94.0
+            Baseline = 93.2
+            Result = Improved 94.0
+        }
+        {
+            Suite = typeScriptSuite
+            Metric = typeScriptLineMetric
+            Current = 88.0
+            Baseline = 87.5
+            Result = Improved 88.0
+        }
+        {
+            Suite = typeScriptSuite
+            Metric = typeScriptBranchMetric
+            Current = 77.0
+            Baseline = 76.0
+            Result = Improved 77.0
+        }
+    ]
 
-    let regressedResults =
-        [
-            {
-                Suite = fSharpSuite
-                Metric = branchMetric
-                Current = 92.0
-                Baseline = 93.2
-                Result = Regressed(92.0, 93.2)
-            }
-        ]
+    let regressedResults = [
+        {
+            Suite = fSharpSuite
+            Metric = branchMetric
+            Current = 92.0
+            Baseline = 93.2
+            Result = Regressed(92.0, 93.2)
+        }
+    ]
 
     let originalBaseline = baseline
 
@@ -565,17 +542,15 @@ let runSelfTest () =
     assertEqual
         "ratchet keeps the baseline when metrics are equal"
         KeepBaseline
-        (baselineAction
-            Ratchet
-            [
-                {
-                    Suite = fSharpSuite
-                    Metric = lineMetric
-                    Current = 98.6
-                    Baseline = 98.6
-                    Result = Pass
-                }
-            ])
+        (baselineAction Ratchet [
+            {
+                Suite = fSharpSuite
+                Metric = lineMetric
+                Current = 98.6
+                Baseline = 98.6
+                Result = Pass
+            }
+        ])
 
     printfn "Self-test: passed."
 

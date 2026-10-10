@@ -59,11 +59,10 @@ type Severity =
 
 type Finding = { Severity: Severity; Message: string }
 
-let private toScalarValue (scalar: YamlScalarNode) =
-    {
-        Text = if isNull scalar.Value then "" else scalar.Value
-        IsPlain = scalar.Style = ScalarStyle.Plain
-    }
+let private toScalarValue (scalar: YamlScalarNode) = {
+    Text = if isNull scalar.Value then "" else scalar.Value
+    IsPlain = scalar.Style = ScalarStyle.Plain
+}
 
 /// Converts a YAML node into the shape this validator reasons about: scalars
 /// (with their quoted-ness), all-scalar sequences, sequences with a non-scalar
@@ -233,31 +232,28 @@ module Validation =
     let validateDescription fields =
         match findField "description" fields with
         | Some(NonEmptyStringScalar _) -> []
-        | Some _ ->
-            [
-                {
-                    Severity = Severity.Error
-                    Message = "'description' must be a non-empty string"
-                }
-            ]
-        | None ->
-            [
-                {
-                    Severity = Severity.Error
-                    Message = "missing required 'description'"
-                }
-            ]
+        | Some _ -> [
+            {
+                Severity = Severity.Error
+                Message = "'description' must be a non-empty string"
+            }
+          ]
+        | None -> [
+            {
+                Severity = Severity.Error
+                Message = "missing required 'description'"
+            }
+          ]
 
     let validateRetiredKeys fields =
         fields
         |> List.choose (fun (k, _) ->
             retiredKeys
             |> Map.tryFind k
-            |> Option.map (fun remediation ->
-                {
-                    Severity = Severity.Error
-                    Message = sprintf "'%s' is retired; %s" k remediation
-                }))
+            |> Option.map (fun remediation -> {
+                Severity = Severity.Error
+                Message = sprintf "'%s' is retired; %s" k remediation
+            }))
 
     let retiredKeyNames = retiredKeys |> Map.keys |> Set.ofSeq
 
@@ -290,11 +286,10 @@ module Validation =
                 ->
                 None
             | _ ->
-                Some
-                    {
-                        Severity = Severity.Error
-                        Message = sprintf "'%s' must be a boolean (unquoted true or false)" k
-                    })
+                Some {
+                    Severity = Severity.Error
+                    Message = sprintf "'%s' must be a boolean (unquoted true or false)" k
+                })
 
     let validateStringLists fields =
         fields
@@ -304,11 +299,10 @@ module Validation =
             | Items values when values |> List.forall isStringScalar -> None
             | NonEmptyStringScalar _ -> None
             | _ ->
-                Some
-                    {
-                        Severity = Severity.Error
-                        Message = sprintf "'%s' must be a string or list of strings" k
-                    })
+                Some {
+                    Severity = Severity.Error
+                    Message = sprintf "'%s' must be a string or list of strings" k
+                })
 
     let validateNestedMappings fields =
         fields
@@ -317,31 +311,29 @@ module Validation =
             match v with
             | Mapping -> None
             | _ ->
-                Some
-                    {
-                        Severity = Severity.Error
-                        Message = sprintf "'%s' must be a mapping" k
-                    })
+                Some {
+                    Severity = Severity.Error
+                    Message = sprintf "'%s' must be a mapping" k
+                })
 
     module Agent =
         let private knownKeys =
-            set
-                [
-                    "agents"
-                    "argument-hint"
-                    "description"
-                    "disable-model-invocation"
-                    "github"
-                    "handoffs"
-                    "hooks"
-                    "model"
-                    "name"
-                    "target"
-                    "tools"
-                    "user-invocable"
-                    "mcp-servers"
-                    "metadata"
-                ]
+            set [
+                "agents"
+                "argument-hint"
+                "description"
+                "disable-model-invocation"
+                "github"
+                "handoffs"
+                "hooks"
+                "model"
+                "name"
+                "target"
+                "tools"
+                "user-invocable"
+                "mcp-servers"
+                "metadata"
+            ]
 
         let validateAgent fields =
             validateDescription fields
@@ -366,20 +358,13 @@ module Validation =
                     ]
                 else
                     []
-            | Some _ ->
-                [
-                    {
-                        Severity = Severity.Error
-                        Message = "'name' must be a non-empty string"
-                    }
-                ]
-            | None ->
-                [
-                    {
-                        Severity = Severity.Error
-                        Message = "missing required 'name'"
-                    }
-                ]
+            | Some _ -> [
+                {
+                    Severity = Severity.Error
+                    Message = "'name' must be a non-empty string"
+                }
+              ]
+            | None -> [ { Severity = Severity.Error; Message = "missing required 'name'" } ]
 
         let validateSkill directory fields =
             validateDescription fields
@@ -395,32 +380,24 @@ module Validation =
         let validateApplyTo fields =
             match findField "applyTo" fields with
             | Some(NonEmptyStringScalar _) -> []
-            | Some _ ->
-                [
-                    {
-                        Severity = Severity.Error
-                        Message = "'applyTo' must be a non-empty string"
-                    }
-                ]
-            | None ->
-                [
-                    {
-                        Severity = Severity.Error
-                        Message = "missing required 'applyTo'"
-                    }
-                ]
+            | Some _ -> [
+                {
+                    Severity = Severity.Error
+                    Message = "'applyTo' must be a non-empty string"
+                }
+              ]
+            | None -> [ { Severity = Severity.Error; Message = "missing required 'applyTo'" } ]
 
         let validateExcludeAgent fields =
             match findField "excludeAgent" fields with
             | None -> []
             | Some(NonEmptyScalar value) when value = "code-review" || value = "cloud-agent" -> []
-            | Some _ ->
-                [
-                    {
-                        Severity = Severity.Error
-                        Message = "'excludeAgent' must be either 'code-review' or 'cloud-agent'"
-                    }
-                ]
+            | Some _ -> [
+                {
+                    Severity = Severity.Error
+                    Message = "'excludeAgent' must be either 'code-review' or 'cloud-agent'"
+                }
+              ]
 
         let validateInstruction fields =
             validateApplyTo fields
@@ -443,13 +420,12 @@ let validationSummary agentCount skillCount instructionCount =
 /// into a single error finding (mirroring the file-scanning pipeline).
 let validateText validate (text: string) : Finding list =
     match parseFrontmatter text with
-    | Error msg ->
-        [
-            {
-                Severity = Severity.Error
-                Message = "frontmatter parse error: " + msg
-            }
-        ]
+    | Error msg -> [
+        {
+            Severity = Severity.Error
+            Message = "frontmatter parse error: " + msg
+        }
+      ]
     | Ok fields -> validate fields
 
 let countBySeverity findings =
@@ -882,120 +858,82 @@ tools: [0_x2a]
 
     printfn "Running self-test..."
 
-    let results =
-        [
-            check "valid agent has no findings" (agent validAgent) 0 0 []
-            check "retired infer is an error" (agent inferAgent) 1 0 [ "retired" ]
-            check "agent skills: is a warning" (agent skillsAgent) 0 1 [ "skills" ]
-            check "non-boolean user-invocable is an error" (agent badBoolAgent) 1 0 [ "must be a boolean" ]
-            check "quoted boolean is an error" (agent quotedBoolAgent) 1 0 [ "must be a boolean" ]
-            check "block-scalar boolean is an error" (agent blockBoolAgent) 1 0 [ "must be a boolean" ]
-            check "inline comment on a boolean is stripped" (agent commentBoolAgent) 0 0 []
-            check "duplicate keys are an error" (agent duplicateKeyAgent) 1 0 [ "invalid YAML frontmatter" ]
-            check "nested-mapping key given a scalar is an error" (agent nestedScalarAgent) 1 0 [ "must be a mapping" ]
-            check "valid nested mapping is accepted" (agent nestedMappingAgent) 0 0 []
-            check "list with a non-scalar item is an error" (agent nonScalarListAgent) 1 0 [ "string or list" ]
-            check "empty description is an error" (agent emptyDescAgent) 1 0 [ "non-empty" ]
-            check "CRLF frontmatter is accepted" (agent crlfAgent) 0 0 []
-            check "near-miss typo of a known key is a warning" (agent typoKeyAgent) 0 1 [ "typo" ]
-            check "non-scalar key is a parse error" (agent nonScalarKeyAgent) 1 0 [ "scalar" ]
-            check "empty key is a parse error" (agent emptyKeyAgent) 1 0 [ "scalar" ]
-            check "non-mapping root is an error" (agent listRootAgent) 1 0 [ "not a YAML mapping" ]
-            check "unterminated frontmatter is an error" (agent unterminatedAgent) 1 0 [ "unterminated" ]
-            check "multiple documents are an error" (agent multiDocAgent) 1 0 [ "multiple" ]
-            check "inline flow list tools is accepted" (agent flowToolsAgent) 0 0 []
-            check "boolean description is an error" (agent booleanDescriptionAgent) 1 0 [ "non-empty string" ]
-            check "boolean tools scalar is an error" (agent booleanToolsAgent) 1 0 [ "string or list of strings" ]
-            check
-                "boolean tools list item is an error"
-                (agent booleanToolsListAgent)
-                1
-                0
-                [ "'tools' must be a string or list of strings" ]
-            check
-                "numeric tools list item is an error"
-                (agent numericToolsListAgent)
-                1
-                0
-                [ "string or list of strings" ]
-            check "numeric skill name is an error" (skill "123" numericNameSkill) 1 0 [ "non-empty string" ]
-            check
-                "numeric allowed-tools scalar is an error"
-                (skill "demo-skill" numericAllowedToolsSkill)
-                1
-                0
-                [ "string or list of strings" ]
-            check
-                "numeric handoffs list item is an error"
-                (agent numericHandoffsAgent)
-                1
-                0
-                [ "string or list of strings" ]
-            check "quoted string-shaped scalars are accepted" (agent quotedScalarStringsAgent) 0 0 []
-            check "valid skill has no findings" (skill "demo-skill" validSkill) 0 0 []
-            check "skill missing description is an error" (skill "demo-skill" noDescSkill) 1 0 [ "description" ]
-            check "skill user-invocable is a warning" (skill "demo-skill" userInvocableSkill) 0 1 [ "user-invocable" ]
-            check "skill name != directory is a warning" (skill "demo-skill" mismatchSkill) 0 1 [ "does not match" ]
-            check "valid instruction has no findings" (instruction validInstruction) 0 0 []
-            check "valid instruction exclusion is accepted" (instruction validExcludedInstruction) 0 0 []
-            check "instruction missing applyTo is an error" (instruction missingApplyToInstruction) 1 0 [ "applyTo" ]
-            check "instruction applyTo list is an error" (instruction listApplyToInstruction) 1 0 [ "non-empty string" ]
-            check
-                "instruction invalid excludeAgent is an error"
-                (instruction invalidExcludeAgentInstruction)
-                1
-                0
-                [ "code-review"; "cloud-agent" ]
-            check
-                "instruction boolean applyTo is an error"
-                (instruction booleanApplyToInstruction)
-                1
-                0
-                [ "non-empty string" ]
-            check
-                "instruction numeric applyTo is an error"
-                (instruction numericApplyToInstruction)
-                1
-                0
-                [ "non-empty string" ]
-            check
-                "instruction quoted boolean-looking applyTo is accepted"
-                (instruction quotedBooleanApplyToInstruction)
-                0
-                0
-                []
-            check
-                "instruction quoted numeric-looking applyTo is accepted"
-                (instruction quotedNumericApplyToInstruction)
-                0
-                0
-                []
-            check
-                "instruction digit-leading non-number applyTo is accepted"
-                (instruction digitLeadingNonNumberApplyToInstruction)
-                0
-                0
-                []
-            check "instruction mixed-case boolean is accepted" (instruction mixedCaseBooleanApplyToInstruction) 0 0 []
-            check "agent digit-leading non-number list item is accepted" (agent digitLeadingNonNumberToolsAgent) 0 0 []
-            check "instruction undocumented key is a warning" (instruction unknownKeyInstruction) 0 1 [ "description" ]
-            check "instruction typo key is a warning" (instruction typoKeyInstruction) 1 1 [ "applyTo"; "typo" ]
-            check
-                "agent-only retired key is unknown on instructions"
-                (instruction retiredAgentKeyInstruction)
-                0
-                1
-                [ "infer" ]
-            checkValue
-                "instruction discovery includes nested instruction files"
-                nestedInstructionDiscovery
-                (set [ "nested.instructions.md"; "root.instructions.md" ])
-            checkValue
-                "validation summary includes instruction count"
-                (validationSummary 3 7 1)
-                "Validating 3 agent, 7 skill, and 1 instruction definition(s)..."
-            check "malformed frontmatter is an error" (agent malformed) 1 0 [ "frontmatter" ]
+    let results = [
+        check "valid agent has no findings" (agent validAgent) 0 0 []
+        check "retired infer is an error" (agent inferAgent) 1 0 [ "retired" ]
+        check "agent skills: is a warning" (agent skillsAgent) 0 1 [ "skills" ]
+        check "non-boolean user-invocable is an error" (agent badBoolAgent) 1 0 [ "must be a boolean" ]
+        check "quoted boolean is an error" (agent quotedBoolAgent) 1 0 [ "must be a boolean" ]
+        check "block-scalar boolean is an error" (agent blockBoolAgent) 1 0 [ "must be a boolean" ]
+        check "inline comment on a boolean is stripped" (agent commentBoolAgent) 0 0 []
+        check "duplicate keys are an error" (agent duplicateKeyAgent) 1 0 [ "invalid YAML frontmatter" ]
+        check "nested-mapping key given a scalar is an error" (agent nestedScalarAgent) 1 0 [ "must be a mapping" ]
+        check "valid nested mapping is accepted" (agent nestedMappingAgent) 0 0 []
+        check "list with a non-scalar item is an error" (agent nonScalarListAgent) 1 0 [ "string or list" ]
+        check "empty description is an error" (agent emptyDescAgent) 1 0 [ "non-empty" ]
+        check "CRLF frontmatter is accepted" (agent crlfAgent) 0 0 []
+        check "near-miss typo of a known key is a warning" (agent typoKeyAgent) 0 1 [ "typo" ]
+        check "non-scalar key is a parse error" (agent nonScalarKeyAgent) 1 0 [ "scalar" ]
+        check "empty key is a parse error" (agent emptyKeyAgent) 1 0 [ "scalar" ]
+        check "non-mapping root is an error" (agent listRootAgent) 1 0 [ "not a YAML mapping" ]
+        check "unterminated frontmatter is an error" (agent unterminatedAgent) 1 0 [ "unterminated" ]
+        check "multiple documents are an error" (agent multiDocAgent) 1 0 [ "multiple" ]
+        check "inline flow list tools is accepted" (agent flowToolsAgent) 0 0 []
+        check "boolean description is an error" (agent booleanDescriptionAgent) 1 0 [ "non-empty string" ]
+        check "boolean tools scalar is an error" (agent booleanToolsAgent) 1 0 [ "string or list of strings" ]
+        check "boolean tools list item is an error" (agent booleanToolsListAgent) 1 0 [
+            "'tools' must be a string or list of strings"
         ]
+        check "numeric tools list item is an error" (agent numericToolsListAgent) 1 0 [ "string or list of strings" ]
+        check "numeric skill name is an error" (skill "123" numericNameSkill) 1 0 [ "non-empty string" ]
+        check "numeric allowed-tools scalar is an error" (skill "demo-skill" numericAllowedToolsSkill) 1 0 [
+            "string or list of strings"
+        ]
+        check "numeric handoffs list item is an error" (agent numericHandoffsAgent) 1 0 [ "string or list of strings" ]
+        check "quoted string-shaped scalars are accepted" (agent quotedScalarStringsAgent) 0 0 []
+        check "valid skill has no findings" (skill "demo-skill" validSkill) 0 0 []
+        check "skill missing description is an error" (skill "demo-skill" noDescSkill) 1 0 [ "description" ]
+        check "skill user-invocable is a warning" (skill "demo-skill" userInvocableSkill) 0 1 [ "user-invocable" ]
+        check "skill name != directory is a warning" (skill "demo-skill" mismatchSkill) 0 1 [ "does not match" ]
+        check "valid instruction has no findings" (instruction validInstruction) 0 0 []
+        check "valid instruction exclusion is accepted" (instruction validExcludedInstruction) 0 0 []
+        check "instruction missing applyTo is an error" (instruction missingApplyToInstruction) 1 0 [ "applyTo" ]
+        check "instruction applyTo list is an error" (instruction listApplyToInstruction) 1 0 [ "non-empty string" ]
+        check "instruction invalid excludeAgent is an error" (instruction invalidExcludeAgentInstruction) 1 0 [
+            "code-review"
+            "cloud-agent"
+        ]
+        check "instruction boolean applyTo is an error" (instruction booleanApplyToInstruction) 1 0 [
+            "non-empty string"
+        ]
+        check "instruction numeric applyTo is an error" (instruction numericApplyToInstruction) 1 0 [
+            "non-empty string"
+        ]
+        check "instruction quoted boolean-looking applyTo is accepted" (instruction quotedBooleanApplyToInstruction) 0 0 []
+        check "instruction quoted numeric-looking applyTo is accepted" (instruction quotedNumericApplyToInstruction) 0 0 []
+        check
+            "instruction digit-leading non-number applyTo is accepted"
+            (instruction digitLeadingNonNumberApplyToInstruction)
+            0
+            0
+            []
+        check "instruction mixed-case boolean is accepted" (instruction mixedCaseBooleanApplyToInstruction) 0 0 []
+        check "agent digit-leading non-number list item is accepted" (agent digitLeadingNonNumberToolsAgent) 0 0 []
+        check "instruction undocumented key is a warning" (instruction unknownKeyInstruction) 0 1 [ "description" ]
+        check "instruction typo key is a warning" (instruction typoKeyInstruction) 1 1 [ "applyTo"; "typo" ]
+        check "agent-only retired key is unknown on instructions" (instruction retiredAgentKeyInstruction) 0 1 [
+            "infer"
+        ]
+        checkValue
+            "instruction discovery includes nested instruction files"
+            nestedInstructionDiscovery
+            (set [ "nested.instructions.md"; "root.instructions.md" ])
+        checkValue
+            "validation summary includes instruction count"
+            (validationSummary 3 7 1)
+            "Validating 3 agent, 7 skill, and 1 instruction definition(s)..."
+        check "malformed frontmatter is an error" (agent malformed) 1 0 [ "frontmatter" ]
+    ]
 
     let passed = results |> List.filter id |> List.length
     let failed = results.Length - passed
