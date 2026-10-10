@@ -11,11 +11,13 @@ open Fake.Core.TargetOperators
 
 module CommandLine =
     type Options =
-        { Target: string option
-          Ci: bool
-          Parallel: int option
-          SelfTest: bool
-          Help: bool }
+        {
+            Target: string option
+            Ci: bool
+            Parallel: int option
+            SelfTest: bool
+            Help: bool
+        }
 
     type BuildError =
         | MissingOptionValue of optionName: string
@@ -35,37 +37,41 @@ module CommandLine =
         | RunTarget of targetName: string * options: Options
 
     let defaultOptions =
-        { Target = None
-          Ci = false
-          Parallel = None
-          SelfTest = false
-          Help = false }
+        {
+            Target = None
+            Ci = false
+            Parallel = None
+            SelfTest = false
+            Help = false
+        }
 
     let availableTargets =
-        [ "Init"
-          "Format"
-          "FormatCheck"
-          "Fable"
-          "PrepareEcs"
-          "ValidateAgents"
-          "Lint"
-          "TypeCheck"
-          "Bundle"
-          "Build"
-          "Dev"
-          "BuildSelfTest"
-          "TestFSharp"
-          "TestTypeScript"
-          "TestKoota"
-          "Test"
-          "CoverageFSharp"
-          "CoverageTypeScript"
-          "Coverage"
-          "CoverageCheck"
-          "Validate"
-          "ReportFSharp"
-          "ReportTypeScript"
-          "Report" ]
+        [
+            "Init"
+            "Format"
+            "FormatCheck"
+            "Fable"
+            "PrepareEcs"
+            "ValidateAgents"
+            "Lint"
+            "TypeCheck"
+            "Bundle"
+            "Build"
+            "Dev"
+            "BuildSelfTest"
+            "TestFSharp"
+            "TestTypeScript"
+            "TestKoota"
+            "Test"
+            "CoverageFSharp"
+            "CoverageTypeScript"
+            "Coverage"
+            "CoverageCheck"
+            "Validate"
+            "ReportFSharp"
+            "ReportTypeScript"
+            "Report"
+        ]
 
     let localOnlyTargets =
         [ "Format"; "Dev"; "ReportFSharp"; "ReportTypeScript"; "Report" ]
@@ -75,14 +81,16 @@ module CommandLine =
     let helpText () =
         String.concat
             Environment.NewLine
-            [ "Usage: dotnet fsi scripts/Build.fsx -- [options]"
-              "Options:"
-              "  --target <target>       Select target (default: Build)"
-              "  --ci                    Use check-only formatting and non-writing coverage"
-              "  --parallel <workers>    Set FAKE worker limit (must be positive)"
-              "  --self-test             Run build command self-tests"
-              "  --help                  Show this help"
-              $"Targets: {targetList}" ]
+            [
+                "Usage: dotnet fsi scripts/Build.fsx -- [options]"
+                "Options:"
+                "  --target <target>       Select target (default: Build)"
+                "  --ci                    Use check-only formatting and non-writing coverage"
+                "  --parallel <workers>    Set FAKE worker limit (must be positive)"
+                "  --self-test             Run build command self-tests"
+                "  --help                  Show this help"
+                $"Targets: {targetList}"
+            ]
 
     let parseArguments arguments =
         let rec parse remaining options =
@@ -152,10 +160,12 @@ module ProcessExecution =
     open CommandLine
 
     type ProcessCommand =
-        { Executable: string
-          Arguments: string list
-          WorkingDirectory: string
-          RequiredFile: string option }
+        {
+            Executable: string
+            Arguments: string list
+            WorkingDirectory: string
+            RequiredFile: string option
+        }
 
     type NpmAction =
         | Install
@@ -168,10 +178,12 @@ module ProcessExecution =
         Path.GetFullPath(Path.Combine(scriptDirectory, ".."))
 
     let processCommand workingDirectory executable arguments =
-        { Executable = executable
-          Arguments = arguments
-          WorkingDirectory = workingDirectory
-          RequiredFile = None }
+        {
+            Executable = executable
+            Arguments = arguments
+            WorkingDirectory = workingDirectory
+            RequiredFile = None
+        }
 
     let dotnetCommand root arguments = processCommand root "dotnet" arguments
 
@@ -195,7 +207,8 @@ module ProcessExecution =
         let fullScriptPath = Path.Combine(root, scriptPath)
 
         { processCommand root "node" (fullScriptPath :: arguments) with
-            RequiredFile = Some fullScriptPath }
+            RequiredFile = Some fullScriptPath
+        }
 
     let validateCommand command =
         match command.RequiredFile with
@@ -242,8 +255,10 @@ module BuildCommands =
         | Check
 
     type CoveragePlan =
-        { CleanPaths: string list
-          Commands: ProcessCommand list }
+        {
+            CleanPaths: string list
+            Commands: ProcessCommand list
+        }
 
     let formattingMode ci = if ci then Check else Write
 
@@ -258,38 +273,48 @@ module BuildCommands =
 
         let prettierArguments = if checkOnly then [ "--check"; "." ] else [ "--write"; "." ]
 
-        [ dotnetCommand root fantomasArguments
-          nodeCommand root "node_modules/prettier/bin/prettier.cjs" prettierArguments ]
+        [
+            dotnetCommand root fantomasArguments
+            nodeCommand root "node_modules/prettier/bin/prettier.cjs" prettierArguments
+        ]
 
     let agentValidationCommands root =
         let validator = "scripts/ValidateAgentDefinitions.fsx"
         let fsiArguments = [ "fsi"; "--warnaserror"; "--warnon:3886"; validator ]
 
-        [ dotnetCommand root (fsiArguments @ [ "--self-test" ])
-          dotnetCommand root fsiArguments ]
+        [
+            dotnetCommand root (fsiArguments @ [ "--self-test" ])
+            dotnetCommand root fsiArguments
+        ]
 
     let fableCommands root =
-        [ dotnetCommand
-              root
-              [ "fable"
-                "--lang"
-                "typescript"
-                "--outDir"
-                "../generated"
-                "--cwd"
-                "./src/Wilnaatahl.Core" ]
-          dotnetCommand root [ "fsi"; "--warnaserror"; "--warnon:3886"; "scripts/PatchFableModules.fsx" ] ]
+        [
+            dotnetCommand
+                root
+                [
+                    "fable"
+                    "--lang"
+                    "typescript"
+                    "--outDir"
+                    "../generated"
+                    "--cwd"
+                    "./src/Wilnaatahl.Core"
+                ]
+            dotnetCommand root [ "fsi"; "--warnaserror"; "--warnon:3886"; "scripts/PatchFableModules.fsx" ]
+        ]
 
     let ecsPreparationCommand root =
         dotnetCommand
             root
-            [ "fable"
-              "tests/Wilnaatahl.ECS.Tests"
-              "--lang"
-              "typescript"
-              "--outDir"
-              "tests/Wilnaatahl.ECS.Tests/out"
-              "--noCache" ]
+            [
+                "fable"
+                "tests/Wilnaatahl.ECS.Tests"
+                "--lang"
+                "typescript"
+                "--outDir"
+                "tests/Wilnaatahl.ECS.Tests/out"
+                "--noCache"
+            ]
 
     let fSharpTestCommand root = dotnetCommand root [ "test" ]
 
@@ -302,10 +327,12 @@ module BuildCommands =
     let reportGeneratorCommand root reportPath targetDirectory reportTypes =
         dotnetCommand
             root
-            [ "reportgenerator"
-              $"-reports:{reportPath}"
-              $"-targetdir:{targetDirectory}"
-              $"-reporttypes:{reportTypes}" ]
+            [
+                "reportgenerator"
+                $"-reports:{reportPath}"
+                $"-targetdir:{targetDirectory}"
+                $"-reporttypes:{reportTypes}"
+            ]
 
     /// Coverlet names each F# test project's report
     /// `<project>.coverage.cobertura.<timestamp>.xml`; the project prefix keeps
@@ -318,19 +345,27 @@ module BuildCommands =
         let reportDirectory = Path.Combine(root, "coveragereport")
         let coverageGlob = fSharpCoverageGlob resultsDirectory
 
-        { CleanPaths = [ resultsDirectory; reportDirectory ]
-          Commands =
-            [ dotnetCommand root [ "test"; "--coverlet"; "--results-directory"; "TestResults" ]
-              reportGeneratorCommand root coverageGlob reportDirectory "JsonSummary" ] }
+        {
+            CleanPaths = [ resultsDirectory; reportDirectory ]
+            Commands =
+                [
+                    dotnetCommand root [ "test"; "--coverlet"; "--results-directory"; "TestResults" ]
+                    reportGeneratorCommand root coverageGlob reportDirectory "JsonSummary"
+                ]
+        }
 
     let typeScriptCoveragePlan root =
         let reportDirectory = Path.Combine(root, "coveragereport-ts")
         let coberturaPath = Path.Combine(reportDirectory, "cobertura-coverage.xml")
 
-        { CleanPaths = [ reportDirectory ]
-          Commands =
-            [ nodeCommand root "node_modules/vitest/vitest.mjs" [ "run"; "--coverage" ]
-              reportGeneratorCommand root coberturaPath reportDirectory "JsonSummary" ] }
+        {
+            CleanPaths = [ reportDirectory ]
+            Commands =
+                [
+                    nodeCommand root "node_modules/vitest/vitest.mjs" [ "run"; "--coverage" ]
+                    reportGeneratorCommand root coberturaPath reportDirectory "JsonSummary"
+                ]
+        }
 
     let coverageCheckCommands root ci =
         let scriptArguments =
@@ -338,8 +373,10 @@ module BuildCommands =
 
         let policyArguments = if ci then [ "--check-only" ] else []
 
-        [ dotnetCommand root (scriptArguments @ [ "--self-test" ])
-          dotnetCommand root (scriptArguments @ policyArguments) ]
+        [
+            dotnetCommand root (scriptArguments @ [ "--self-test" ])
+            dotnetCommand root (scriptArguments @ policyArguments)
+        ]
 
     let cleanOwnedDirectories paths =
         paths
@@ -389,7 +426,8 @@ module BuildSelfTest =
                 { defaultOptions with
                     Target = Some "Fable"
                     Ci = true
-                    Parallel = Some 1 })
+                    Parallel = Some 1
+                })
             (parseArguments [ "--target"; "Fable"; "--ci"; "--parallel"; "1" ])
 
         assertEqual "missing target value" (Error(MissingOptionValue "--target")) (parseArguments [ "--target" ])
@@ -453,7 +491,8 @@ module BuildSelfTest =
             (Error(UnknownTarget "Missing"))
             (validateOptions
                 { defaultOptions with
-                    Target = Some "Missing" })
+                    Target = Some "Missing"
+                })
 
         assertEqual
             "unknown target message"
@@ -466,7 +505,8 @@ module BuildSelfTest =
             (validateOptions
                 { defaultOptions with
                     Target = Some "Format"
-                    Ci = true })
+                    Ci = true
+                })
 
         assertEqual
             "format CI error message"
@@ -479,7 +519,8 @@ module BuildSelfTest =
             (validateOptions
                 { defaultOptions with
                     Target = Some "Dev"
-                    Ci = true })
+                    Ci = true
+                })
 
         assertEqual
             "generic local-only target message"
@@ -492,48 +533,59 @@ module BuildSelfTest =
             (validateOptions
                 { defaultOptions with
                     Target = Some "Report"
-                    Ci = true })
+                    Ci = true
+                })
 
         assertEqual "CI selects read-only formatting" Check (formattingMode true)
         assertEqual "local formatting writes" Write (formattingMode false)
 
         assertEqual
             "CI format commands check without writing"
-            [ dotnetCommand root [ "fantomas"; "--check"; "." ]
-              nodeCommand root "node_modules/prettier/bin/prettier.cjs" [ "--check"; "." ] ]
+            [
+                dotnetCommand root [ "fantomas"; "--check"; "." ]
+                nodeCommand root "node_modules/prettier/bin/prettier.cjs" [ "--check"; "." ]
+            ]
             (formattingCommands root Check)
 
         assertEqual
             "local format commands write"
-            [ dotnetCommand root [ "fantomas"; "." ]
-              nodeCommand root "node_modules/prettier/bin/prettier.cjs" [ "--write"; "." ] ]
+            [
+                dotnetCommand root [ "fantomas"; "." ]
+                nodeCommand root "node_modules/prettier/bin/prettier.cjs" [ "--write"; "." ]
+            ]
             (formattingCommands root Write)
 
         assertEqual
             "Fable compilation is followed by patching"
-            [ dotnetCommand
-                  root
-                  [ "fable"
-                    "--lang"
-                    "typescript"
-                    "--outDir"
-                    "../generated"
-                    "--cwd"
-                    "./src/Wilnaatahl.Core" ]
-              dotnetCommand root [ "fsi"; "--warnaserror"; "--warnon:3886"; "scripts/PatchFableModules.fsx" ] ]
+            [
+                dotnetCommand
+                    root
+                    [
+                        "fable"
+                        "--lang"
+                        "typescript"
+                        "--outDir"
+                        "../generated"
+                        "--cwd"
+                        "./src/Wilnaatahl.Core"
+                    ]
+                dotnetCommand root [ "fsi"; "--warnaserror"; "--warnon:3886"; "scripts/PatchFableModules.fsx" ]
+            ]
             (fableCommands root)
 
         assertEqual
             "ECS output keeps no-cache option"
             (dotnetCommand
                 root
-                [ "fable"
-                  "tests/Wilnaatahl.ECS.Tests"
-                  "--lang"
-                  "typescript"
-                  "--outDir"
-                  "tests/Wilnaatahl.ECS.Tests/out"
-                  "--noCache" ])
+                [
+                    "fable"
+                    "tests/Wilnaatahl.ECS.Tests"
+                    "--lang"
+                    "typescript"
+                    "--outDir"
+                    "tests/Wilnaatahl.ECS.Tests/out"
+                    "--noCache"
+                ])
             (ecsPreparationCommand root)
 
         assertEqual
@@ -563,28 +615,40 @@ module BuildSelfTest =
 
         assertEqual
             "F# coverage cleans only its owned output and generates a summary"
-            { CleanPaths = [ fSharpResultsPath; fSharpReportPath ]
-              Commands =
-                [ dotnetCommand root [ "test"; "--coverlet"; "--results-directory"; "TestResults" ]
-                  dotnetCommand
-                      root
-                      [ "reportgenerator"
-                        $"-reports:{fSharpCoverageGlob}"
-                        $"-targetdir:{fSharpReportPath}"
-                        "-reporttypes:JsonSummary" ] ] }
+            {
+                CleanPaths = [ fSharpResultsPath; fSharpReportPath ]
+                Commands =
+                    [
+                        dotnetCommand root [ "test"; "--coverlet"; "--results-directory"; "TestResults" ]
+                        dotnetCommand
+                            root
+                            [
+                                "reportgenerator"
+                                $"-reports:{fSharpCoverageGlob}"
+                                $"-targetdir:{fSharpReportPath}"
+                                "-reporttypes:JsonSummary"
+                            ]
+                    ]
+            }
             (fSharpCoveragePlan root)
 
         assertEqual
             "TypeScript coverage cleans only its owned output and runs suite once"
-            { CleanPaths = [ typeScriptReportPath ]
-              Commands =
-                [ nodeCommand root "node_modules/vitest/vitest.mjs" [ "run"; "--coverage" ]
-                  dotnetCommand
-                      root
-                      [ "reportgenerator"
-                        $"-reports:{typeScriptCoveragePath}"
-                        $"-targetdir:{typeScriptReportPath}"
-                        "-reporttypes:JsonSummary" ] ] }
+            {
+                CleanPaths = [ typeScriptReportPath ]
+                Commands =
+                    [
+                        nodeCommand root "node_modules/vitest/vitest.mjs" [ "run"; "--coverage" ]
+                        dotnetCommand
+                            root
+                            [
+                                "reportgenerator"
+                                $"-reports:{typeScriptCoveragePath}"
+                                $"-targetdir:{typeScriptReportPath}"
+                                "-reporttypes:JsonSummary"
+                            ]
+                    ]
+            }
             (typeScriptCoveragePlan root)
 
         let cleanupDirectory =
@@ -605,42 +669,54 @@ module BuildSelfTest =
 
         assertEqual
             "local coverage ratchets and CI coverage checks without writing"
-            [ dotnetCommand
-                  root
-                  [ "fsi"
-                    "--warnaserror"
-                    "--warnon:3886"
-                    "scripts/CheckCoverage.fsx"
-                    "--self-test" ]
-              dotnetCommand root [ "fsi"; "--warnaserror"; "--warnon:3886"; "scripts/CheckCoverage.fsx" ] ]
+            [
+                dotnetCommand
+                    root
+                    [
+                        "fsi"
+                        "--warnaserror"
+                        "--warnon:3886"
+                        "scripts/CheckCoverage.fsx"
+                        "--self-test"
+                    ]
+                dotnetCommand root [ "fsi"; "--warnaserror"; "--warnon:3886"; "scripts/CheckCoverage.fsx" ]
+            ]
             (coverageCheckCommands root false)
 
         assertEqual
             "CI coverage check uses non-writing mode"
-            [ dotnetCommand
-                  root
-                  [ "fsi"
-                    "--warnaserror"
-                    "--warnon:3886"
-                    "scripts/CheckCoverage.fsx"
-                    "--self-test" ]
-              dotnetCommand
-                  root
-                  [ "fsi"
-                    "--warnaserror"
-                    "--warnon:3886"
-                    "scripts/CheckCoverage.fsx"
-                    "--check-only" ] ]
+            [
+                dotnetCommand
+                    root
+                    [
+                        "fsi"
+                        "--warnaserror"
+                        "--warnon:3886"
+                        "scripts/CheckCoverage.fsx"
+                        "--self-test"
+                    ]
+                dotnetCommand
+                    root
+                    [
+                        "fsi"
+                        "--warnaserror"
+                        "--warnon:3886"
+                        "scripts/CheckCoverage.fsx"
+                        "--check-only"
+                    ]
+            ]
             (coverageCheckCommands root true)
 
         assertEqual
             "F# HTML report generator"
             (dotnetCommand
                 root
-                [ "reportgenerator"
-                  $"-reports:{fSharpCoverageGlob}"
-                  $"-targetdir:{fSharpReportPath}"
-                  "-reporttypes:Html" ])
+                [
+                    "reportgenerator"
+                    $"-reports:{fSharpCoverageGlob}"
+                    $"-targetdir:{fSharpReportPath}"
+                    "-reporttypes:Html"
+                ])
             (reportGeneratorCommand root fSharpCoverageGlob fSharpReportPath "Html")
 
         let fSharpReportIndex = Path.Combine(fSharpReportPath, "index.html")
@@ -662,19 +738,25 @@ module BuildSelfTest =
 
         assertEqual
             "agent validation self-test precedes validation"
-            [ dotnetCommand
-                  root
-                  [ "fsi"
-                    "--warnaserror"
-                    "--warnon:3886"
-                    "scripts/ValidateAgentDefinitions.fsx"
-                    "--self-test" ]
-              dotnetCommand
-                  root
-                  [ "fsi"
-                    "--warnaserror"
-                    "--warnon:3886"
-                    "scripts/ValidateAgentDefinitions.fsx" ] ]
+            [
+                dotnetCommand
+                    root
+                    [
+                        "fsi"
+                        "--warnaserror"
+                        "--warnon:3886"
+                        "scripts/ValidateAgentDefinitions.fsx"
+                        "--self-test"
+                    ]
+                dotnetCommand
+                    root
+                    [
+                        "fsi"
+                        "--warnaserror"
+                        "--warnon:3886"
+                        "scripts/ValidateAgentDefinitions.fsx"
+                    ]
+            ]
             (agentValidationCommands root)
 
         let spacedRoot = Path.Combine(Path.GetTempPath(), "fake build test with spaces")
