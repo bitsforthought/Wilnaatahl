@@ -29,6 +29,15 @@ Useful focused targets include `TestFSharp`, `TestTypeScript`, `TestKoota`,
 `Coverage`, `CoverageCheck`, `Lint`, `FormatCheck`, `ReportFSharp`, and
 `ReportTypeScript`.
 
+## Generated TypeScript
+
+TypeScript root-file discovery excludes the vendored Fable runtime and its
+generated bridge, configured in `tsconfig.json`. Fable includes runtime modules
+for optional features the application does not use, and the bridge re-exports
+the whole runtime, so both trees must be excluded from root discovery.
+First-party generated files remain roots, and runtime modules reached through
+imports are still resolved and type-checked.
+
 ## F# Test Platform
 
 The F# test projects run on Microsoft Testing Platform: `global.json` selects

@@ -19,9 +19,17 @@ import {
   Size,
 } from "../../../src/ecs/traits";
 import { Person_get_Empty } from "../../../src/generated/Model";
-import { AppMode_Moving, AppMode_Viewing } from "../../../src/generated/Traits/ViewTraits";
+import { isViewing } from "../../../src/generated/Traits/ViewTraits";
 import { Locale } from "../../../src/generated/ViewModel/Localization";
 import { NodeLabelView_get_Empty } from "../../../src/generated/ViewModel/NodeContent";
+import { movingMode, viewingMode } from "./appMode";
+
+test.each([
+  ["Viewing", viewingMode, true],
+  ["Moving", movingMode, false],
+])("%s adapter returns the intended mode", (_name, createMode, expectedViewing) => {
+  expect(isViewing(createMode())).toBe(expectedViewing);
+});
 
 describe("ECS trait declarations", () => {
   let world: World;
@@ -94,24 +102,35 @@ describe("ECS trait declarations", () => {
     expect(secondPosition.x).toBe(0);
   });
 
-  test("reference traits use fresh defaults rather than sharing mutable values", () => {
+  test("reference traits preserve canonical defaults and independent label records", () => {
     const first = world.spawn(CurrentMode(), CurrentLocale(), NodeLabel());
     const second = world.spawn(CurrentMode(), CurrentLocale(), NodeLabel());
 
-    expect(first.get(CurrentMode)).toStrictEqual(AppMode_Viewing());
-    expect(first.get(CurrentMode)).not.toBe(second.get(CurrentMode));
+    expect(first.get(CurrentMode)).toStrictEqual(viewingMode());
+    expect(second.get(CurrentMode)).toStrictEqual(viewingMode());
     expect(first.get(CurrentLocale)).toStrictEqual(new Locale());
-    expect(first.get(CurrentLocale)).not.toBe(second.get(CurrentLocale));
+    expect(second.get(CurrentLocale)).toStrictEqual(new Locale());
     expect(first.get(NodeLabel)).toStrictEqual(NodeLabelView_get_Empty());
+    expect(second.get(NodeLabel)).toStrictEqual(NodeLabelView_get_Empty());
     expect(first.get(NodeLabel)).not.toBe(second.get(NodeLabel));
   });
 
-  test("factory traits retain explicit union and record values", () => {
-    const movingMode = AppMode_Moving();
-    const person = Person_get_Empty();
-    const entity = world.spawn(CurrentMode(movingMode), PersonRef(person));
+  test("changing one entity's mode leaves another entity's mode unchanged", () => {
+    const first = world.spawn(CurrentMode());
+    const second = world.spawn(CurrentMode());
 
-    expect(entity.get(CurrentMode)).toBe(movingMode);
+    first.set(CurrentMode, movingMode());
+
+    expect(first.get(CurrentMode)).toStrictEqual(movingMode());
+    expect(second.get(CurrentMode)).toStrictEqual(viewingMode());
+  });
+
+  test("factory traits retain explicit union and record values", () => {
+    const explicitMode = movingMode();
+    const person = Person_get_Empty();
+    const entity = world.spawn(CurrentMode(explicitMode), PersonRef(person));
+
+    expect(entity.get(CurrentMode)).toBe(explicitMode);
     expect(entity.get(PersonRef)).toBe(person);
   });
 });

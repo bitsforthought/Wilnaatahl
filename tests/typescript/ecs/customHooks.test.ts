@@ -6,9 +6,9 @@ import { WorldProvider } from "koota/react";
 import { createWorld, Entity, World } from "koota";
 import { Mesh } from "three";
 import { afterEach, describe, expect, test } from "vitest";
-import { AppMode_Moving, AppMode_Viewing } from "../../../src/generated/Traits/ViewTraits";
 import { CurrentMode, MeshRef, Selected } from "../../../src/ecs";
 import { useMeshRef, useOverlayVisible } from "../../../src/ecs/customHooks";
+import { movingMode, viewingMode } from "./appMode";
 
 function worldWrapper(world: World) {
   return function WorldWrapper({ children }: { children?: React.ReactNode }) {
@@ -108,7 +108,7 @@ describe("useOverlayVisible", () => {
     expect(result.current).toBe(false);
 
     act(() => {
-      world.add(CurrentMode(AppMode_Viewing()));
+      world.add(CurrentMode(viewingMode()));
     });
 
     expect(result.current).toBe(true);
@@ -118,7 +118,7 @@ describe("useOverlayVisible", () => {
     world = createWorld();
     const selectedEntity = world.spawn();
     const secondSelectedEntity = world.spawn();
-    world.add(CurrentMode(AppMode_Viewing()));
+    world.add(CurrentMode(viewingMode()));
 
     const { result } = renderHook(() => useOverlayVisible(), {
       wrapper: worldWrapper(world),
@@ -142,7 +142,7 @@ describe("useOverlayVisible", () => {
     expect(result.current).toBe(true);
 
     act(() => {
-      world.set(CurrentMode, AppMode_Moving());
+      world.set(CurrentMode, movingMode());
     });
     expect(result.current).toBe(false);
   });
@@ -150,7 +150,7 @@ describe("useOverlayVisible", () => {
   test("reacts to mode changes while keeping the selection count unchanged", () => {
     world = createWorld();
     world.spawn(Selected);
-    world.add(CurrentMode(AppMode_Moving()));
+    world.add(CurrentMode(movingMode()));
 
     const { result } = renderHook(() => useOverlayVisible(), {
       wrapper: worldWrapper(world),
@@ -159,7 +159,7 @@ describe("useOverlayVisible", () => {
     expect(result.current).toBe(false);
 
     act(() => {
-      world.set(CurrentMode, AppMode_Viewing());
+      world.set(CurrentMode, viewingMode());
     });
     expect(result.current).toBe(true);
   });
