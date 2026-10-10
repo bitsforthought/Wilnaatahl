@@ -1,0 +1,23 @@
+<Project>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!-- The test projects run on Microsoft Testing Platform (selected in
+       global.json), which requires each test project to be an executable. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Coverlet writes every project's report to the same results directory
+         under a millisecond timestamp, so a collision would silently overwrite
+         one report. A per-project prefix keeps the names distinct. -->
+    <TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) --coverlet-file-prefix $(MSBuildProjectName)</TestingPlatformCommandLineArguments>
+  </PropertyGroup>
+
+  <!-- When testconfig.json supplies Coverlet settings, coverlet uses only those
+       settings. Its command-line defaults would also exclude compiler-generated
+       code, which F# emits for closures and module initialization, and would
+       shrink the coverage denominator that coverage-baseline.json ratchets. -->
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)testconfig.json" Link="testconfig.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

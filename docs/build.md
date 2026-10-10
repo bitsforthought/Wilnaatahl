@@ -29,6 +29,13 @@ Useful focused targets include `TestFSharp`, `TestTypeScript`, `TestKoota`,
 `Coverage`, `CoverageCheck`, `Lint`, `FormatCheck`, `ReportFSharp`, and
 `ReportTypeScript`.
 
+## F# Test Platform
+
+The F# test projects run on Microsoft Testing Platform: `global.json` selects
+it for `dotnet test`, and each test project builds as an executable. Coverage is collected by coverlet's Microsoft Testing Platform
+extension, configured by the shared `tests/testconfig.json`. Running the tests
+from an IDE requires a test explorer that supports Microsoft Testing Platform.
+
 ## CI Mode
 
 Pass `--ci` through the quoted separator:
