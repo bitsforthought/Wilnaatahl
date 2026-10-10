@@ -30,21 +30,11 @@ domain model and features built on the data are in
 
 ```json
 {
-  "people": [
-    /* Person records — see below */
-  ],
-  "couples": [
-    /* Couple records */
-  ],
-  "huwilp": [
-    /* Wilp records */
-  ],
-  "names": [
-    /* Name records */
-  ],
-  "namesHeld": [
-    /* NameHeld records */
-  ]
+  "people": [/* Person records — see below */],
+  "couples": [/* Couple records */],
+  "huwilp": [/* Wilp records */],
+  "names": [/* Name records */],
+  "namesHeld": [/* NameHeld records */]
 }
 ```
 
