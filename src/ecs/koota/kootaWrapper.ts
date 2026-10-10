@@ -1,5 +1,5 @@
-import { int32 } from "../../generated/fable_modules/fable-library-ts.5.1.0/Int32.js";
-import { Option } from "../../generated/fable_modules/fable-library-ts.5.1.0/Option";
+import { int32 } from "../../generated/fable-library/Int32";
+import { Option } from "../../generated/fable-library/Option";
 import {
   ConfigurableTrait,
   createAdded,

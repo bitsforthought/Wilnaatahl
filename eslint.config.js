@@ -15,5 +15,19 @@ export default defineConfig(
         tsconfigRootDir: import.meta.dirname,
       },
     },
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              regex: "fable_modules/fable-library-ts\\.",
+              message:
+                "Import the Fable runtime from src/generated/fable-library/ so that Fable upgrades don't break the path.",
+            },
+          ],
+        },
+      ],
+    },
   }
 );

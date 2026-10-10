@@ -16,7 +16,7 @@ import {
   NodeDetail,
   NodeLabelView,
 } from "../generated/ViewModel/NodeContent";
-import { unwrap } from "../generated/fable_modules/fable-library-ts.5.1.0/Option.js";
+import { unwrap } from "../generated/fable-library/Option";
 
 /**
  * The default/fallback locale (English is the only implemented language today).

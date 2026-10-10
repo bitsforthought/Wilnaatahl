@@ -287,6 +287,19 @@ module BuildCommands =
             "./src/Wilnaatahl.Core"
         ]
         dotnetCommand root [ "fsi"; "--warnaserror"; "--warnon:3886"; "scripts/PatchFableModules.fsx" ]
+        dotnetCommand root [
+            "fsi"
+            "--warnaserror"
+            "--warnon:3886"
+            "scripts/GenerateFableLibraryBridge.fsx"
+            "--self-test"
+        ]
+        dotnetCommand root [
+            "fsi"
+            "--warnaserror"
+            "--warnon:3886"
+            "scripts/GenerateFableLibraryBridge.fsx"
+        ]
     ]
 
     let ecsPreparationCommand root =
@@ -520,7 +533,7 @@ module BuildSelfTest =
             (formattingCommands root Write)
 
         assertEqual
-            "Fable compilation is followed by patching"
+            "Fable compilation is followed by patching and bridge generation"
             [
                 dotnetCommand root [
                     "fable"
@@ -532,6 +545,19 @@ module BuildSelfTest =
                     "./src/Wilnaatahl.Core"
                 ]
                 dotnetCommand root [ "fsi"; "--warnaserror"; "--warnon:3886"; "scripts/PatchFableModules.fsx" ]
+                dotnetCommand root [
+                    "fsi"
+                    "--warnaserror"
+                    "--warnon:3886"
+                    "scripts/GenerateFableLibraryBridge.fsx"
+                    "--self-test"
+                ]
+                dotnetCommand root [
+                    "fsi"
+                    "--warnaserror"
+                    "--warnon:3886"
+                    "scripts/GenerateFableLibraryBridge.fsx"
+                ]
             ]
             (fableCommands root)
 
