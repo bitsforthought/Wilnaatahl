@@ -11,8 +11,8 @@
 
   <ItemGroup>
     <PackageVersion Include="Fable.Core" Version="5.0.0" />
-    <PackageVersion Include="Thoth.Json.Core" Version="0.9.0" />
-    <PackageVersion Include="Thoth.Json.Newtonsoft" Version="0.3.3" />
+    <PackageVersion Include="Thoth.Json.Core" Version="0.9.1" />
+    <PackageVersion Include="Thoth.Json.Newtonsoft" Version="0.4.0" />
     <PackageVersion Include="Thoth.Json.JavaScript" Version="0.4.1" />
     <PackageVersion Include="coverlet.MTP" Version="10.1.0" />
     <PackageVersion Include="FsCheck.Xunit.v3" Version="3.4.0" />
