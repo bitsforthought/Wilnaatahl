@@ -9,7 +9,7 @@ The npm scripts are a thin facade over the FAKE target graph in
 | ------------------ | ------------------------------------------------------------------------------------------ |
 | `npm run init`     | Install npm packages and restore .NET packages and tools.                                  |
 | `npm run build`    | Format locally, validate agent definitions, type-check, lint, and bundle for deployment.   |
-| `npm run dev`      | Format locally, generate, patch, and bridge Fable output, and start Vite.                  |
+| `npm run dev`      | Format locally, generate and bridge Fable output, and start Vite.                          |
 | `npm test`         | Run both complete test suites, including Koota conformance.                                |
 | `npm run validate` | Run build checks, infrastructure self-tests, instrumented suites, and coverage gates once. |
 | `npm run format`   | Format authored files with Fantomas and Prettier.                                          |
