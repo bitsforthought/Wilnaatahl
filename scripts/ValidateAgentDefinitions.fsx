@@ -34,6 +34,7 @@
 
 #r "nuget: YamlDotNet, 16.3.0"
 
+open System
 open System.IO
 open System.Globalization
 open YamlDotNet.Core
@@ -125,7 +126,7 @@ let private parseMapping (block: string) : Result<(string * FieldValue) list, st
                         |> Seq.toList
                         |> List.partition (fun pair ->
                             match pair.Key with
-                            | :? YamlScalarNode as key -> not (System.String.IsNullOrWhiteSpace key.Value)
+                            | :? YamlScalarNode as key -> not (String.IsNullOrWhiteSpace key.Value)
                             | _ -> false)
 
                     if not (List.isEmpty invalidKeyed) then
@@ -193,7 +194,7 @@ module Validation =
         if text = "true" || text = "false" then
             PlainScalarKind.Boolean
         else
-            match System.Double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture) with
+            match Double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture) with
             | true, _ -> PlainScalarKind.Number
             // Deliberately treat every other plain scalar as text; stricter YAML
             // edge-case classification is not worth the validator complexity.
@@ -835,7 +836,7 @@ tools: [0_x2a]
 
     let nestedInstructionDiscovery =
         let root =
-            Path.Combine(Path.GetTempPath(), $"wilnaatahl-instruction-test-{System.Guid.NewGuid()}")
+            Path.Combine(Path.GetTempPath(), $"wilnaatahl-instruction-test-{Guid.NewGuid()}")
 
         let nested = Path.Combine(root, "nested")
 

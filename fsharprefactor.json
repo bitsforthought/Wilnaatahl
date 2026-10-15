@@ -102,58 +102,58 @@
     "FR0179": true, // an update of a Map, Set or immutable collection handed to ignore changes nothing
     "FR0181": true, // a specific handler around Task.Wait/Result misses the task's exception, which arrives i...
 
-    // Performance is off globally; FAKE selects browser-relevant rules only on production.
-    "FR0004": false,
-    "FR0011": false,
-    "FR0014": false,
+    // Performance is off here; .config/fsharp-refactor-performance.json selects production-only checks.
+    "FR0004": false, // Move collection conversions past pipeline operations.
+    "FR0011": false, // Struct partial active patterns using ValueSome/ValueNone.
+    "FR0014": false, // Replace ContainsKey plus indexing with a single lookup.
     // Literal regex patterns => StartsWith/Contains/Replace/Split, the Match.Success and Matc...
     //   perCall (true): hoist a Regex out of a plain function body too, not only out of a loop
     "FR0015": { "enabled": false, "perCall": true },
-    "FR0016": false,
-    "FR0021": false,
-    "FR0028": false,
+    "FR0016": false, // Add Struct to small value-only unions.
+    "FR0021": false, // Remove redundant ToString calls in interpolated strings.
+    "FR0028": false, // Detect N+1 queries.
     // task state machine
     //   tailLines (40): non-awaiting lines after the last await that earn a tail extraction
     //   hoistReturnOnAsync (false): extend the return hoist (not the FS3511 advice) to async { }
     "FR0029": { "enabled": false, "tailLines": 40, "hoistReturnOnAsync": false },
-    "FR0030": false,
+    "FR0030": false, // Replace loops adding elements with AddRange.
     // List/Array/Seq.contains x ys inside a loop
     //   minElements (8): how many written-out elements a probed list or array literal needs before a HashSet pays
     //   setMinElements (16): how many it needs before converting in place to an F# Set, a comparison tree that pays later
     "FR0035": { "enabled": false, "minElements": 8, "setMinElements": 16 },
-    "FR0037": false,
-    "FR0038": false,
-    "FR0039": false,
-    "FR0040": false,
-    "FR0041": false,
-    "FR0051": false,
-    "FR0052": false,
-    "FR0053": false,
-    "FR0058": false,
-    "FR0059": false,
-    "FR0069": false,
-    "FR0070": false,
-    "FR0071": false,
-    "FR0076": false,
-    "FR0079": false,
-    "FR0093": false,
-    "FR0102": false,
-    "FR0104": false,
-    "FR0106": false,
-    "FR0137": false,
-    "FR0139": false,
-    "FR0142": false,
-    "FR0155": false,
-    "FR0166": false,
-    "FR0167": false,
-    "FR0168": false,
-    "FR0170": false,
-    "FR0171": false,
-    "FR0173": false,
+    "FR0037": false, // Hoist build-once objects such as HttpClient out of loops.
+    "FR0038": false, // Use char overloads for single-character strings.
+    "FR0039": false, // Avoid allocating case conversions for insensitive comparisons.
+    "FR0040": false, // Remove redundant membership guards before Remove.
+    "FR0041": false, // Detect scalar aggregate loops over numeric arrays.
+    "FR0051": false, // Avoid quadratic collection append in loops.
+    "FR0052": false, // Prefer IsEmpty over Count on concurrent collections.
+    "FR0053": false, // Use Convert.ToHexString instead of BitConverter string replacement.
+    "FR0058": false, // Detect nested enumerator allocation in recursive sequence expressions.
+    "FR0059": false, // Replace private Option results with ValueOption.
+    "FR0069": false, // Replace optional record fields with ValueOption.
+    "FR0070": false, // Add Struct to small records.
+    "FR0071": false, // Hoist loop-invariant bindings.
+    "FR0076": false, // Use iter instead of map when the result is discarded.
+    "FR0079": false, // Remove single-element parallel task/async wrappers.
+    "FR0093": false, // Replace reference tuple record fields with struct tuples.
+    "FR0102": false, // Detect repeated linked-list indexing in loops.
+    "FR0104": false, // Avoid quadratic singleton append in recursion.
+    "FR0106": false, // Use spans instead of allocating Substring copies.
+    "FR0137": false, // Fuse consecutive map operations.
+    "FR0139": false, // Prefer array operations over Seq operations on known arrays.
+    "FR0142": false, // Return asynchronous test work instead of blocking on it.
+    "FR0155": false, // Seal internal classes with no subclasses.
+    "FR0166": false, // Use ordinal StartsWith/EndsWith instead of substring comparisons.
+    "FR0167": false, // Iterate strings without allocating ToCharArray copies.
+    "FR0168": false, // Use TryParse instead of catching parse failures.
+    "FR0170": false, // Enumerate dictionary key/value pairs instead of re-indexing keys.
+    "FR0171": false, // Use byte literals instead of encoding ASCII literals at runtime.
+    "FR0173": false, // Use collection initialization instead of mapping an allocated range.
     // a query copied before Where/Select (or filter/map) loads every row; the query runs them...
     //   pipelines (false): take the `q |> Seq.toList |> List.filter f` pipeline too, not only the LINQ method chain
     "FR0174": { "enabled": false, "pipelines": false },
-    "FR0180": false,
+    "FR0180": false, // Use Random.Shared instead of constructing unseeded Random instances.
 
     // ---- idiom (55) ----
     "FR0001": true, // Boolean match => if-else
@@ -184,7 +184,7 @@
     "FR0087": true, // The pattern x :: [] => [ x ]
     "FR0090": true, // Tupled => curried for internal/public functions with every project call site rewritten ...
     "FR0091": true, // Data-last parameter reorder for internal/public functions with every project call site ...
-    "FR0092": false, // Preserve error-message contracts.
+    "FR0092": false, // Add argument context to failwith messages; disabled to preserve error-message contracts.
     "FR0095": true, // A lambda that restates a built-in: fun x -> x => id, fun (a, b) -> a => fst, fun (a, b)...
     "FR0101": true, // index-based loop over a collection it only indexes
     "FR0103": true, // isinstance-style type-test ladders as match
@@ -202,7 +202,7 @@
     "FR0117": true, // adjacent same-result match arms fold into an or-pattern
     "FR0128": true, // obsolete crypto constructors become static factories
     "FR0129": true, // a guard that only equality-tests the binder is the literal pattern
-    "FR0130": false, // Avoid inlined-constant API versioning hazards.
+    "FR0130": false, // Add Literal to constants; disabled to avoid inlined-constant API versioning hazards.
     "FR0131": true, // provably tail-recursive functions gain TailCall
     "FR0132": true, // trailing comment promoted to XML doc position
     "FR0134": false, // DateTime record fields migrate to DateTimeOffset (default off)
@@ -227,7 +227,7 @@
     // Consecutive attribute brackets merge: [<Attr1>] [<Attr2>] (stacked or same-line) => [<A...
     //   maxAttributes (4): how many attributes may share one [<A; B>] bracket
     //   wrapColumn (110): how wide the merged attribute line may get
-    "FR0060": false, // Preserve separate tabular test-data attributes.
+    "FR0060": false, // Merge consecutive attributes; disabled to preserve tabular test data.
     "FR0082": true, // [<FooAttribute>] => [<Foo>]
     "FR0083": true, // [<Foo()>] => [<Foo>]
     "FR0084": true, //  name  backticks around a plain non-keyword identifier do nothing
