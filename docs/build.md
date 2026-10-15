@@ -29,31 +29,19 @@ Useful focused targets include `Refactor`, `RefactorCheck`, `TestFSharp`,
 `TestTypeScript`, `TestKoota`, `Coverage`, `CoverageCheck`, `Lint`,
 `FormatCheck`, `ReportFSharp`, and `ReportTypeScript`.
 
-`Refactor` applies the enabled mechanical fixes. `RefactorCheck` performs
-report-only analysis and writes fresh SARIF reports under the ignored
-`refactor-reports/` directory. Both scan the tracked solution and F# scripts;
+`Refactor` applies the enabled mechanical fixes. `RefactorCheck` previews
+findings without changing source. Both print findings to the console and scan
+the tracked solution and F# scripts;
 new authored scripts under `scripts/` are also included before they are tracked.
-The solution analysis covers project compile inputs such as `.fsi` files.
 
-The common analysis pass covers correctness, idiom, and cosmetic rules across
-the solution and scripts. Performance analysis is a separate pass over the
-production core, restricted to the explicit browser-performance allowlist in
-`scripts/Build.fsx`. It defines `FABLE_COMPILER` and scopes the corresponding
-MSBuild condition to that child process so CLR-only mock sources are excluded
-from performance findings without excluding them from the common pass.
-After this pass, the wrapper restores the normal CLR project assets because the
-conditional compilation changes the dependency graph recorded by MSBuild.
-The root config freezes the complete 180-rule catalog with performance disabled
-by default, and keeps FR0060, FR0092, and FR0130 disabled. The allowlist does
-not opt into .NET-specific overload, `Span`, sealing, or SIMD recommendations.
+Rule settings live in `fsharprefactor.json`. Performance rules run only on
+browser production code, using the allowlist in
+`.config/fsharp-refactor-performance.json`; tests, infrastructure and CLR mocks
+are excluded from that pass.
 
-Findings are advisory in the current workflow: `--notes` makes fix-less
-findings visible, but the wrapper does not pass `--fail-on-findings`. A
-non-zero tool exit, missing or invalid SARIF, and other infrastructure failures
-still fail the target. The tool supports a future strict gate using
-`--fail-on-findings`; that mode returns exit code `3` for findings, which a
-future wrapper must propagate as a distinct findings result rather than mistake
-for an infrastructure failure.
+Findings, including advisory notes, are currently non-blocking; tool and
+configuration errors still fail the target. A future strict gate can use
+`--fail-on-findings`.
 
 ## Generated TypeScript
 

@@ -416,27 +416,16 @@ module RefactorIntegration =
         | Apply
         | ReportOnly
 
-    type RefactorCommand = { Process: ProcessCommand; ReportPath: string option }
+    let parsePerformanceCodes (configuration: string) =
+        use document = JsonDocument.Parse configuration
 
-    let performanceCodes = [
-        "FR0004"
-        "FR0051"
-        "FR0058"
-        "FR0071"
-        "FR0076"
-        "FR0102"
-        "FR0104"
-        "FR0137"
-        "FR0167"
-        "FR0170"
-        "FR0173"
-    ]
+        let codes =
+            document.RootElement.EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
 
-    let private expectedRuleCodes =
-        // FR0056 is withdrawn; the pinned catalog contains no rule with that ID.
-        [ 1..181 ] |> List.filter ((<>) 56) |> List.map (sprintf "FR%04d") |> Set.ofList
+        if List.isEmpty codes || codes |> List.exists String.IsNullOrWhiteSpace then
+            failwith "Performance codes must be a nonempty JSON array of nonblank strings."
 
-    let private expectedRuleCount = Set.count expectedRuleCodes
+        codes
 
     let private normalizePath (path: string) =
         path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar)
@@ -458,38 +447,28 @@ module RefactorIntegration =
         | Apply -> []
         | ReportOnly -> [ "--dry-run" ]
 
-    let private reportPath reportDirectory target =
-        Path.Combine(reportDirectory, target + ".sarif")
-
-    let private createCommand root mode target categories extraArguments reportDirectory environmentVariables =
-        let outputPath =
-            if mode = ReportOnly then
-                Some(reportPath reportDirectory target)
-            else
-                None
-
+    let private createCommand root mode target categories extraArguments environmentVariables =
         let arguments =
             [ "tool"; "run"; "fsharp-refactor"; "--"; target ]
             @ modeArguments mode
             @ [ "--categories"; categories ]
             @ extraArguments
             @ [ "--notes" ]
-            @ (outputPath |> Option.toList |> List.collect (fun path -> [ "--report"; path ]))
 
         {
-            Process = {
-                (dotnetCommand root arguments) with
-                    EnvironmentVariables = environmentVariables
-            }
-            ReportPath = outputPath
+            (dotnetCommand root arguments) with
+                EnvironmentVariables = environmentVariables
         }
 
-    let commonCommand root mode reportDirectory target =
-        createCommand root mode target "correctness,idiom,cosmetic" [] reportDirectory Map.empty
+    let commonCommand root mode target =
+        createCommand root mode target "correctness,idiom,cosmetic" [] Map.empty
 
-    let performanceCommand root mode reportDirectory =
+    let performanceCommand root mode codes =
         let productionSourceDirectory = Path.Combine("src", "Wilnaatahl.Core")
-        let selectedCodes = String.concat "," performanceCodes
+        let selectedCodes = String.concat "," codes
+
+        if List.isEmpty codes then
+            failwith "Performance analysis requires nonempty codes."
 
         createCommand
             root
@@ -497,99 +476,21 @@ module RefactorIntegration =
             productionSourceDirectory
             "performance"
             [ "--codes"; selectedCodes; "--define"; "FABLE_COMPILER" ]
-            reportDirectory
             (Map [ ("FABLE_COMPILER", "true") ])
 
-    let validateReport (report: string option) =
-        let invalidReport = Error "Invalid refactor report."
-
-        match report with
-        | None -> Error "Missing refactor report."
-        | Some text ->
-            try
-                use document = JsonDocument.Parse(text)
-                let root = document.RootElement
-
-                let validRuns =
-                    root.GetProperty("runs").ValueKind = JsonValueKind.Array
-                    && (root.GetProperty("runs").EnumerateArray()
-                        |> Seq.forall (fun run ->
-                            let driverName =
-                                run.GetProperty("tool").GetProperty("driver").GetProperty("name").GetString()
-
-                            driverName = "fsharp-refactor"
-                            && run.GetProperty("results").ValueKind = JsonValueKind.Array))
-
-                if
-                    root.GetProperty("version").GetString() = "2.1.0"
-                    && root.GetProperty("runs").GetArrayLength() > 0
-                    && validRuns
-                then
-                    Ok()
-                else
-                    invalidReport
-            with
-            | :? JsonException
-            | :? InvalidOperationException
-            | :? KeyNotFoundException -> invalidReport
-
-    let private readEnabledRules (configuration: string) =
-        let jsonOptions =
-            JsonDocumentOptions(CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true)
-
-        use document = JsonDocument.Parse(configuration, jsonOptions)
-        let root = document.RootElement
-        let rules = root.GetProperty "rules"
-
-        rules.EnumerateObject()
-        |> Seq.map (fun rule ->
-            let enabled =
-                if rule.Value.ValueKind = JsonValueKind.Object then
-                    rule.Value.GetProperty("enabled").GetBoolean()
-                else
-                    rule.Value.GetBoolean()
-
-            rule.Name, enabled)
-        |> Map.ofSeq
-
     let validateConfiguration (configuration: string) =
-        let invalidConfiguration message =
-            Error $"Invalid fsharprefactor.json: {message}"
+        use document =
+            JsonDocument.Parse(
+                configuration,
+                JsonDocumentOptions(CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true)
+            )
 
-        try
-            use document =
-                JsonDocument.Parse(
-                    configuration,
-                    JsonDocumentOptions(CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true)
-                )
-
-            let root = document.RootElement
-            let rules = root.GetProperty "rules"
-
-            if not (root.GetProperty("publicApi").GetBoolean()) then
-                invalidConfiguration "publicApi must remain true."
-            elif (root.GetProperty("apiChanges").GetBoolean()) then
-                invalidConfiguration "apiChanges must remain false."
-            elif rules.ValueKind <> JsonValueKind.Object then
-                invalidConfiguration "rules must be an object."
-            elif
-                rules.EnumerateObject()
-                |> Seq.countBy _.Name
-                |> Seq.exists (fun (_, occurrences) -> occurrences > 1)
-            then
-                invalidConfiguration "duplicate rule keys are not allowed."
-            elif (rules.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq) <> expectedRuleCodes then
-                invalidConfiguration $"expected exactly the {expectedRuleCount} pinned rule keys."
+        document.RootElement.GetProperty("rules").EnumerateObject()
+        |> Seq.iter (fun rule ->
+            if rule.Value.ValueKind = JsonValueKind.Object then
+                rule.Value.GetProperty("enabled").GetBoolean() |> ignore
             else
-                readEnabledRules configuration |> ignore
-                Ok()
-        with
-        | :? JsonException
-        | :? InvalidOperationException
-        | :? KeyNotFoundException -> invalidConfiguration "the JSONC structure is incomplete or invalid."
-
-    let ruleEnabled configuration code =
-        readEnabledRules configuration |> Map.tryFind code
+                rule.Value.GetBoolean() |> ignore)
 
     let private trackedPaths root =
         let startInfo =
@@ -625,22 +526,6 @@ module RefactorIntegration =
         else
             []
 
-    let private reportDirectory root = Path.Combine(root, "refactor-reports")
-
-    let private loadConfiguration root =
-        let path = Path.Combine(root, "fsharprefactor.json")
-
-        if File.Exists path then
-            File.ReadAllText path |> validateConfiguration
-        else
-            Error $"Required refactor config was not found: {path}"
-
-    let cleanReportDirectory path =
-        if Directory.Exists path then
-            Directory.Delete(path, true)
-
-        Directory.CreateDirectory path |> ignore
-
     let runAfterPerformance runAnalysis restore =
         let analysisResult =
             try
@@ -662,30 +547,17 @@ module RefactorIntegration =
         | Ok(), Error restoreError -> ExceptionDispatchInfo.Capture(restoreError).Throw()
         | Ok(), Ok() -> ()
 
-    let private runRefactorCommand command =
-        command.ReportPath
-        |> Option.iter (fun path -> Directory.CreateDirectory(Path.GetDirectoryName(path)) |> ignore)
-
-        command.Process |> ProcessExecution.runCommand
-
-        command.ReportPath
-        |> Option.iter (fun path ->
-            if not (File.Exists path) then
-                failwith $"Missing refactor report: {path}"
-
-            File.ReadAllText path
-            |> Some
-            |> validateReport
-            |> function
-                | Ok() -> ()
-                | Error message -> failwith $"{path}: {message}")
-
     let run root mode =
-        match loadConfiguration root with
-        | Error message -> failwith message
-        | Ok() -> ()
+        Path.Combine(root, "fsharprefactor.json")
+        |> File.ReadAllText
+        |> validateConfiguration
 
-        let outputDirectory = reportDirectory root
+        // The CLI has no named profiles, so the performance selection lives separately from its common config.
+        let codes =
+            Path.Combine(root, ".config", "fsharp-refactor-performance.json")
+            |> File.ReadAllText
+            |> parsePerformanceCodes
+
         let targets = analysisInputs (trackedPaths root) (authoredScripts root)
 
         if
@@ -696,14 +568,12 @@ module RefactorIntegration =
         then
             failwith "Refactor analysis requires a tracked solution input."
 
-        if mode = ReportOnly then
-            cleanReportDirectory outputDirectory
-
         targets
-        |> List.map (commonCommand root mode outputDirectory)
-        |> List.iter runRefactorCommand
+        |> List.map (commonCommand root mode)
+        |> List.iter ProcessExecution.runCommand
 
-        runAfterPerformance (fun () -> performanceCommand root mode outputDirectory |> runRefactorCommand) (fun () ->
+        // Fable-conditional analysis changes restore assets; leave normal .NET assets behind even on failure.
+        runAfterPerformance (fun () -> performanceCommand root mode codes |> ProcessExecution.runCommand) (fun () ->
             dotnetCommand root [ "restore" ] |> ProcessExecution.runOrFail)
 
 module BuildSelfTest =
@@ -717,94 +587,102 @@ module BuildSelfTest =
         if expected <> actual then
             failwith $"Build self-test failed: {name}. Expected {expected}, got {actual}."
 
+    let failureFrom action =
+        try
+            action ()
+            None
+        with error ->
+            Some error
+
     let runSelfTest root =
-        let configurationPath = Path.Combine(root, "fsharprefactor.json")
-        let configuration = File.ReadAllText configurationPath
-
-        assertEqual
-            "pinned JSONC configuration validates with its comments"
-            (Ok())
-            (validateConfiguration configuration)
-
-        for code in performanceCodes @ [ "FR0060"; "FR0092"; "FR0130" ] do
+        for invalidCodes in
+            [
+                "[]"
+                "null"
+                "{}"
+                """[""]"""
+                """["   "]"""
+                """[null]"""
+                """[42]"""
+                "{ malformed"
+            ] do
             assertEqual
-                $"repository opt-out {code} stays disabled in config"
-                (Some false)
-                (ruleEnabled configuration code)
-
-        assertEqual "malformed refactor config is rejected" true (validateConfiguration "{ malformed" |> Result.isError)
-
-        assertEqual
-            "missing required API policy is rejected"
-            true
-            (validateConfiguration """{"apiChanges":false,"rules":{}}""" |> Result.isError)
-
-        let sameCountUnknownRule =
-            configuration.Replace("\"FR0060\": false,", "\"FR0O60\": false,")
+                $"invalid performance codes fail closed: {invalidCodes}"
+                true
+                (failureFrom (fun () -> parsePerformanceCodes invalidCodes |> ignore)
+                 |> Option.isSome)
 
         assertEqual
-            "unknown rule cannot silently re-enable a tool default"
-            true
-            (validateConfiguration sameCountUnknownRule |> Result.isError)
+            "performance codes preserve configured selection"
+            [ "EXAMPLE1"; "EXAMPLE2" ]
+            (parsePerformanceCodes
+                """
+                [
+                    "EXAMPLE1",
+                    "EXAMPLE2"
+                ]
+                """)
 
-        let sameCountDuplicateRule =
-            configuration.Replace("\"FR0070\": false,", "\"FR0060\": false,")
+        for invalidRule in [ "\"false\""; "null"; "{}"; """{ "enabled": "true" }""" ] do
+            let configuration =
+                """
+            {
+                "rules": {
+                    "example": INVALID
+                }
+            }
+            """
 
-        assertEqual
-            "duplicate rule cannot silently drop a pinned setting"
-            true
-            (validateConfiguration sameCountDuplicateRule |> Result.isError)
+            assertEqual
+                "malformed rule settings are rejected"
+                true
+                (failureFrom (fun () -> validateConfiguration (configuration.Replace("INVALID", invalidRule)))
+                 |> Option.isSome)
 
-        let additionalDuplicateRule =
-            configuration.Replace("\"FR0060\": false,", "\"FR0060\": false, \"FR0060\": false,")
+        for invalidConfiguration in [ "{ malformed"; "[]"; "{}" ] do
+            assertEqual
+                "malformed config is rejected"
+                true
+                (failureFrom (fun () -> validateConfiguration invalidConfiguration)
+                 |> Option.isSome)
 
-        assertEqual
-            "duplicate rule is rejected even when every pinned rule remains"
-            (Error "Invalid fsharprefactor.json: duplicate rule keys are not allowed.")
-            (validateConfiguration additionalDuplicateRule)
+        let configuration =
+            """
+        {
+            // Config owns rule names and policy.
+            "rules": {
+                "example": false,
+                "another": { "enabled": true },
+            }
+        }
+        """
 
-        let invalidConfigurationRoot = Path.Combine(root, "refactor-preflight-self-test")
-        Directory.CreateDirectory invalidConfigurationRoot |> ignore
+        let scriptFixtureRoot = Path.Combine(root, $"refactor-self-test-{Guid.NewGuid():N}")
+
+        let untrackedScriptPath =
+            Path.Combine(scriptFixtureRoot, "scripts", "NewUntracked.fsx")
+
+        Directory.CreateDirectory(Path.GetDirectoryName(untrackedScriptPath)) |> ignore
 
         try
-            let missingConfigurationPath =
-                Path.Combine(invalidConfigurationRoot, "fsharprefactor.json")
-
-            let missingConfigurationFailure =
-                try
-                    run invalidConfigurationRoot Apply
-                    None
-                with error ->
-                    Some error.Message
+            File.WriteAllText(untrackedScriptPath, "let newlyAuthoredScript = true")
 
             assertEqual
-                "missing config fails before source inventory, report creation, or tool execution"
-                (Some $"Required refactor config was not found: {missingConfigurationPath}")
-                missingConfigurationFailure
+                "filesystem discovery includes an untracked script"
+                [ Path.Combine("scripts", "NewUntracked.fsx") ]
+                (authoredScripts scriptFixtureRoot |> analysisInputs [])
 
-            File.WriteAllText(
-                Path.Combine(invalidConfigurationRoot, "fsharprefactor.json"),
-                configuration.Replace("\"publicApi\": true", "\"publicApi\": false")
-            )
+            File.WriteAllText(Path.Combine(scriptFixtureRoot, "fsharprefactor.json"), configuration)
+            Directory.CreateDirectory(Path.Combine(scriptFixtureRoot, ".config")) |> ignore
 
-            let preflightFailure =
-                try
-                    run invalidConfigurationRoot Apply
-                    None
-                with error ->
-                    Some error.Message
+            File.WriteAllText(Path.Combine(scriptFixtureRoot, ".config", "fsharp-refactor-performance.json"), "[]")
 
             assertEqual
-                "invalid config fails before source inventory, report creation, or tool execution"
-                (Some "Invalid fsharprefactor.json: publicApi must remain true.")
-                preflightFailure
-
-            assertEqual
-                "invalid config does not create report output"
-                false
-                (Directory.Exists(Path.Combine(invalidConfigurationRoot, "refactor-reports")))
+                "invalid performance selection fails before inventory or source writes"
+                (Some "Performance codes must be a nonempty JSON array of nonblank strings.")
+                (failureFrom (fun () -> run scriptFixtureRoot Apply) |> Option.map _.Message)
         finally
-            Directory.Delete(invalidConfigurationRoot, true)
+            Directory.Delete(scriptFixtureRoot, true)
 
         assertEqual
             "analysis includes tracked project and scripts plus an untracked authored script"
@@ -819,103 +697,52 @@ module BuildSelfTest =
                 "tests/Wilnaatahl.Core.Tests/Wilnaatahl.Core.Tests.fsproj"
             ] [ "scripts/Build.fsx"; "scripts/NewRefactorCheck.fsx" ])
 
-        let reportDirectory = Path.Combine(root, "refactor-reports")
+        let commonApply = commonCommand root Apply "Wilnaatahl.slnx"
+        let commonCheck = commonCommand root ReportOnly "Wilnaatahl.slnx"
+        let performanceCheck = performanceCommand root ReportOnly [ "EXAMPLE1"; "EXAMPLE2" ]
 
-        let commonApply = commonCommand root Apply reportDirectory "Wilnaatahl.slnx"
-        let commonCheck = commonCommand root ReportOnly reportDirectory "Wilnaatahl.slnx"
-        let performanceCheck = performanceCommand root ReportOnly reportDirectory
+        assertEqual "applying fixes never requests dry-run" false (commonApply.Arguments |> List.contains "--dry-run")
 
-        assertEqual
-            "applying fixes never requests dry-run"
-            false
-            (commonApply.Process.Arguments |> List.contains "--dry-run")
+        assertEqual "report-only check requests dry-run" true (commonCheck.Arguments |> List.contains "--dry-run")
 
-        assertEqual
-            "report-only check requests dry-run"
-            true
-            (commonCheck.Process.Arguments |> List.contains "--dry-run")
+        for command in [ commonApply; commonCheck; performanceCheck ] do
+            assertEqual "analysis surfaces advisory notes" true (command.Arguments |> List.contains "--notes")
 
-        assertEqual "both modes surface advisory notes" true (commonApply.Process.Arguments |> List.contains "--notes")
-
-        assertEqual
-            "advisories are not promoted to a gate"
-            false
-            (commonApply.Process.Arguments |> List.contains "--fail-on-findings")
-
-        assertEqual
-            "common pass includes all three non-performance categories"
-            true
-            (commonCheck.Process.Arguments |> List.contains "correctness,idiom,cosmetic")
-
-        assertEqual
-            "common pass does not explicitly enable performance rules"
-            false
-            (commonCheck.Process.Arguments |> List.contains "--codes")
+            assertEqual
+                "advisories are not promoted to a gate"
+                false
+                (command.Arguments |> List.contains "--fail-on-findings")
 
         assertEqual
             "performance analysis scopes to the production project"
             (Path.Combine("src", "Wilnaatahl.Core"))
-            (performanceCheck.Process.Arguments |> List.item 4)
+            (performanceCheck.Arguments |> List.item 4)
 
         assertEqual
             "performance pass forwards the selected rules and Fable define"
-            (String.concat "," performanceCodes)
-            (performanceCheck.Process.Arguments
-             |> List.skipWhile ((<>) "--codes")
-             |> List.item 1)
+            "EXAMPLE1,EXAMPLE2"
+            (performanceCheck.Arguments |> List.skipWhile ((<>) "--codes") |> List.item 1)
 
         assertEqual
             "performance pass supplies the Fable preprocessor define"
             "FABLE_COMPILER"
-            (performanceCheck.Process.Arguments
-             |> List.skipWhile ((<>) "--define")
-             |> List.item 1)
+            (performanceCheck.Arguments |> List.skipWhile ((<>) "--define") |> List.item 1)
 
         assertEqual
             "only the performance child receives the Fable conditional"
             (Map [ ("FABLE_COMPILER", "true") ])
-            performanceCheck.Process.EnvironmentVariables
-
-        assertEqual
-            "performance findings remain advisory"
-            false
-            (performanceCheck.Process.Arguments |> List.contains "--fail-on-findings")
+            performanceCheck.EnvironmentVariables
 
         assertEqual
             "common pass does not inherit performance-only environment"
             Map.empty
-            commonCheck.Process.EnvironmentVariables
+            commonCheck.EnvironmentVariables
 
-        let scriptFixtureRoot =
-            Path.Combine(reportDirectory, $"self-test-{Guid.NewGuid():N}")
-
-        let untrackedScriptPath =
-            Path.Combine(scriptFixtureRoot, "scripts", "NewUntracked.fsx")
-
-        Directory.CreateDirectory(Path.GetDirectoryName(untrackedScriptPath)) |> ignore
-        File.WriteAllText(untrackedScriptPath, "let newlyAuthoredScript = true")
-
-        try
-            assertEqual
-                "filesystem discovery includes an untracked script"
-                [ Path.Combine("scripts", "NewUntracked.fsx") ]
-                (authoredScripts scriptFixtureRoot |> analysisInputs [])
-        finally
-            Directory.Delete(scriptFixtureRoot, true)
-
-        let staleReportDirectory =
-            Path.Combine(reportDirectory, $"stale-output-{Guid.NewGuid():N}")
-
-        Directory.CreateDirectory(staleReportDirectory) |> ignore
-        let staleReportPath = Path.Combine(staleReportDirectory, "stale.sarif")
-        File.WriteAllText(staleReportPath, "{}")
-
-        try
-            cleanReportDirectory staleReportDirectory
-            assertEqual "report reset deletes stale output" false (File.Exists staleReportPath)
-        finally
-            if Directory.Exists staleReportDirectory then
-                Directory.Delete(staleReportDirectory, true)
+        assertEqual
+            "empty performance selection cannot broaden analysis"
+            (Some "Performance analysis requires nonempty codes.")
+            (failureFrom (fun () -> performanceCommand root ReportOnly [] |> ignore)
+             |> Option.map _.Message)
 
         let performanceEvents = ResizeArray<string>()
 
@@ -926,54 +753,44 @@ module BuildSelfTest =
             [ "analysis"; "restore" ]
             (performanceEvents |> Seq.toList)
 
-        let restoredAfterFailure = ref false
+        let mutable restoredAfterFailure = false
         let analysisFailure = InvalidOperationException("performance analysis failed")
 
         let preservedAnalysisFailure =
-            try
-                runAfterPerformance (fun () -> raise analysisFailure) (fun () -> restoredAfterFailure.Value <- true)
+            failureFrom (fun () ->
+                runAfterPerformance (fun () -> raise analysisFailure) (fun () -> restoredAfterFailure <- true))
 
-                None
-            with error ->
-                Some error
-
-        assertEqual "asset restoration runs after analysis fails" true restoredAfterFailure.Value
+        assertEqual "asset restoration runs after analysis fails" true restoredAfterFailure
 
         assertEqual
             "asset restoration does not mask the analysis failure"
-            true
-            (preservedAnalysisFailure
-             |> Option.exists (fun error -> Object.ReferenceEquals(error, analysisFailure)))
+            (Some(analysisFailure :> exn))
+            preservedAnalysisFailure
 
         let restoreFailure = InvalidOperationException("normal asset restore failed")
-        let originalRestoreStack = ref ""
+        let mutable originalRestoreStack = ""
 
         let surfacedRestoreFailure =
-            try
+            failureFrom (fun () ->
                 runAfterPerformance ignore (fun () ->
                     try
                         raise restoreFailure
                     with error ->
-                        originalRestoreStack.Value <- error.StackTrace
-                        reraise ())
-
-                None
-            with error ->
-                Some error
+                        originalRestoreStack <- error.StackTrace
+                        reraise ()))
 
         assertEqual
             "asset restoration failure is surfaced when analysis succeeds"
-            true
-            (surfacedRestoreFailure
-             |> Option.exists (fun error -> Object.ReferenceEquals(error, restoreFailure)))
+            (Some(restoreFailure :> exn))
+            surfacedRestoreFailure
 
         assertEqual
             "asset restoration failure retains its original throw location"
             true
             (surfacedRestoreFailure
              |> Option.exists (fun error ->
-                 not (String.IsNullOrEmpty originalRestoreStack.Value)
-                 && error.StackTrace.Contains(originalRestoreStack.Value, StringComparison.Ordinal)))
+                 not (String.IsNullOrEmpty originalRestoreStack)
+                 && error.StackTrace.Contains(originalRestoreStack, StringComparison.Ordinal)))
 
         let primaryAnalysisFailure =
             InvalidOperationException("primary performance analysis failed")
@@ -986,51 +803,21 @@ module BuildSelfTest =
 
         let preservedPrimaryFailure =
             try
-                try
+                failureFrom (fun () ->
                     runAfterPerformance (fun () -> raise primaryAnalysisFailure) (fun () ->
-                        raise secondaryRestoreFailure)
-
-                    None
-                with error ->
-                    Some error
+                        raise secondaryRestoreFailure))
             finally
                 Console.SetError priorErrorWriter
 
         assertEqual
             "primary analysis failure survives a simultaneous restore failure"
-            true
-            (preservedPrimaryFailure
-             |> Option.exists (fun error -> Object.ReferenceEquals(error, primaryAnalysisFailure)))
+            (Some(primaryAnalysisFailure :> exn))
+            preservedPrimaryFailure
 
         assertEqual
             "secondary restore failure is logged when the primary error is preserved"
             true
             (capturedErrors.ToString().Contains(secondaryRestoreFailure.Message, StringComparison.Ordinal))
-
-        assertEqual "missing report is an infrastructure error" (Error "Missing refactor report.") (validateReport None)
-
-        assertEqual
-            "malformed report is an infrastructure error"
-            (Error "Invalid refactor report.")
-            (validateReport (Some "{"))
-
-        assertEqual
-            "report accepts a successful tool result with findings"
-            (Ok())
-            (validateReport (
-                Some
-                    """{"version":"2.1.0","runs":[{"results":[{"ruleId":"FR0001"}],"tool":{"driver":{"name":"fsharp-refactor"}}}]}"""
-            ))
-
-        assertEqual
-            "report rejects an unexpected tool driver"
-            (Error "Invalid refactor report.")
-            (validateReport (Some """{"version":"2.1.0","runs":[{"results":[],"tool":{"driver":{"name":"other"}}}]}"""))
-
-        assertEqual
-            "report rejects a run without results"
-            (Error "Invalid refactor report.")
-            (validateReport (Some """{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"fsharp-refactor"}}}]}"""))
 
         let fableCompilerBeforeProcess =
             Environment.GetEnvironmentVariable("FABLE_COMPILER")
