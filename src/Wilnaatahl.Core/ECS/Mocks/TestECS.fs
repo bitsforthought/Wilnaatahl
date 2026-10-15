@@ -223,7 +223,7 @@ type private TestTraitFactory() =
         let callConverter name paramType v =
             let methodInfo = mutableType.GetMethod(name, flags, [| paramType |])
 
-            if methodInfo = null then
+            if isNull methodInfo then
                 v
             else
                 let result = (nonNull methodInfo).Invoke(null, [| v |])
@@ -360,7 +360,7 @@ module private World =
 
     let removeTrait someTrait (EntityId entityId) world =
         let store = world |> getStore someTrait
-        let existed, _ = store.TryRemove(entityId)
+        let existed, _ = store.TryRemove entityId
 
         if existed then
             let snapshot = lazy (world |> entityTraitSnapshot (EntityId entityId))
@@ -656,8 +656,7 @@ module private World =
                             matches.OrTraits.IsEmpty
                             || matches.OrTraits |> List.exists (snapshotHasTrait snapshot)
 
-                        let eventNotOk =
-                            matches.NotTraits |> List.forall (fun t -> not (snapshotHasTrait snapshot t))
+                        let eventNotOk = matches.NotTraits |> List.forall (snapshotHasTrait snapshot >> not)
 
                         let drainWithOk = withSets |> List.forall (Set.contains eid)
                         let drainOrOk = matches.OrTraits.IsEmpty || Set.contains eid orSet
@@ -909,7 +908,8 @@ type TestWorld() =
             let isTracked option someTrait =
                 match option with
                 | AlwaysTrack -> true
-                | _ -> changedTraits |> Array.exists (fun t -> obj.ReferenceEquals(t, someTrait))
+                | AutoTrack
+                | NeverTrack -> changedTraits |> Array.exists (fun t -> obj.ReferenceEquals(t, someTrait))
 
             let notifyChanges option entity (beforeFirst, beforeSecond) (afterFirst, afterSecond) =
                 let snapshot = lazy (world |> entityTraitSnapshot entity)
@@ -969,7 +969,8 @@ type TestWorld() =
             let isTracked option someTrait =
                 match option with
                 | AlwaysTrack -> true
-                | _ -> changedTraits |> Array.exists (fun t -> obj.ReferenceEquals(t, someTrait))
+                | AutoTrack
+                | NeverTrack -> changedTraits |> Array.exists (fun t -> obj.ReferenceEquals(t, someTrait))
 
             let notifyChanges option entity (b1, b2, b3) (a1, a2, a3) =
                 let snapshot = lazy (world |> entityTraitSnapshot entity)
@@ -1035,7 +1036,8 @@ type TestWorld() =
             let isTracked option someTrait =
                 match option with
                 | AlwaysTrack -> true
-                | _ -> changedTraits |> Array.exists (fun t -> obj.ReferenceEquals(t, someTrait))
+                | AutoTrack
+                | NeverTrack -> changedTraits |> Array.exists (fun t -> obj.ReferenceEquals(t, someTrait))
 
             let notifyChanges option entity (b1, b2, b3, b4) (a1, a2, a3, a4) =
                 let snapshot = lazy (world |> entityTraitSnapshot entity)

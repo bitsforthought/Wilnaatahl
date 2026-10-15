@@ -577,7 +577,8 @@ module Transform =
                 KinshipNote =
                     match p.Kinship with
                     | NoneProvided note -> note
-                    | _ -> None
+                    | Wilp _
+                    | UnknownWilp _ -> None
                 BirthOrder = Some p.BirthOrder
                 RawDateOfBirth = p.DateOfBirthText
                 RawDateOfDeath = p.DateOfDeathText

@@ -1,0 +1,248 @@
+// Pinned rule policy; see docs/build.md for scope and upgrade guidance.
+{
+  "publicApi": true,
+  "apiChanges": false,
+
+  // Preprocessor symbols every build and script check defines, like --define:
+  // code under #if LOCAL_BUILD is analysed and kept compiling. Projects keep
+  // their own DEBUG, TRACE and DefineConstants.
+  "defines": [],
+
+  // What a `// fsharpanalyzer: ignore-line FRxxxx` comment is worth:
+  //   "all"            it silences the finding (what editors do regardless)
+  //   "no-correctness" correctness findings are reported anyway, never fixed
+  //   "none"           every suppressed finding is reported anyway
+  "suppressions": "all",
+
+  // Extra paths never analysed, ADDITIVE over the built-in defaults
+  // (git-ignored files, obj/, generated sources). Substring or glob.
+  "ignorePaths": [],
+
+  // Extra fsharplint-style hints, e.g. "not (a = b) ===> a <> b"
+  "hints": { "add": [] },
+
+  // Explicit settings keep upgrades reviewable rather than adopting new defaults.
+  "rules": {
+    // ---- correctness (67) ----
+    "FR0017": true, // Async discarded with ignore or bound to a wildcard never runs
+    "FR0018": true, // check-then-add races
+    "FR0019": false, // Equals without GetHashCode
+    "FR0020": true, // abstract member called during construction
+    "FR0027": true, // lambda capturing this holds the object alive
+    "FR0032": true, // disposable field, no IDisposable
+    "FR0036": true, // runtime type comparison breaks on a rename
+    "FR0044": true, // raise ex resets the stack trace
+    "FR0045": true, // x = nan never holds
+    "FR0046": true, // locking a process-wide singleton
+    "FR0047": true, // Dispose that misses a field
+    "FR0048": true, // String.Format placeholder without an argument
+    // sync-over-async deadlocks
+    //   syncSwap (false): let a sweep swap an awaited call for its synchronous sibling
+    "FR0049": { "enabled": true, "syncSwap": false },
+    "FR0054": true, // raise inside Equals/GetHashCode/Dispose
+    "FR0055": true, // swallowing every exception
+    "FR0061": true, // invalidArg naming a parameter that does not exist
+    "FR0062": true, // public module-level mutable state
+    "FR0063": true, // raise in finally discards the exception in flight
+    "FR0064": true, // raising runtime-reserved exceptions
+    // weak cryptography
+    //   dropLegacyProtocols (false): let a sweep comment a dead TLS protocol out of the flags
+    "FR0065": { "enabled": true, "dropLegacyProtocols": false },
+    "FR0066": true, // SQL assembled from strings
+    // culture-sensitive parsing
+    //   invariant (false): let a sweep apply CultureInfo.InvariantCulture to an uncultured parse
+    "FR0067": { "enabled": true, "invariant": false },
+    "FR0068": true, // duplicate enum values conflate cases
+    "FR0072": true, // a wildcard hiding one or two real cases
+    "FR0075": true, // a disposable bound with let is never disposed
+    "FR0077": true, // object expression missing interface members (FS0366)
+    "FR0080": true, // leading TABs (FS1161)
+    "FR0089": true, // [ 1, 2 ] is a one-element list of a tuple
+    "FR0100": true, // an unfinished branch returning a plausible value
+    "FR0105": true, // unchecked arithmetic on near-limit constants wraps silently
+    "FR0110": true, // incomplete DU match gains explicit raising arms (FS0025 made loud)
+    "FR0118": true, // a CancellationToken in scope should reach the calls that take one
+    "FR0119": true, // inside task/async, the awaitable twin should be used
+    "FR0120": true, // a catch-clause log should mention the caught exception
+    // UtcNow.Date/Today are timezone-random; Now->UtcNow opt-in
+    //   utcNow (false): let a sweep rewrite DateTime.Now to UtcNow
+    "FR0121": { "enabled": true, "utcNow": false },
+    "FR0122": true, // literal regex patterns must compile
+    "FR0123": true, // Monitor.Enter/Exit is the lock function spelled dangerously
+    "FR0124": true, // structured-log templates that lie
+    "FR0125": true, // invisible and bidirectional Unicode in source
+    "FR0126": true, // dynamic strings into process-execution sinks
+    "FR0127": true, // provider-format API keys in literals
+    "FR0136": true, // zero-argument Guid constructor: Guid.Empty stated, NewGuid offered
+    "FR0143": true, // a script #load chain missing a file of the project it loads from
+    "FR0144": true, // a script #r or #I path the package no longer has, re-pointed at what it has
+    "FR0145": true, // a record expression leaving fields unassigned gets them, by type
+    "FR0146": true, // a SQL command with no parameter at all
+    "FR0148": true, // a public Dispose() on a type that is not IDisposable
+    "FR0149": true, // a computation started with nobody to observe its failure
+    "FR0150": true, // a use-bound disposable captured by a computation that outlives the scope
+    "FR0151": true, // an exception handler reading only .Message from a type whose diagnosis is elsewhere
+    "FR0152": true, // GetOrAdd caching a Task or Lazy, so one failure is cached for every later reader
+    "FR0153": true, // a credential in a [<Literal>], which should be a development one
+    "FR0154": true, // a store after a TryGetValue miss on a ConcurrentDictionary races other callers; the mis...
+    // a float/decimal conversion of an integer division truncates first: float (a / b) => flo...
+    //   all (false): note the literal-operand and product-dividend divisions on a sweep too
+    "FR0159": { "enabled": true, "all": false },
+    "FR0160": true, // a handler raising a new exception drops the one it caught; the constructor's trailing i...
+    "FR0161": true, // a mutating method on the struct a property returns mutates a copy
+    "FR0162": true, // check-then-assign on a module-level mutable races; lazy runs the factory once
+    "FR0163": true, // a System.Threading.Timer constructed and dropped is collected mid-flight
+    "FR0164": true, // a collection edited inside a for loop over itself throws; the loop walks a snapshot
+    "FR0165": true, // a local DateTime compared with or subtracted from a UTC one flips with the timezone
+    "FR0169": true, // a seq parameter or local enumerated twice on one path runs a query or a generator again
+    "FR0175": true, // a date format with hh and no tt, mm between year and day, or MM beside the hours writes...
+    "FR0176": true, // a date built from the year of one instant and the month of a shifted one disagrees acro...
+    "FR0177": true, // x <> A || x <> B over two constants is always true; x = A && x = B and x > e && x < e a...
+    "FR0178": true, // .Value read in the branch where the option was tested empty throws every time
+    "FR0179": true, // an update of a Map, Set or immutable collection handed to ignore changes nothing
+    "FR0181": true, // a specific handler around Task.Wait/Result misses the task's exception, which arrives i...
+
+    // Performance is off globally; FAKE selects browser-relevant rules only on production.
+    "FR0004": false,
+    "FR0011": false,
+    "FR0014": false,
+    // Literal regex patterns => StartsWith/Contains/Replace/Split, the Match.Success and Matc...
+    //   perCall (true): hoist a Regex out of a plain function body too, not only out of a loop
+    "FR0015": { "enabled": false, "perCall": true },
+    "FR0016": false,
+    "FR0021": false,
+    "FR0028": false,
+    // task state machine
+    //   tailLines (40): non-awaiting lines after the last await that earn a tail extraction
+    //   hoistReturnOnAsync (false): extend the return hoist (not the FS3511 advice) to async { }
+    "FR0029": { "enabled": false, "tailLines": 40, "hoistReturnOnAsync": false },
+    "FR0030": false,
+    // List/Array/Seq.contains x ys inside a loop
+    //   minElements (8): how many written-out elements a probed list or array literal needs before a HashSet pays
+    //   setMinElements (16): how many it needs before converting in place to an F# Set, a comparison tree that pays later
+    "FR0035": { "enabled": false, "minElements": 8, "setMinElements": 16 },
+    "FR0037": false,
+    "FR0038": false,
+    "FR0039": false,
+    "FR0040": false,
+    "FR0041": false,
+    "FR0051": false,
+    "FR0052": false,
+    "FR0053": false,
+    "FR0058": false,
+    "FR0059": false,
+    "FR0069": false,
+    "FR0070": false,
+    "FR0071": false,
+    "FR0076": false,
+    "FR0079": false,
+    "FR0093": false,
+    "FR0102": false,
+    "FR0104": false,
+    "FR0106": false,
+    "FR0137": false,
+    "FR0139": false,
+    "FR0142": false,
+    "FR0155": false,
+    "FR0166": false,
+    "FR0167": false,
+    "FR0168": false,
+    "FR0170": false,
+    "FR0171": false,
+    "FR0173": false,
+    // a query copied before Where/Select (or filter/map) loads every row; the query runs them...
+    //   pipelines (false): take the `q |> Seq.toList |> List.filter f` pipeline too, not only the LINQ method chain
+    "FR0174": { "enabled": false, "pipelines": false },
+    "FR0180": false,
+
+    // ---- idiom (55) ----
+    "FR0001": true, // Boolean match => if-else
+    "FR0002": false, // Manual Some/None (and ValueSome/ValueNone) match => Option/ValueOption map/bind/flatten...
+    "FR0003": true, // Extract function composition (f >> g) from pipeline/nested-application lambdas
+    "FR0005": true, // Strip do-nothing CE wrapping (async { return! c }, rewrap identity, immediately-run wra...
+    "FR0006": true, // Extract a when guard into an active pattern
+    "FR0007": true, // Remove mutable from never-mutated local bindings and type-level let mutable fields (cla...
+    "FR0008": true, // Tupled => curried parameters for private functions (definition + all call sites)
+    "FR0009": true, // Manual Ok/Error match => Result.map/bind/mapError/isOk/isError/defaultValue/defaultWith...
+    "FR0010": true, // Simplifications: if c then true else false => c
+    "FR0012": true, // Term-rewriting hints (fsharplint-style lhs ===> rhs rules): comparison flips, x = true,...
+    "FR0022": true, // Non-public union cases with unnamed tuple fields take the field names the code already ...
+    "FR0023": true, // Private two-parameter functions called as fun x -> f x k are reordered data-last, all i...
+    "FR0024": true, // raise (Exception msg) => failwith msg (plain System.Exception only
+    "FR0025": true, // Null test wrapping a value into an option => Option.ofObj / ValueOption.ofObj (if isNul...
+    "FR0026": true, // Mutable backing field + trivial get/set member => member val X = init with get, set (fi...
+    "FR0031": true, // String + chains mixing literals and string values => interpolated string ('Hello ' + na...
+    "FR0033": true, // An instance member touching no instance state
+    "FR0034": true, // if x.IsSome then x.Value + 1 else e => match x with | Some v -> v + 1 | None -> e (.Val...
+    "FR0042": true, // Fully applied sprintf => typed interpolated string (sprintf 'asdf %s' x => $'asdf %s{x}')
+    "FR0043": true, // In an interpolated string that *already* has a typed hole, the remaining plain holes ga...
+    "FR0050": true, // measured: List/Array.sum run LEVEL with the loop, not faster
+    "FR0073": true, // let! x = comp whose binder exists only to be matched collapses to match! comp with (F# ...
+    "FR0074": true, // Nested record copy-and-update flattens to F# 8 path syntax: { r with X = { r.X with Y =...
+    "FR0078": true, // The three-part mutable-condition loop idiom (let! first / let mutable go / rebind at lo...
+    "FR0081": true, // Path fragments joined with a hard-coded / or \ separator => Path.Combine advice
+    "FR0087": true, // The pattern x :: [] => [ x ]
+    "FR0090": true, // Tupled => curried for internal/public functions with every project call site rewritten ...
+    "FR0091": true, // Data-last parameter reorder for internal/public functions with every project call site ...
+    "FR0092": false, // Preserve error-message contracts.
+    "FR0095": true, // A lambda that restates a built-in: fun x -> x => id, fun (a, b) -> a => fst, fun (a, b)...
+    "FR0101": true, // index-based loop over a collection it only indexes
+    "FR0103": true, // isinstance-style type-test ladders as match
+    "FR0107": true, // exists/forall short-circuit where the flag loop kept iterating
+    "FR0108": true, // && true contributes nothing; the expression is the other operand
+    "FR0109": true, // a || a is a, when a is visibly call-free; often a copy-paste worth a look
+    "FR0112": true, // if/elif over one ident vs literals is a match spelled longhand
+    "FR0113": true, // nested ifs with the same else (or none) merge into one &&
+    // pyramid flip: short exit first (default off - house style)
+    //   thenAtLeast (20): how long the then-branch must be before flipping is suggested
+    //   elseAtMost (3): how short the else-branch must stay
+    "FR0114": { "enabled": false, "thenAtLeast": 20, "elseAtMost": 3 },
+    "FR0115": true, // base case first behind a compound guard: advice on arm order
+    "FR0116": true, // a non-recursive member leaves its let rec group
+    "FR0117": true, // adjacent same-result match arms fold into an or-pattern
+    "FR0128": true, // obsolete crypto constructors become static factories
+    "FR0129": true, // a guard that only equality-tests the binder is the literal pattern
+    "FR0130": false, // Avoid inlined-constant API versioning hazards.
+    "FR0131": true, // provably tail-recursive functions gain TailCall
+    "FR0132": true, // trailing comment promoted to XML doc position
+    "FR0134": false, // DateTime record fields migrate to DateTimeOffset (default off)
+    "FR0138": true, // hand-rolled emptiness tests become String.IsNullOrEmpty/IsNullOrWhiteSpace
+    "FR0140": true, // constructor then property sets is named-property construction spelled out
+    "FR0141": false, // a state-carrying while loop is tail recursion written inside out
+    // a namespace spelled out at every use becomes an open
+    //   uses (6): how many spellings of a namespace earn an open
+    //   deepUses (4): the same, for a namespace three segments deep
+    "FR0147": { "enabled": true, "uses": 6, "deepUses": 4 },
+    // a ResizeArray filled one Add at a time by loops, or a mutable list appended one element...
+    //   arrays (false): write an array expression too, at the measured cost of a slower collector
+    //   explicitYield (false): spell the collected element `yield x` rather than bare `x`
+    "FR0156": { "enabled": true, "arrays": false, "explicitYield": false },
+    "FR0157": true, // a closed set of string literals matched by name becomes a union with a ToString returni...
+    "FR0158": true, // a while loop walking a mutable index while a condition holds is a tail-recursive local ...
+    "FR0172": true, // a match arm binding a whole list and reading only itms.[0] / .[1] / .Tail is a cons pat...
+
+    // ---- cosmetic (17) ----
+    "FR0013": true, // Redundant parentheses around single atomic arguments to a *function*: List.max([4
+    "FR0057": true, // XML doc drift
+    // Consecutive attribute brackets merge: [<Attr1>] [<Attr2>] (stacked or same-line) => [<A...
+    //   maxAttributes (4): how many attributes may share one [<A; B>] bracket
+    //   wrapColumn (110): how wide the merged attribute line may get
+    "FR0060": false, // Preserve separate tabular test-data attributes.
+    "FR0082": true, // [<FooAttribute>] => [<Foo>]
+    "FR0083": true, // [<Foo()>] => [<Foo>]
+    "FR0084": true, //  name  backticks around a plain non-keyword identifier do nothing
+    "FR0085": true, // new on a non-IDisposable construction is noise
+    "FR0086": true, // $'no holes' => 'no holes'
+    "FR0088": true, // Case(_, _) => Case _ when every field is a wildcard (typed-gated to real union cases
+    "FR0094": true, // Redundant parentheses around a single atomic argument to an instance *method*: s.Contai...
+    "FR0096": true, // Redundant parentheses around a pattern: | (Some y) -> => | Some y ->, let f (x) = x => ...
+    "FR0097": true, // Redundant parentheses around a type: (x: (int)) => (x: int), (string) list => string list
+    "FR0098": true, // The BCL name of a type F# abbreviates: System.Int32 => int, System.String => string, Sy...
+    "FR0099": false, // A ; ending a line does nothing in light syntax: let x = 1; => let x = 1
+    "FR0111": true, // else-holding-an-if is elif spelled tall
+    // five-word names become double-backtick names (tests by default)
+    //   locals (false): rename local and file-private names too, not only test-attributed ones
+    "FR0133": { "enabled": true, "locals": false },
+    "FR0135": true // markdown-bearing block comments in scripts become literate cells
+  }
+}

@@ -44,6 +44,7 @@ obj/
 TestResults/
 coveragereport/
 coveragereport-ts/
+refactor-reports/
 .fable/
 .ionide/
 .fsac/

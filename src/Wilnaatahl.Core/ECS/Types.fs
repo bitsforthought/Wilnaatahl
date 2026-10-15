@@ -128,7 +128,8 @@ type QueryOperator =
 type SpawnSpec = // NOTE: We can't use TypeScriptTaggedUnion here as it breaks the generated TypeScript code for functions returning a SpawnSpec.
     private // Private to force type-safe construction via the extension members in the Extensions module.
     | Tag of ITagTrait
-    | Val of (ITrait * obj) // Need to erase the types here for the sake of Spawn's signature.
+    /// Need to erase the types here for the sake of Spawn's signature.
+    | Val of (ITrait * obj)
     // Relate the new entity to the target with no explicit value (the relation's schema default).
     | Rel of (IRelation * EntityId)
     // Relate the new entity to the target carrying the given (type-erased) value.

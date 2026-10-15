@@ -111,7 +111,7 @@ let private parseMapping (block: string) : Result<(string * FieldValue) list, st
         try
             use reader = new StringReader(block)
             let stream = YamlStream()
-            stream.Load(reader)
+            stream.Load reader
 
             if stream.Documents.Count = 0 then
                 Ok []
@@ -125,7 +125,7 @@ let private parseMapping (block: string) : Result<(string * FieldValue) list, st
                         |> Seq.toList
                         |> List.partition (fun pair ->
                             match pair.Key with
-                            | :? YamlScalarNode as key -> not (isNull key.Value) && key.Value.Trim() <> ""
+                            | :? YamlScalarNode as key -> not (System.String.IsNullOrWhiteSpace key.Value)
                             | _ -> false)
 
                     if not (List.isEmpty invalidKeyed) then
@@ -137,13 +137,13 @@ let private parseMapping (block: string) : Result<(string * FieldValue) list, st
                 | _ -> Error "frontmatter is not a YAML mapping"
         with :? YamlException as ex ->
             let firstLine = ex.Message.Replace("\r\n", "\n").Split('\n')[0]
-            Error(sprintf "invalid YAML frontmatter: %s" firstLine)
+            Error $"invalid YAML frontmatter: %s{firstLine}"
 
 /// Extracts the leading `---` … `---` frontmatter block and parses it. The fences
 /// must sit at column 0 (matched on `TrimEnd`), so an indented `---` inside a
 /// block scalar does not terminate the block.
 let parseFrontmatter (text: string) : Result<(string * FieldValue) list, string> =
-    let lines = text.Replace("\r\n", "\n").Split('\n')
+    let lines = text.Replace("\r\n", "\n").Split '\n'
 
     if lines[0].TrimEnd() <> "---" then
         Error "missing YAML frontmatter (file must start with '---')"
@@ -252,7 +252,7 @@ module Validation =
             |> Map.tryFind k
             |> Option.map (fun remediation -> {
                 Severity = Severity.Error
-                Message = sprintf "'%s' is retired; %s" k remediation
+                Message = $"'%s{k}' is retired; %s{remediation}"
             }))
 
     let retiredKeyNames = retiredKeys |> Map.keys |> Set.ofSeq
@@ -260,17 +260,17 @@ module Validation =
     let private validateUnknownKeysIgnoring (ignored: Set<string>) (known: Set<string>) fields =
         fields
         |> List.map fst
-        |> List.filter (fun k -> not (ignored.Contains k) && not (known.Contains k))
+        |> List.filter (fun k -> not (ignored.Contains k || known.Contains k))
         |> List.map (fun k ->
             if known |> Set.exists (isOneEdit k) then
                 {
                     Severity = Severity.Warning
-                    Message = sprintf "undocumented key '%s' looks like a typo of a documented key" k
+                    Message = $"undocumented key '%s{k}' looks like a typo of a documented key"
                 }
             else
                 {
                     Severity = Severity.Warning
-                    Message = sprintf "undocumented key '%s' (not in the official schema)" k
+                    Message = $"undocumented key '%s{k}' (not in the official schema)"
                 })
 
     let validateUnknownKeys known fields =
@@ -288,7 +288,7 @@ module Validation =
             | _ ->
                 Some {
                     Severity = Severity.Error
-                    Message = sprintf "'%s' must be a boolean (unquoted true or false)" k
+                    Message = $"'%s{k}' must be a boolean (unquoted true or false)"
                 })
 
     let validateStringLists fields =
@@ -301,7 +301,7 @@ module Validation =
             | _ ->
                 Some {
                     Severity = Severity.Error
-                    Message = sprintf "'%s' must be a string or list of strings" k
+                    Message = $"'%s{k}' must be a string or list of strings"
                 })
 
     let validateNestedMappings fields =
@@ -310,11 +310,7 @@ module Validation =
         |> List.choose (fun (k, v) ->
             match v with
             | Mapping -> None
-            | _ ->
-                Some {
-                    Severity = Severity.Error
-                    Message = sprintf "'%s' must be a mapping" k
-                })
+            | _ -> Some { Severity = Severity.Error; Message = $"'%s{k}' must be a mapping" })
 
     module Agent =
         let private knownKeys =
@@ -353,7 +349,7 @@ module Validation =
                     [
                         {
                             Severity = Severity.Warning
-                            Message = sprintf "skill 'name' (%s) does not match its directory (%s)" name directory
+                            Message = $"skill 'name' (%s{name}) does not match its directory (%s{directory})"
                         }
                     ]
                 else
@@ -414,7 +410,7 @@ let instructionDefinitionFiles directory =
     definitionFiles directory "*.instructions.md" SearchOption.AllDirectories
 
 let validationSummary agentCount skillCount instructionCount =
-    sprintf "Validating %d agent, %d skill, and %d instruction definition(s)..." agentCount skillCount instructionCount
+    $"Validating %d{agentCount} agent, %d{skillCount} skill, and %d{instructionCount} instruction definition(s)..."
 
 /// Runs a validator over raw file text, collapsing a frontmatter parse failure
 /// into a single error finding (mirroring the file-scanning pipeline).

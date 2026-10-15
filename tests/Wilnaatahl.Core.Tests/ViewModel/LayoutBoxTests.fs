@@ -139,7 +139,7 @@ let ``visit visits all boxes and passes correct positions`` () =
         PersonId 2, { X = 4.1<w>; Y = 5.2<w>; Z = 6.3<w> }
     ]
 
-    let actual = TestUtils.setPositions (vecZeroW, box) |> Seq.toList
+    let actual = TestUtils.setPositions vecZeroW box |> Seq.toList
 
     // Compare as sets (order doesn't matter)
     Set.ofList actual =! Set.ofList expected

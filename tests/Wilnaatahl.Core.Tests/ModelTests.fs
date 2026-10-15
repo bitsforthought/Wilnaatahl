@@ -102,7 +102,8 @@ let ``Initial peopleAndParents assigns each Wilp to a distinct Pdeek`` () =
         |> Seq.choose (fun (p, _) ->
             match p.Kinship with
             | Wilp w -> Some w
-            | _ -> None)
+            | UnknownWilp _
+            | NoneProvided _ -> None)
         |> Seq.map (fun w -> w.Name, w)
         |> Map.ofSeq
 

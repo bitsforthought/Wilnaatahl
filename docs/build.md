@@ -5,15 +5,15 @@ The npm scripts are a thin facade over the FAKE target graph in
 
 ## Commands
 
-| Command            | Behaviour                                                                                  |
-| ------------------ | ------------------------------------------------------------------------------------------ |
-| `npm run init`     | Install npm packages and restore .NET packages and tools.                                  |
-| `npm run build`    | Format locally, validate agent definitions, type-check, lint, and bundle for deployment.   |
-| `npm run dev`      | Format locally, generate and bridge Fable output, and start Vite.                          |
-| `npm test`         | Run both complete test suites, including Koota conformance.                                |
-| `npm run validate` | Run build checks, infrastructure self-tests, instrumented suites, and coverage gates once. |
-| `npm run format`   | Format authored files with Fantomas and Prettier.                                          |
-| `npm run report`   | Generate fresh coverage and open both HTML reports locally.                                |
+| Command            | Behaviour                                                                                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run init`     | Install npm packages and restore .NET packages and tools.                                                                                         |
+| `npm run build`    | Apply enabled F# refactorings, format locally, validate agent definitions, type-check, lint, and bundle for deployment.                           |
+| `npm run dev`      | Apply enabled F# refactorings, format locally, generate and bridge Fable output, and start Vite.                                                  |
+| `npm test`         | Apply enabled F# refactorings and format locally, then run both complete test suites, including Koota conformance.                                |
+| `npm run validate` | Apply enabled F# refactorings and format locally, then run build checks, infrastructure self-tests, instrumented suites, and coverage gates once. |
+| `npm run format`   | Apply enabled F# refactorings, then format authored files with Fantomas and Prettier.                                                             |
+| `npm run report`   | Apply enabled F# refactorings and format, then generate fresh coverage and open both HTML reports locally.                                        |
 
 Run a focused target with:
 
@@ -25,9 +25,35 @@ Quoting the npm argument separator keeps this form consistent across PowerShell,
 `cmd.exe`, and Unix-like shells. Run `npm run fake "--" --help` to list the
 available targets and options.
 
-Useful focused targets include `TestFSharp`, `TestTypeScript`, `TestKoota`,
-`Coverage`, `CoverageCheck`, `Lint`, `FormatCheck`, `ReportFSharp`, and
-`ReportTypeScript`.
+Useful focused targets include `Refactor`, `RefactorCheck`, `TestFSharp`,
+`TestTypeScript`, `TestKoota`, `Coverage`, `CoverageCheck`, `Lint`,
+`FormatCheck`, `ReportFSharp`, and `ReportTypeScript`.
+
+`Refactor` applies the enabled mechanical fixes. `RefactorCheck` performs
+report-only analysis and writes fresh SARIF reports under the ignored
+`refactor-reports/` directory. Both scan the tracked solution and F# scripts;
+new authored scripts under `scripts/` are also included before they are tracked.
+The solution analysis covers project compile inputs such as `.fsi` files.
+
+The common analysis pass covers correctness, idiom, and cosmetic rules across
+the solution and scripts. Performance analysis is a separate pass over the
+production core, restricted to the explicit browser-performance allowlist in
+`scripts/Build.fsx`. It defines `FABLE_COMPILER` and scopes the corresponding
+MSBuild condition to that child process so CLR-only mock sources are excluded
+from performance findings without excluding them from the common pass.
+After this pass, the wrapper restores the normal CLR project assets because the
+conditional compilation changes the dependency graph recorded by MSBuild.
+The root config freezes the complete 180-rule catalog with performance disabled
+by default, and keeps FR0060, FR0092, and FR0130 disabled. The allowlist does
+not opt into .NET-specific overload, `Span`, sealing, or SIMD recommendations.
+
+Findings are advisory in the current workflow: `--notes` makes fix-less
+findings visible, but the wrapper does not pass `--fail-on-findings`. A
+non-zero tool exit, missing or invalid SARIF, and other infrastructure failures
+still fail the target. The tool supports a future strict gate using
+`--fail-on-findings`; that mode returns exit code `3` for findings, which a
+future wrapper must propagate as a distinct findings result rather than mistake
+for an infrastructure failure.
 
 ## Generated TypeScript
 
@@ -54,10 +80,12 @@ npm run init "--" --ci
 npm run validate "--" --ci
 ```
 
-CI mode uses `npm ci`, checks formatting without writing, prevents coverage
-baseline updates, and rejects targets that launch a development server or open a
-report. Local development should normally use `npm run init` and
-`npm run validate` without this option.
+CI mode uses `npm ci`, runs F# refactoring report-only, checks formatting
+without writing, prevents coverage baseline updates, and rejects targets that
+launch a development server or open a report. The report-only `RefactorCheck`
+target can also be run directly in CI mode. Local build, test, dev, and focused
+F# targets apply enabled fixes before Fantomas. Local development should
+normally use `npm run init` and `npm run validate` without this option.
 
 ## Continuous Integration
 

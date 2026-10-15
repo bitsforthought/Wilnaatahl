@@ -18,9 +18,8 @@ type EcsWorld() =
 
     member _.World = world
 
-    interface System.IDisposable with
-        member _.Dispose() =
-            (testWorld :> System.IDisposable).Dispose()
+    interface IDisposable with
+        member _.Dispose() = (testWorld :> IDisposable).Dispose()
 
 type internal AddTrackingWorld(inner: IWorld) =
     let mutable addCalls = 0
@@ -34,7 +33,7 @@ type internal AddTrackingWorld(inner: IWorld) =
 
         member _.Get(valueTrait: IValueTrait<'T>) = inner.Get valueTrait
         member _.Has someTrait = inner.Has someTrait
-        member _.Query([<ParamArray>] where: QueryOperator[]) = inner.Query(where)
+        member _.Query([<ParamArray>] where: QueryOperator[]) = inner.Query where
         member _.QueryTrait(someTrait, [<ParamArray>] where: QueryOperator[]) = inner.QueryTrait(someTrait, where)
 
         member _.QueryTraits(firstTrait, secondTrait, [<ParamArray>] where: QueryOperator[]) =
@@ -46,10 +45,10 @@ type internal AddTrackingWorld(inner: IWorld) =
         member _.QueryTraits4(firstTrait, secondTrait, thirdTrait, fourthTrait, [<ParamArray>] where: QueryOperator[]) =
             inner.QueryTraits4(firstTrait, secondTrait, thirdTrait, fourthTrait, where)
 
-        member _.QueryFirst([<ParamArray>] where: QueryOperator[]) = inner.QueryFirst(where)
+        member _.QueryFirst([<ParamArray>] where: QueryOperator[]) = inner.QueryFirst where
         member _.Remove someTrait = inner.Remove someTrait
         member _.Set (valueTrait: IValueTrait<'T>) (value: 'T) = inner.Set valueTrait value
-        member _.Spawn([<ParamArray>] specs: SpawnSpec[]) = inner.Spawn(specs)
+        member _.Spawn([<ParamArray>] specs: SpawnSpec[]) = inner.Spawn specs
 
 /// The label on a toolbar button. Fails when the entity carries no `Button`.
 let buttonLabel entity = (entity |> get Button).Value.label
