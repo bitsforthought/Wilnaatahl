@@ -15,14 +15,14 @@ let private UndoButton = tagTrait ()
 let private RedoButton = tagTrait ()
 
 /// A stack of commands, most recent first.
-let private CommandStack = refTrait (fun () -> new Stack<Command>())
+let private CommandStack = refTrait (fun () -> Stack<Command>())
 
 let spawnUndoRedoControls (sortOrder, world: IWorld) =
     // The controls are spawned on app startup and never destroyed, which should be fine.
     world.Spawn(
         Button.Val {| sortOrder = sortOrder; label = "Undo"; disabled = true |},
         UndoButton.Tag(),
-        CommandStack.Val(new Stack<Command>()),
+        CommandStack.Val(Stack<Command>()),
         MoveModeOnly.Tag(),
         EmitsIntent.Val [ Undo ]
     )
@@ -31,7 +31,7 @@ let spawnUndoRedoControls (sortOrder, world: IWorld) =
     world.Spawn(
         Button.Val {| sortOrder = sortOrder + 1; label = "Redo"; disabled = true |},
         RedoButton.Tag(),
-        CommandStack.Val(new Stack<Command>()),
+        CommandStack.Val(Stack<Command>()),
         MoveModeOnly.Tag(),
         EmitsIntent.Val [ Redo ]
     )

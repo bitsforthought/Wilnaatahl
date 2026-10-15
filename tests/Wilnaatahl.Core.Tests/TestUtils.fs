@@ -29,7 +29,7 @@ let debugBreak () =
 /// keyed by the PersonId each node renders. (Distinct nodes of the same person —
 /// an outside spouse's per-marriage partner nodes — collapse to one key here; the
 /// system-level layout tests distinguish them by NodeKey instead.)
-let setPositions (initialPosition, rootBox) =
+let setPositions initialPosition rootBox =
     let visitLeaf pos (nodeKey: NodeKey) offset =
         (nodeKey.PersonId, pos + offset) |> Seq.singleton
 

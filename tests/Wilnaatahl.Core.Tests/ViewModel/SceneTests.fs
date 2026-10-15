@@ -99,7 +99,7 @@ let ``layoutGraph assigns correct positions`` () =
     let rootOffset, rootBox = Scene.layoutGraph (WilpName "H") graph
 
     let actual =
-        setPositions (rootOffset, rootBox)
+        setPositions rootOffset rootBox
         |> List.ofSeq
         |> List.sortBy (fun (p, _) -> p.AsInt)
 
@@ -146,7 +146,7 @@ let ``layoutGraph positions partner of a childless Couple adjacent to the Wilp p
         createFamilyGraph [ childlessHead, None; childlessPartner, None ] [ childlessCouple ] []
 
     let rootOffset, rootBox = Scene.layoutGraph (WilpName "Q") graph
-    let positions = setPositions (rootOffset, rootBox) |> List.ofSeq |> Map.ofList
+    let positions = setPositions rootOffset rootBox |> List.ofSeq |> Map.ofList
 
     let headPos = positions |> Map.find childlessHead.Id
     let partnerPos = positions |> Map.find childlessPartner.Id
@@ -189,7 +189,7 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
             ColonialName = Some "ChildA"
             Shape = Sphere
             Kinship = Wilp { Name = WilpName "T"; Pdeek = Giskaast }
-            DateOfBirth = Some(System.DateOnly(2000, 6, 1))
+            DateOfBirth = Some(DateOnly(2000, 6, 1))
             BirthOrder = 0
     }
 
@@ -199,7 +199,7 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
             ColonialName = Some "ChildB"
             Shape = Sphere
             Kinship = Wilp { Name = WilpName "T"; Pdeek = Giskaast }
-            DateOfBirth = Some(System.DateOnly(2005, 1, 1))
+            DateOfBirth = Some(DateOnly(2005, 1, 1))
     }
 
     let childC = {
@@ -208,7 +208,7 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
             ColonialName = Some "ChildC"
             Shape = Sphere
             Kinship = Wilp { Name = WilpName "T"; Pdeek = Giskaast }
-            DateOfBirth = Some(System.DateOnly(2000, 6, 1))
+            DateOfBirth = Some(DateOnly(2000, 6, 1))
             BirthOrder = 1
     }
 
@@ -227,7 +227,7 @@ let ``layoutGraph sorts children by DateOfBirth then BirthOrder`` () =
 
     // Collect the X positions of children from the layout.
     let childPositions =
-        setPositions ({ X = 0.0<w>; Y = 0.0<w>; Z = 0.0<w> }, rootBox)
+        setPositions ({ X = 0.0<w>; Y = 0.0<w>; Z = 0.0<w> }) rootBox
         |> List.ofSeq
         |> List.choose (fun (pid, pos) ->
             match pid with
@@ -449,7 +449,7 @@ let ``layoutGraph interleaves childless and procreative Couples by effective dat
     let graph = createFamilyGraph people couples []
 
     let rootOffset, rootBox = Scene.layoutGraph wilpName graph
-    let positions = setPositions (rootOffset, rootBox) |> List.ofSeq |> Map.ofList
+    let positions = setPositions rootOffset rootBox |> List.ofSeq |> Map.ofList
 
     // The three partners should be laid out left-to-right in effective-date order.
     let xOf personId = (Map.find personId positions).X

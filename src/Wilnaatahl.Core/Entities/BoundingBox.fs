@@ -43,6 +43,6 @@ let updateCorners (world: IWorld) changeOption f boxId =
         let which = entity |> getRelationValue CornerOf boxId |> Option.get
 
         match i with
-        | 1 -> f pos which.IsBounds
+        | 1
         | 2 -> f pos which.IsBounds
         | _ -> failwith $"Found Line {boxId} with {i} endpoints during update."

@@ -195,7 +195,8 @@ module Couple =
 /// A family tree centered around one Wilp, including partners from outside that Wilp.
 /// If a Wilp has mutiple roots, then it will have more than one such tree.
 type WilpTree =
-    | Leaf of PersonId // Person with no descendants
+    /// Person with no descendants
+    | Leaf of PersonId
     | Family of Family
 
     /// Gets the root of a WilpTree, which is either the Wilp member parent of a
@@ -343,7 +344,8 @@ module FamilyGraph =
             |> List.choose (fun (p, _) ->
                 match p.Kinship with
                 | Wilp w -> Some w.Name
-                | _ -> None)
+                | UnknownWilp _
+                | NoneProvided _ -> None)
             |> Set.ofList
 
         // Helper to build WilpTree recursively. A Wilp member becomes a Family node if

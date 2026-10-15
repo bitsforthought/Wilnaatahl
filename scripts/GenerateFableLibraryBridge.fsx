@@ -297,7 +297,7 @@ module internal SelfTest =
     let runSelfTest () =
         let assertEqual name expected actual =
             if expected <> actual then
-                failwith (sprintf "Self-test failed: %s. Expected %A, got %A." name expected actual)
+                failwith $"Self-test failed: %s{name}. Expected %A{expected}, got %A{actual}."
 
         let usage = Error "Usage: GenerateFableLibraryBridge.fsx [--self-test]"
         assertEqual "no arguments generate the bridge" (Ok CommandLine.GenerateBridge) (CommandLine.parseArguments [])

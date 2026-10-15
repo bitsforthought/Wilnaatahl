@@ -61,7 +61,7 @@ let private dragInFlight (world: IWorld) =
 /// carrying out that click and the drag together, so clicks are dropped here rather than in the
 /// systems that read them.
 let handleClick world entity =
-    if not (dragInFlight world) && not (entity |> has Hidden) then
+    if not (dragInFlight world || entity |> has Hidden) then
         world |> raiseInput (Clicked(entity, currentMode world))
 
 let handleDrag (world: IWorld) x y z =
@@ -84,7 +84,7 @@ let handleDragEnd (world: IWorld) = world |> raiseInput DragEnded
 let handleDragStart (world: IWorld) =
     (world |> queue)
         .RemoveAll(function
-            | Clicked(_, _) -> true
+            | Clicked _ -> true
             | _ -> false)
     |> ignore
 

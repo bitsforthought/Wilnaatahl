@@ -230,8 +230,7 @@ module LayoutBox =
                     / 2.0
 
             let followers =
-                [ 0 .. boxes.Length - 1 ]
-                |> List.map (fun i ->
+                List.init boxes.Length (fun i ->
                     boxes[i],
                     {
                         X = distancesToTheLeft[i]

@@ -74,7 +74,7 @@ let fSharpMetrics = [ lineMetric; branchMetric ]
 let typeScriptMetrics = [ typeScriptLineMetric; typeScriptBranchMetric ]
 
 let tryGetProperty (property: string) (element: JsonElement) =
-    match element.TryGetProperty(property) with
+    match element.TryGetProperty property with
     | true, prop -> Ok prop
     | false, _ -> Error property
 
@@ -199,9 +199,7 @@ let failWithError error =
     exit 1
 
 let unwrapResult result =
-    match result with
-    | Ok value -> value
-    | Error error -> failWithError error
+    result |> Result.defaultWith (fun error -> failWithError error)
 
 let writeBaseline path results =
     let properties =
@@ -235,7 +233,7 @@ let applyBaselineAction path action : Result<unit, CoverageGateError> =
 let runSelfTest () =
     let assertEqual name expected actual =
         if expected <> actual then
-            failwith (sprintf "Self-test failed: %s. Expected %A, got %A." name expected actual)
+            failwith $"Self-test failed: %s{name}. Expected %A{expected}, got %A{actual}."
 
     assertEqual "default arguments ratchet" (Ok(RunCoverageCheck Ratchet)) (parseArguments [])
 
