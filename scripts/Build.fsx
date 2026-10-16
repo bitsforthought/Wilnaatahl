@@ -6,7 +6,6 @@ open System.ComponentModel
 open System.Diagnostics
 open System.Globalization
 open System.IO
-open System.Runtime.ExceptionServices
 open Fake.Core
 open Fake.Core.TargetOperators
 
@@ -411,25 +410,62 @@ module RefactorIntegration =
     open System.Text.Json
     open ProcessExecution
 
+    /// Refactor applies fixes locally; RefactorCheck reports them with --dry-run so CI never rewrites sources.
     type AnalysisMode =
         | Apply
         | ReportOnly
 
+    // Both configuration files are hand-edited and carry comments explaining each rule decision.
+    let private jsoncOptions =
+        JsonDocumentOptions(CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true)
+
     let parsePerformanceCodes (configuration: string) =
-        use document =
-            JsonDocument.Parse(
-                configuration,
-                JsonDocumentOptions(CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true)
-            )
+        use document = JsonDocument.Parse(configuration, jsoncOptions)
 
         let codes =
             document.RootElement.EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
 
+        // performanceCommand forwards these via --codes, and an empty --codes means "no filter" to the tool,
+        // which would silently enable every performance rule instead of none.
         if List.isEmpty codes || codes |> List.exists String.IsNullOrWhiteSpace then
             failwith "Performance codes must be a nonempty JSON array of nonblank strings."
 
         codes
 
+    let private isRuleSetting (setting: JsonElement) =
+        let isBoolean (value: JsonElement) =
+            value.ValueKind = JsonValueKind.True || value.ValueKind = JsonValueKind.False
+
+        match setting.ValueKind with
+        | JsonValueKind.Object ->
+            match setting.TryGetProperty "enabled" with
+            | true, enabled -> isBoolean enabled
+            | false, _ -> false
+        | _ -> isBoolean setting
+
+    let private hasRuleSettings (root: JsonElement) =
+        root.ValueKind = JsonValueKind.Object
+        && match root.TryGetProperty "rules" with
+           | true, rules when rules.ValueKind = JsonValueKind.Object ->
+               rules.EnumerateObject() |> Seq.forall (fun rule -> isRuleSetting rule.Value)
+           | _ -> false
+
+    /// fsharp-refactor fails open: it silently falls back to its defaults when fsharprefactor.json is malformed,
+    /// which would quietly re-enable every rule we disabled. Checking the shape it reads makes that a build error.
+    let validateConfiguration (configuration: string) =
+        let isValid =
+            try
+                use document = JsonDocument.Parse(configuration, jsoncOptions)
+                hasRuleSettings document.RootElement
+            with :? JsonException ->
+                false
+
+        if not isValid then
+            failwith
+                "fsharprefactor.json must contain a \"rules\" object whose values are booleans or objects with a boolean \"enabled\"."
+
+    // Build outputs, restored packages and Fable-generated code are not authored here; fixing them would be
+    // overwritten or would rewrite third-party sources. Deliberately name-based so new projects need no registration.
     let private skippedDirectoryNames =
         set [ ".git"; "bin"; "obj"; "node_modules"; "fable_modules"; "generated" ]
 
@@ -445,7 +481,8 @@ module RefactorIntegration =
                 |> Seq.collect (filesUnder extensions)
         }
 
-    /// Projects bring their compiled sources, so individual .fs/.fsi files are not separate inputs.
+    /// Projects bring their compiled sources, so individual .fs/.fsi files are not separate inputs. Analysing
+    /// through the project also gives the tool typed compiler arguments, which many rules need to fire safely.
     let analysisInputs root =
         filesUnder (set [ ".fsproj"; ".fsx" ]) root
         |> Seq.map (fun path -> Path.GetRelativePath(root, path))
@@ -457,6 +494,8 @@ module RefactorIntegration =
         | Apply -> []
         | ReportOnly -> [ "--dry-run" ]
 
+    // --notes prints advisory-only findings (rules with no automatic fix) to the console, where coding agents can
+    // act on them. --fail-on-findings is deliberately absent: findings stay advisory until we choose to gate on them.
     let private createCommand root mode target categories extraArguments environmentVariables =
         let arguments =
             [ "tool"; "run"; "fsharp-refactor"; "--"; target ]
@@ -470,9 +509,15 @@ module RefactorIntegration =
                 EnvironmentVariables = environmentVariables
         }
 
+    // Excluding the performance category here keeps performance rules confined to production code even if one is
+    // later enabled in fsharprefactor.json; tests and build scripts gain nothing from them.
     let commonCommand root mode target =
         createCommand root mode target "correctness,idiom,cosmetic" [] Map.empty
 
+    /// Production code runs as Fable-generated JavaScript, so CLR-specific performance advice does not apply to it.
+    /// This pass therefore analyses the browser build flavour: --define FABLE_COMPILER selects the #if FABLE_COMPILER
+    /// source branches, and the environment variable (which MSBuild reads as a property) selects Fable's package
+    /// references and excludes the CLR-only ECS mock. Directory.Build.props gives that flavour its own bin/obj.
     let performanceCommand root mode codes =
         let productionSourceDirectory = Path.Combine("src", "Wilnaatahl.Core")
         let selectedCodes = String.concat "," codes
@@ -488,29 +533,14 @@ module RefactorIntegration =
             [ "--codes"; selectedCodes; "--define"; "FABLE_COMPILER" ]
             (Map [ ("FABLE_COMPILER", "true") ])
 
-    let runWithCleanup action cleanup =
-        let actionResult =
-            try
-                Ok(action ())
-            with error ->
-                Error error
-
-        let cleanupResult =
-            try
-                Ok(cleanup ())
-            with error ->
-                Error error
-
-        match actionResult, cleanupResult with
-        | Error actionError, Error cleanupError ->
-            eprintfn $"Cleanup also failed: {cleanupError.Message}"
-            ExceptionDispatchInfo.Capture(actionError).Throw()
-        | Error actionError, Ok() -> ExceptionDispatchInfo.Capture(actionError).Throw()
-        | Ok(), Error cleanupError -> ExceptionDispatchInfo.Capture(cleanupError).Throw()
-        | Ok(), Ok() -> ()
-
     let run root mode =
-        // The CLI has no named profiles, so the performance selection lives separately from its common config.
+        // Both configuration files are checked before any analysis, so a bad edit cannot leave sources partly rewritten.
+        Path.Combine(root, "fsharprefactor.json")
+        |> File.ReadAllText
+        |> validateConfiguration
+
+        // The CLI has no named profiles or --config option; it only reads the nearest fsharprefactor.json. A
+        // production-only rule selection therefore lives in its own file and is forwarded with --codes.
         let codes =
             Path.Combine(root, ".config", "fsharp-refactor-performance.json")
             |> File.ReadAllText
@@ -520,11 +550,7 @@ module RefactorIntegration =
         |> List.map (commonCommand root mode)
         |> List.iter ProcessExecution.runCommand
 
-        // fsharp-refactor builds projects to obtain typed compiler arguments. With FABLE_COMPILER=true,
-        // Wilnaatahl.Core.fsproj restores Thoth.Json.JavaScript and Fable.Core instead of Thoth.Json.Newtonsoft
-        // into the same obj/project.assets.json, so CLR builds using --no-restore need a normal restore afterwards.
-        runWithCleanup (fun () -> performanceCommand root mode codes |> ProcessExecution.runCommand) (fun () ->
-            dotnetCommand root [ "restore" ] |> ProcessExecution.runOrFail)
+        performanceCommand root mode codes |> ProcessExecution.runCommand
 
 
 module BuildSelfTest =
@@ -581,6 +607,47 @@ module BuildSelfTest =
             [ "EXAMPLE1"; "EXAMPLE2" ]
             describedCodes
 
+        let configurationError =
+            Some
+                "fsharprefactor.json must contain a \"rules\" object whose values are booleans or objects with a boolean \"enabled\"."
+
+        let ruleConfiguration ruleSetting =
+            $$"""
+            // Rule policy with a described rule.
+            {
+                "publicApi": true,
+                "rules": {
+                    "kept": { "enabled": false, "description": "Explains the decision." },
+                    "example": {{ruleSetting}},
+                }
+            }
+            """
+
+        for validRule in [ "true"; "false"; """{ "enabled": true }""" ] do
+            assertEqual
+                $"well-formed rule setting is accepted: {validRule}"
+                None
+                (failureFrom (fun () -> validateConfiguration (ruleConfiguration validRule))
+                 |> Option.map _.Message)
+
+        for invalidConfiguration in
+            [
+                ""
+                "{ malformed"
+                "[]"
+                "{}"
+                """{ "rules": [] }"""
+                ruleConfiguration "\"false\""
+                ruleConfiguration "null"
+                ruleConfiguration "{}"
+                ruleConfiguration """{ "enabled": "true" }"""
+            ] do
+            assertEqual
+                $"configuration the tool would silently ignore is rejected: {invalidConfiguration}"
+                configurationError
+                (failureFrom (fun () -> validateConfiguration invalidConfiguration)
+                 |> Option.map _.Message)
+
         let fixtureRoot = Path.Combine(root, $"refactor-self-test-{Guid.NewGuid():N}")
 
         let writeFixture (relativePath: string) =
@@ -617,7 +684,21 @@ module BuildSelfTest =
 
             Directory.CreateDirectory(Path.Combine(fixtureRoot, ".config")) |> ignore
 
-            File.WriteAllText(Path.Combine(fixtureRoot, ".config", "fsharp-refactor-performance.json"), "[]")
+            let performancePath =
+                Path.Combine(fixtureRoot, ".config", "fsharp-refactor-performance.json")
+
+            let configurationPath = Path.Combine(fixtureRoot, "fsharprefactor.json")
+
+            File.WriteAllText(performancePath, """[ "EXAMPLE1" ]""")
+            File.WriteAllText(configurationPath, "{ malformed")
+
+            assertEqual
+                "invalid rule configuration fails before discovery or source writes"
+                configurationError
+                (failureFrom (fun () -> run fixtureRoot Apply) |> Option.map _.Message)
+
+            File.WriteAllText(configurationPath, ruleConfiguration "false")
+            File.WriteAllText(performancePath, "[]")
 
             assertEqual
                 "invalid performance selection fails before discovery or source writes"
@@ -672,73 +753,6 @@ module BuildSelfTest =
             (Some "Performance analysis requires nonempty codes.")
             (failureFrom (fun () -> performanceCommand root ReportOnly [] |> ignore)
              |> Option.map _.Message)
-
-        let cleanupEvents = ResizeArray<string>()
-
-        runWithCleanup (fun () -> cleanupEvents.Add "action") (fun () -> cleanupEvents.Add "cleanup")
-
-        assertEqual "cleanup runs after the action" [ "action"; "cleanup" ] (cleanupEvents |> Seq.toList)
-
-        let mutable cleanedUpAfterFailure = false
-        let actionFailure = InvalidOperationException("action failed")
-
-        let preservedActionFailure =
-            failureFrom (fun () ->
-                runWithCleanup (fun () -> raise actionFailure) (fun () -> cleanedUpAfterFailure <- true))
-
-        assertEqual "cleanup runs after the action fails" true cleanedUpAfterFailure
-
-        assertEqual "cleanup does not mask the action failure" (Some(actionFailure :> exn)) preservedActionFailure
-
-        let cleanupFailure = InvalidOperationException("cleanup failed")
-        let mutable originalCleanupStack = ""
-
-        let surfacedCleanupFailure =
-            failureFrom (fun () ->
-                runWithCleanup ignore (fun () ->
-                    try
-                        raise cleanupFailure
-                    with error ->
-                        originalCleanupStack <- error.StackTrace
-                        reraise ()))
-
-        assertEqual
-            "cleanup failure is surfaced when the action succeeds"
-            (Some(cleanupFailure :> exn))
-            surfacedCleanupFailure
-
-        assertEqual
-            "cleanup failure retains its original throw location"
-            true
-            (surfacedCleanupFailure
-             |> Option.exists (fun error ->
-                 not (String.IsNullOrEmpty originalCleanupStack)
-                 && error.StackTrace.Contains(originalCleanupStack, StringComparison.Ordinal)))
-
-        let primaryActionFailure = InvalidOperationException("primary action failed")
-        let secondaryCleanupFailure = InvalidOperationException("secondary cleanup failed")
-        let priorErrorWriter = Console.Error
-        use capturedErrors = new StringWriter()
-
-        Console.SetError capturedErrors
-
-        let preservedPrimaryFailure =
-            try
-                failureFrom (fun () ->
-                    runWithCleanup (fun () -> raise primaryActionFailure) (fun () -> raise secondaryCleanupFailure))
-            finally
-                Console.SetError priorErrorWriter
-
-        assertEqual
-            "primary action failure survives a simultaneous cleanup failure"
-            (Some(primaryActionFailure :> exn))
-            preservedPrimaryFailure
-
-        assertEqual
-            "secondary cleanup failure is logged when the primary error is preserved"
-            true
-            (capturedErrors.ToString().Contains(secondaryCleanupFailure.Message, StringComparison.Ordinal))
-
 
         let fableCompilerBeforeProcess =
             Environment.GetEnvironmentVariable("FABLE_COMPILER")
