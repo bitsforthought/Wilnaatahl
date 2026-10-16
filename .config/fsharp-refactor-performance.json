@@ -1,13 +1,13 @@
 [
-  "FR0004",
-  "FR0051",
-  "FR0058",
-  "FR0071",
-  "FR0076",
-  "FR0102",
-  "FR0104",
-  "FR0137",
-  "FR0167",
-  "FR0170",
-  "FR0173"
+  "FR0004", // Move collection conversions past pipeline operations.
+  "FR0051", // Avoid quadratic collection append in loops.
+  "FR0058", // Detect nested enumerator allocation in recursive sequence expressions.
+  "FR0071", // Hoist loop-invariant bindings.
+  "FR0076", // Use iter instead of map when the result is discarded.
+  "FR0102", // Detect repeated linked-list indexing in loops.
+  "FR0104", // Avoid quadratic singleton append in recursion.
+  "FR0137", // Fuse consecutive map operations.
+  "FR0167", // Iterate strings without allocating ToCharArray copies.
+  "FR0170", // Enumerate dictionary key/value pairs instead of re-indexing keys.
+  "FR0173" // Use collection initialization instead of mapping an allocated range.
 ]

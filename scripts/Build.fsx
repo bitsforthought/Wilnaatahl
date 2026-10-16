@@ -2,7 +2,6 @@
 #r "nuget: Fake.Core.Process, 6.1.4"
 
 open System
-open System.Collections.Generic
 open System.ComponentModel
 open System.Diagnostics
 open System.Globalization
@@ -417,7 +416,11 @@ module RefactorIntegration =
         | ReportOnly
 
     let parsePerformanceCodes (configuration: string) =
-        use document = JsonDocument.Parse configuration
+        use document =
+            JsonDocument.Parse(
+                configuration,
+                JsonDocumentOptions(CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true)
+            )
 
         let codes =
             document.RootElement.EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
@@ -427,20 +430,27 @@ module RefactorIntegration =
 
         codes
 
-    let private normalizePath (path: string) =
-        path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar)
+    let private skippedDirectoryNames =
+        set [ ".git"; "bin"; "obj"; "node_modules"; "fable_modules"; "generated" ]
 
-    let analysisInputs (trackedPaths: string list) (scriptFiles: string list) =
-        trackedPaths @ scriptFiles
-        |> List.map normalizePath
-        |> List.filter (fun path ->
-            match Path.GetExtension(path) with
-            | ".sln"
-            | ".slnx"
-            | ".fsx" -> true
-            | _ -> false)
-        |> List.distinct
-        |> List.sort
+    let rec private filesUnder extensions directory =
+        seq {
+            yield!
+                Directory.EnumerateFiles directory
+                |> Seq.filter (fun path -> extensions |> Set.contains (Path.GetExtension path))
+
+            yield!
+                Directory.EnumerateDirectories directory
+                |> Seq.filter (fun child -> skippedDirectoryNames |> Set.contains (Path.GetFileName child) |> not)
+                |> Seq.collect (filesUnder extensions)
+        }
+
+    /// Projects bring their compiled sources, so individual .fs/.fsi files are not separate inputs.
+    let analysisInputs root =
+        filesUnder (set [ ".fsproj"; ".fsx" ]) root
+        |> Seq.map (fun path -> Path.GetRelativePath(root, path))
+        |> Seq.sort
+        |> Seq.toList
 
     let private modeArguments mode =
         match mode with
@@ -478,103 +488,44 @@ module RefactorIntegration =
             [ "--codes"; selectedCodes; "--define"; "FABLE_COMPILER" ]
             (Map [ ("FABLE_COMPILER", "true") ])
 
-    let validateConfiguration (configuration: string) =
-        use document =
-            JsonDocument.Parse(
-                configuration,
-                JsonDocumentOptions(CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true)
-            )
-
-        document.RootElement.GetProperty("rules").EnumerateObject()
-        |> Seq.iter (fun rule ->
-            if rule.Value.ValueKind = JsonValueKind.Object then
-                rule.Value.GetProperty("enabled").GetBoolean() |> ignore
-            else
-                rule.Value.GetBoolean() |> ignore)
-
-    let private trackedPaths root =
-        let startInfo =
-            ProcessStartInfo(
-                "git",
-                WorkingDirectory = root,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            )
-
-        [ "ls-files"; "--"; "*.sln"; "*.slnx"; "*.fsx" ]
-        |> List.iter (fun argument -> startInfo.ArgumentList.Add argument)
-
-        use gitProcess = Process.Start(startInfo)
-        let output = gitProcess.StandardOutput.ReadToEnd()
-        let error = gitProcess.StandardError.ReadToEnd()
-        gitProcess.WaitForExit()
-
-        if gitProcess.ExitCode <> 0 then
-            failwith $"Could not list tracked F# analysis inputs: {error.TrimEnd()}"
-
-        output.Split([| '\r'; '\n' |], StringSplitOptions.RemoveEmptyEntries)
-        |> Array.toList
-
-    let authoredScripts root =
-        let scriptsDirectory = Path.Combine(root, "scripts")
-
-        if Directory.Exists scriptsDirectory then
-            Directory.EnumerateFiles(scriptsDirectory, "*.fsx", SearchOption.AllDirectories)
-            |> Seq.map (fun path -> Path.GetRelativePath(root, path))
-            |> Seq.toList
-        else
-            []
-
-    let runAfterPerformance runAnalysis restore =
-        let analysisResult =
+    let runWithCleanup action cleanup =
+        let actionResult =
             try
-                Ok(runAnalysis ())
+                Ok(action ())
             with error ->
                 Error error
 
-        let restoreResult =
+        let cleanupResult =
             try
-                Ok(restore ())
+                Ok(cleanup ())
             with error ->
                 Error error
 
-        match analysisResult, restoreResult with
-        | Error analysisError, Error restoreError ->
-            eprintfn $"Restoring normal .NET assets also failed: {restoreError.Message}"
-            ExceptionDispatchInfo.Capture(analysisError).Throw()
-        | Error analysisError, Ok() -> ExceptionDispatchInfo.Capture(analysisError).Throw()
-        | Ok(), Error restoreError -> ExceptionDispatchInfo.Capture(restoreError).Throw()
+        match actionResult, cleanupResult with
+        | Error actionError, Error cleanupError ->
+            eprintfn $"Cleanup also failed: {cleanupError.Message}"
+            ExceptionDispatchInfo.Capture(actionError).Throw()
+        | Error actionError, Ok() -> ExceptionDispatchInfo.Capture(actionError).Throw()
+        | Ok(), Error cleanupError -> ExceptionDispatchInfo.Capture(cleanupError).Throw()
         | Ok(), Ok() -> ()
 
     let run root mode =
-        Path.Combine(root, "fsharprefactor.json")
-        |> File.ReadAllText
-        |> validateConfiguration
-
         // The CLI has no named profiles, so the performance selection lives separately from its common config.
         let codes =
             Path.Combine(root, ".config", "fsharp-refactor-performance.json")
             |> File.ReadAllText
             |> parsePerformanceCodes
 
-        let targets = analysisInputs (trackedPaths root) (authoredScripts root)
-
-        if
-            not (
-                targets
-                |> List.exists (fun path -> Path.GetExtension(path) = ".sln" || Path.GetExtension(path) = ".slnx")
-            )
-        then
-            failwith "Refactor analysis requires a tracked solution input."
-
-        targets
+        analysisInputs root
         |> List.map (commonCommand root mode)
         |> List.iter ProcessExecution.runCommand
 
-        // Fable-conditional analysis changes restore assets; leave normal .NET assets behind even on failure.
-        runAfterPerformance (fun () -> performanceCommand root mode codes |> ProcessExecution.runCommand) (fun () ->
+        // fsharp-refactor builds projects to obtain typed compiler arguments. With FABLE_COMPILER=true,
+        // Wilnaatahl.Core.fsproj restores Thoth.Json.JavaScript and Fable.Core instead of Thoth.Json.Newtonsoft
+        // into the same obj/project.assets.json, so CLR builds using --no-restore need a normal restore afterwards.
+        runWithCleanup (fun () -> performanceCommand root mode codes |> ProcessExecution.runCommand) (fun () ->
             dotnetCommand root [ "restore" ] |> ProcessExecution.runOrFail)
+
 
 module BuildSelfTest =
     open CommandLine
@@ -597,6 +548,7 @@ module BuildSelfTest =
     let runSelfTest root =
         for invalidCodes in
             [
+                ""
                 "[]"
                 "null"
                 "{}"
@@ -612,94 +564,71 @@ module BuildSelfTest =
                 (failureFrom (fun () -> parsePerformanceCodes invalidCodes |> ignore)
                  |> Option.isSome)
 
-        assertEqual
-            "performance codes preserve configured selection"
-            [ "EXAMPLE1"; "EXAMPLE2" ]
-            (parsePerformanceCodes
+        let describedCodes =
+            parsePerformanceCodes
                 """
+                // Rules selected for the Fable-conditional pass.
                 [
+                    // First example rule.
                     "EXAMPLE1",
-                    "EXAMPLE2"
+                    /* Second example rule. */
+                    "EXAMPLE2",
                 ]
-                """)
-
-        for invalidRule in [ "\"false\""; "null"; "{}"; """{ "enabled": "true" }""" ] do
-            let configuration =
                 """
-            {
-                "rules": {
-                    "example": INVALID
-                }
-            }
-            """
 
-            assertEqual
-                "malformed rule settings are rejected"
-                true
-                (failureFrom (fun () -> validateConfiguration (configuration.Replace("INVALID", invalidRule)))
-                 |> Option.isSome)
+        assertEqual
+            "performance codes accept described entries with a trailing comma"
+            [ "EXAMPLE1"; "EXAMPLE2" ]
+            describedCodes
 
-        for invalidConfiguration in [ "{ malformed"; "[]"; "{}" ] do
-            assertEqual
-                "malformed config is rejected"
-                true
-                (failureFrom (fun () -> validateConfiguration invalidConfiguration)
-                 |> Option.isSome)
+        let fixtureRoot = Path.Combine(root, $"refactor-self-test-{Guid.NewGuid():N}")
 
-        let configuration =
-            """
-        {
-            // Config owns rule names and policy.
-            "rules": {
-                "example": false,
-                "another": { "enabled": true },
-            }
-        }
-        """
-
-        let scriptFixtureRoot = Path.Combine(root, $"refactor-self-test-{Guid.NewGuid():N}")
-
-        let untrackedScriptPath =
-            Path.Combine(scriptFixtureRoot, "scripts", "NewUntracked.fsx")
-
-        Directory.CreateDirectory(Path.GetDirectoryName(untrackedScriptPath)) |> ignore
+        let writeFixture (relativePath: string) =
+            let path = Path.Combine(fixtureRoot, relativePath)
+            Directory.CreateDirectory(Path.GetDirectoryName(path)) |> ignore
+            File.WriteAllText(path, "")
 
         try
-            File.WriteAllText(untrackedScriptPath, "let newlyAuthoredScript = true")
-
-            assertEqual
-                "filesystem discovery includes an untracked script"
-                [ Path.Combine("scripts", "NewUntracked.fsx") ]
-                (authoredScripts scriptFixtureRoot |> analysisInputs [])
-
-            File.WriteAllText(Path.Combine(scriptFixtureRoot, "fsharprefactor.json"), configuration)
-            Directory.CreateDirectory(Path.Combine(scriptFixtureRoot, ".config")) |> ignore
-
-            File.WriteAllText(Path.Combine(scriptFixtureRoot, ".config", "fsharp-refactor-performance.json"), "[]")
-
-            assertEqual
-                "invalid performance selection fails before inventory or source writes"
-                (Some "Performance codes must be a nonempty JSON array of nonblank strings.")
-                (failureFrom (fun () -> run scriptFixtureRoot Apply) |> Option.map _.Message)
-        finally
-            Directory.Delete(scriptFixtureRoot, true)
-
-        assertEqual
-            "analysis includes tracked project and scripts plus an untracked authored script"
             [
-                "Wilnaatahl.slnx"
-                Path.Combine("scripts", "Build.fsx")
-                Path.Combine("scripts", "NewRefactorCheck.fsx")
+                "Fixture.slnx"
+                "App/App.fsproj"
+                "App/Program.fs"
+                "tests/Lib.Tests/Lib.Tests.fsproj"
+                "tools/nested/NewUntracked.fsx"
+                "tools/nested/README.md"
+                "App/bin/Debug/Copied.fsproj"
+                "App/obj/Generated.fsx"
+                "node_modules/package/Package.fsproj"
+                ".git/hooks/Hook.fsx"
+                "src/generated/Generated.fsx"
+                "src/generated/Generated.fsproj"
+                "src/generated/fable_modules/Library/Library.fsproj"
             ]
-            (analysisInputs [
-                "Wilnaatahl.slnx"
-                "scripts/Build.fsx"
-                "tests/Wilnaatahl.Core.Tests/Wilnaatahl.Core.Tests.fsproj"
-            ] [ "scripts/Build.fsx"; "scripts/NewRefactorCheck.fsx" ])
+            |> List.iter writeFixture
+
+            assertEqual
+                "filesystem discovery finds each project and authored script, skipping generated and dependency trees"
+                [
+                    Path.Combine("App", "App.fsproj")
+                    Path.Combine("tests", "Lib.Tests", "Lib.Tests.fsproj")
+                    Path.Combine("tools", "nested", "NewUntracked.fsx")
+                ]
+                (analysisInputs fixtureRoot)
+
+            Directory.CreateDirectory(Path.Combine(fixtureRoot, ".config")) |> ignore
+
+            File.WriteAllText(Path.Combine(fixtureRoot, ".config", "fsharp-refactor-performance.json"), "[]")
+
+            assertEqual
+                "invalid performance selection fails before discovery or source writes"
+                (Some "Performance codes must be a nonempty JSON array of nonblank strings.")
+                (failureFrom (fun () -> run fixtureRoot Apply) |> Option.map _.Message)
+        finally
+            Directory.Delete(fixtureRoot, true)
 
         let commonApply = commonCommand root Apply "Wilnaatahl.slnx"
         let commonCheck = commonCommand root ReportOnly "Wilnaatahl.slnx"
-        let performanceCheck = performanceCommand root ReportOnly [ "EXAMPLE1"; "EXAMPLE2" ]
+        let performanceCheck = performanceCommand root ReportOnly describedCodes
 
         assertEqual "applying fixes never requests dry-run" false (commonApply.Arguments |> List.contains "--dry-run")
 
@@ -719,7 +648,7 @@ module BuildSelfTest =
             (performanceCheck.Arguments |> List.item 4)
 
         assertEqual
-            "performance pass forwards the selected rules and Fable define"
+            "performance pass forwards the configured rules"
             "EXAMPLE1,EXAMPLE2"
             (performanceCheck.Arguments |> List.skipWhile ((<>) "--codes") |> List.item 1)
 
@@ -744,58 +673,50 @@ module BuildSelfTest =
             (failureFrom (fun () -> performanceCommand root ReportOnly [] |> ignore)
              |> Option.map _.Message)
 
-        let performanceEvents = ResizeArray<string>()
+        let cleanupEvents = ResizeArray<string>()
 
-        runAfterPerformance (fun () -> performanceEvents.Add "analysis") (fun () -> performanceEvents.Add "restore")
+        runWithCleanup (fun () -> cleanupEvents.Add "action") (fun () -> cleanupEvents.Add "cleanup")
 
-        assertEqual
-            "normal assets are restored after the Fable-conditional pass"
-            [ "analysis"; "restore" ]
-            (performanceEvents |> Seq.toList)
+        assertEqual "cleanup runs after the action" [ "action"; "cleanup" ] (cleanupEvents |> Seq.toList)
 
-        let mutable restoredAfterFailure = false
-        let analysisFailure = InvalidOperationException("performance analysis failed")
+        let mutable cleanedUpAfterFailure = false
+        let actionFailure = InvalidOperationException("action failed")
 
-        let preservedAnalysisFailure =
+        let preservedActionFailure =
             failureFrom (fun () ->
-                runAfterPerformance (fun () -> raise analysisFailure) (fun () -> restoredAfterFailure <- true))
+                runWithCleanup (fun () -> raise actionFailure) (fun () -> cleanedUpAfterFailure <- true))
 
-        assertEqual "asset restoration runs after analysis fails" true restoredAfterFailure
+        assertEqual "cleanup runs after the action fails" true cleanedUpAfterFailure
 
-        assertEqual
-            "asset restoration does not mask the analysis failure"
-            (Some(analysisFailure :> exn))
-            preservedAnalysisFailure
+        assertEqual "cleanup does not mask the action failure" (Some(actionFailure :> exn)) preservedActionFailure
 
-        let restoreFailure = InvalidOperationException("normal asset restore failed")
-        let mutable originalRestoreStack = ""
+        let cleanupFailure = InvalidOperationException("cleanup failed")
+        let mutable originalCleanupStack = ""
 
-        let surfacedRestoreFailure =
+        let surfacedCleanupFailure =
             failureFrom (fun () ->
-                runAfterPerformance ignore (fun () ->
+                runWithCleanup ignore (fun () ->
                     try
-                        raise restoreFailure
+                        raise cleanupFailure
                     with error ->
-                        originalRestoreStack <- error.StackTrace
+                        originalCleanupStack <- error.StackTrace
                         reraise ()))
 
         assertEqual
-            "asset restoration failure is surfaced when analysis succeeds"
-            (Some(restoreFailure :> exn))
-            surfacedRestoreFailure
+            "cleanup failure is surfaced when the action succeeds"
+            (Some(cleanupFailure :> exn))
+            surfacedCleanupFailure
 
         assertEqual
-            "asset restoration failure retains its original throw location"
+            "cleanup failure retains its original throw location"
             true
-            (surfacedRestoreFailure
+            (surfacedCleanupFailure
              |> Option.exists (fun error ->
-                 not (String.IsNullOrEmpty originalRestoreStack)
-                 && error.StackTrace.Contains(originalRestoreStack, StringComparison.Ordinal)))
+                 not (String.IsNullOrEmpty originalCleanupStack)
+                 && error.StackTrace.Contains(originalCleanupStack, StringComparison.Ordinal)))
 
-        let primaryAnalysisFailure =
-            InvalidOperationException("primary performance analysis failed")
-
-        let secondaryRestoreFailure = InvalidOperationException("secondary restore failed")
+        let primaryActionFailure = InvalidOperationException("primary action failed")
+        let secondaryCleanupFailure = InvalidOperationException("secondary cleanup failed")
         let priorErrorWriter = Console.Error
         use capturedErrors = new StringWriter()
 
@@ -804,20 +725,20 @@ module BuildSelfTest =
         let preservedPrimaryFailure =
             try
                 failureFrom (fun () ->
-                    runAfterPerformance (fun () -> raise primaryAnalysisFailure) (fun () ->
-                        raise secondaryRestoreFailure))
+                    runWithCleanup (fun () -> raise primaryActionFailure) (fun () -> raise secondaryCleanupFailure))
             finally
                 Console.SetError priorErrorWriter
 
         assertEqual
-            "primary analysis failure survives a simultaneous restore failure"
-            (Some(primaryAnalysisFailure :> exn))
+            "primary action failure survives a simultaneous cleanup failure"
+            (Some(primaryActionFailure :> exn))
             preservedPrimaryFailure
 
         assertEqual
-            "secondary restore failure is logged when the primary error is preserved"
+            "secondary cleanup failure is logged when the primary error is preserved"
             true
-            (capturedErrors.ToString().Contains(secondaryRestoreFailure.Message, StringComparison.Ordinal))
+            (capturedErrors.ToString().Contains(secondaryCleanupFailure.Message, StringComparison.Ordinal))
+
 
         let fableCompilerBeforeProcess =
             Environment.GetEnvironmentVariable("FABLE_COMPILER")
