@@ -30,6 +30,24 @@ description: >-
   build-vs-buy decision per `fsharp-style`; for example,
   `ValidateAgentDefinitions.fsx` uses YamlDotNet rather than a hand-rolled parser.
 
+## Thin tool integrations
+
+- Build scripts orchestrate tools; configuration owns rule policy. Before adding
+  a wrapper capability, identify its consumer and the repository requirement or
+  observed tool limitation it addresses. Do not produce reports without a
+  consumer, duplicate a vendor's schema, or impose Git/solution prerequisites
+  without that evidence.
+- Validate repository-owned adapter inputs and experimentally demonstrated
+  vendor failure modes. A tool that silently falls back on malformed config may
+  need a thin preflight check; this does not justify freezing its entire schema
+  or rule catalog in the build script. Keep disposable probes as evidence, not
+  permanent tests of dependency behaviour.
+- When adding a compiler define, target, or build flavour, identify its restore
+  graph and intermediate/output paths. Isolate incompatible artifacts before
+  adding restoration, retries, or cleanup machinery. Verify that running one
+  flavour leaves another's required artifacts intact, not merely that a repair
+  command runs afterward.
+
 ## Behavioural self-tests
 
 - Start with a failing test for each repository-owned policy or observable effect

@@ -24,6 +24,23 @@ coverage, code-generation, and package-command changes.
 This rubric is deliberately tuned to the four failure modes most often seen in
 generated changes here.
 
+## Design necessity and evidence
+
+Before hardening a new abstraction or failure-handling subsystem, ask whether
+ownership, isolation, existing tooling, or deletion removes the problem. Report
+unnecessary machinery through its concrete maintenance or failure cost, not an
+alternative design preference. Recommend the smallest sufficient resolution.
+
+Distinguish explicit requirements, inferred invariants, and reviewer suggestions.
+Quote owner feedback accurately; a request to describe a rule is not a request
+to justify every rule choice. Do not promote preferences into contracts or
+require extra machinery just because it could detect a hypothetical mistake.
+Agreement among panelists is not evidence that a requirement exists.
+
+Follow the review-packet protocol in `AGENTS.md`. A clean result requires
+inspection of the complete supplied scope; missing evidence means incomplete,
+not clean. Keep clean reports short and omit implementation checklists.
+
 ## 1. Logic coverage vs line coverage
 
 The change can pass `coverage:check` and still be under-tested. For every unit

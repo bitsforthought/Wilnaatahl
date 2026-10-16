@@ -178,6 +178,21 @@ parallelism, and argument-forwarding syntax.
 When guidance belongs to more than one audience, keep the complete explanation
 in its owning surface and link to it elsewhere.
 
+Comment consequential, non-obvious constraints: the failure being prevented and
+why the simpler-looking alternative is wrong. Usually one or two sentences
+suffice; do not narrate control flow or repeat the explanation at each use site.
+Apply the detailed comment rules in
+`.github/instructions/code-quality.instructions.md`.
+
+## Handling review feedback
+
+Separate the requested outcome from its stated rationale. If experimental
+evidence contradicts a premise that affects correctness or safety, explain it
+and resolve the decision with the user before making that consequential change.
+Once the tradeoff is understood and explicitly decided, follow the decision.
+Apply the underlying feedback to equivalent in-scope surfaces without expanding
+unrelated scope; do not turn a local correction into a blanket rule.
+
 ## Keeping token cost down
 
 Every tool call re-sends the whole context window, so keeping the working context
@@ -199,6 +214,13 @@ lean directly lowers cost. When working in this repo:
   of reading them whole, and don't re-read a file already in context.
 - **Search narrowly.** Prefer a targeted `glob`/`grep` over a broad repo-wide scan,
   and batch independent reads/searches into a single step.
+- **Assign one owner per edit scope and quality gate.** An executor owns its
+  focused checks; designate one owner for integration validation and review.
+  Do not have the coordinator repeat a delegated executor's completed gate.
+  Keep handoffs to decisions, changed files, evidence paths, and unresolved
+  findings, not transcripts.
+- **Keep procedures in their owning skills.** Link to them rather than copying
+  their checklists into root instructions or handoff prompts.
 
 ## Key Files & Directories
 
@@ -264,6 +286,16 @@ The reviewing agent (the primary agent, or an `implement-plan` executor)
 prepares each packet: the generated diff and status from its base, intended
 behaviour, load-bearing invariants, and validation run. Re-review packets also
 identify the finding, changed files, and claimed resolution.
+
+Save the machine-generated diff, status, and supporting evidence in temporary
+files under the session folder, outside the repository. Include added/untracked
+files in the review scope and materialize their contents or patches too.
+Pass reviewers file paths and a short scope summary, not pasted diffs, logs, or
+transcripts. Reviewers must be able to read the packet without shell or Git
+access. Refresh it for each round and keep the candidate unchanged during review.
+An unreadable packet or uninspected in-scope change is an incomplete review,
+not a clean result; supply the missing evidence to that panelist before
+consolidating. Apply the review skill's evidence and finding criteria.
 
 The first panel reviews the complete candidate diff against the full rubric.
 After fixing a finding, the next panel is a delta review: verify that resolution

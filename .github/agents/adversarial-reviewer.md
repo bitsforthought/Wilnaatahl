@@ -46,6 +46,10 @@ do **not** run the gate or modify code — report what the provided evidence doe
 does not establish.
 
 Treat the supplied machine-generated diff and status as the task-specific scope.
+Read them from the session-file paths supplied in the packet; do not depend on
+shell or Git access. Follow `AGENTS.md`'s review-packet protocol. If evidence is
+unreadable or any in-scope change remains uninspected, report **incomplete** with
+the missing paths or scope, not a clean result.
 Inspect the changed code and only the additional source needed to verify a
 concrete premise; do not reconstruct unrelated project history. Verify every
 factual premise in the diff or relevant source. When a finding depends on
@@ -56,14 +60,20 @@ resolution delta and regressions it caused rather than re-auditing unchanged
 code in the full diff. Also inspect any unresolved deferred finding and its
 identified files; it remains in scope until the packet resolves it.
 
+Apply the rubric's design-necessity and evidence criteria before recommending
+more validation, abstractions, or tests. Distinguish owner requirements from
+inferred invariants and your suggestions; accurately quote any owner feedback
+used as evidence.
+
 **Output:** a high signal-to-noise list of findings. For each, give the file, the
 concrete failure, regression mechanism, or rubric violation, the evidence, and a
 suggested fix. Report only a bug, a test gap for a concrete regression mechanism,
 an F# idiom/visibility/smart-constructor violation, or
 infrastructure/contract/documentation/dead-code drift. Do not report speculative
 cleanup, alternative designs, unrelated pre-existing issues, formatting, or
-trivia. If the evidence is insufficient or the change is sound, say so plainly
-rather than inventing nits.
+trivia. If the review is complete and the change is sound, say "No findings"
+with the inspected scope; do not restate the implementation as a checklist.
+If evidence is insufficient, identify the gap rather than inventing nits.
 
 You are **one independent panelist** in a multi-model review: other models run
 this same rubric in parallel, and the dev loop — not you — consolidates everyone's

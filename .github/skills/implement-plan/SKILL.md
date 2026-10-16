@@ -16,6 +16,13 @@ The primary session coordinates the work and owns state-changing git and
 adversarial review. The primary session verifies the report mechanically; it
 does not re-review or overrule the executor.
 
+Keep one owner for each edit scope and its quality loop; do not duplicate an
+assignment while an executor is active. Handoffs carry decisions, changed files,
+evidence paths, and unresolved findings, not transcripts or pasted diffs. Follow
+`AGENTS.md`'s pass-by-reference review-packet protocol. The coordinator checks
+reports without repeating a completed gate unless the candidate has changed or
+the evidence exposes an unresolved concern.
+
 ## Phases
 
 Run **Prepare → Implement → Publish**, resuming from recorded state when needed.
