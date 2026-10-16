@@ -481,7 +481,7 @@ module RefactorIntegration =
                 |> Seq.collect (filesUnder extensions)
         }
 
-    /// Projects bring their compiled sources, so individual .fs/.fsi files are not separate inputs. Analysing
+    /// Projects bring their compiled sources, so individual .fs/.fsi files are not separate inputs. Analyzing
     /// through the project also gives the tool typed compiler arguments, which many rules need to fire safely.
     let analysisInputs root =
         filesUnder (set [ ".fsproj"; ".fsx" ]) root
