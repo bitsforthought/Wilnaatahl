@@ -31,16 +31,15 @@ Useful focused targets include `Refactor`, `RefactorCheck`, `TestFSharp`,
 
 `Refactor` applies the enabled mechanical fixes. `RefactorCheck` previews
 findings without changing source. Both print findings to the console and scan
-the tracked solution and F# scripts;
-new authored scripts under `scripts/` are also included before they are tracked.
+F# projects and scripts, including new files not yet tracked in Git.
 
 Rule settings live in `fsharprefactor.json`. Performance rules run only on
 browser production code, using the allowlist in
 `.config/fsharp-refactor-performance.json`; tests, infrastructure and CLR mocks
 are excluded from that pass.
 
-Findings, including advisory notes, are currently non-blocking; tool and
-configuration errors still fail the target. A future strict gate can use
+Findings, including advisory notes, are currently non-blocking; tool execution
+failures still fail the target. A future strict gate can use
 `--fail-on-findings`.
 
 ## Generated TypeScript
