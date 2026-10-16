@@ -41,26 +41,9 @@
     <WarningsNotAsErrors>NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsNotAsErrors>
   </PropertyGroup>
 
-  <!-- Give the Fable-flavoured .NET build its own artifact roots, the way
-       multi-targeted projects keep one output tree per target framework.
-
-       Wilnaatahl.Core is compiled three ways: a normal .NET build (tests), the
-       Fable build to JavaScript (production), and a .NET build with
-       FABLE_COMPILER=true that only exists so fsharp-refactor can type-check the
-       browser flavour of the production code for its performance rules (see
-       RefactorIntegration in scripts/Build.fsx). With FABLE_COMPILER set,
-       Wilnaatahl.Core.fsproj restores different packages (Fable.Core and
-       Thoth.Json.JavaScript instead of Thoth.Json.Newtonsoft) and compiles
-       different files. Sharing obj/ would overwrite the normal
-       project.assets.json, so a later no-restore build or test run would fail on
-       missing packages. Sharing bin/ would let either flavour's assembly stand in
-       for the other's.
-
-       FABLE_COMPILER usually arrives as an environment variable, which MSBuild
-       reads as a property. BaseIntermediateOutputPath must be set before the SDK
-       is imported, which is why this lives here and not in the project file.
-       Fable's own project cracking (`dotnet fable`) does not write to either
-       tree, so the JavaScript build is unaffected. -->
+  <!-- FABLE_COMPILER restores different project assets than the normal .NET
+       build. Keep its bin and obj separate so it cannot overwrite CLR assets;
+       these paths must be set before the SDK import. -->
   <PropertyGroup Condition="'$(FABLE_COMPILER)' == 'true'">
     <BaseIntermediateOutputPath>obj/fable/</BaseIntermediateOutputPath>
     <BaseOutputPath>bin/fable/</BaseOutputPath>
