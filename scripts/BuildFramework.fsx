@@ -409,6 +409,21 @@ module SelfTestAssertions =
         if expected <> actual then
             failwith $"Build self-test failed: {name}. Expected {expected}, got {actual}."
 
+    let temporaryDirectoryPath repositoryRoot directoryName =
+        let temporaryRoot = Path.GetFullPath(Path.GetTempPath())
+        let candidate = Path.Combine(temporaryRoot, directoryName)
+        let relativePath = Path.GetRelativePath(Path.GetFullPath repositoryRoot, candidate)
+
+        let isParentDirectory =
+            relativePath = ".."
+            || relativePath.StartsWith(".." + string Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            || relativePath.StartsWith(".." + string Path.AltDirectorySeparatorChar, StringComparison.Ordinal)
+
+        if Path.IsPathRooted relativePath || isParentDirectory then
+            candidate
+        else
+            failwith "The system temporary directory must be outside the repository root."
+
     let failureFrom action =
         try
             action ()
@@ -425,6 +440,14 @@ module BuildSelfTest =
     open SelfTestAssertions
 
     let runSelfTest root =
+        let temporaryRoot = Path.GetFullPath(Path.GetTempPath())
+
+        assertEqual
+            "temporary paths inside the repository are rejected"
+            (Some "The system temporary directory must be outside the repository root.")
+            (failureFrom (fun () -> temporaryDirectoryPath temporaryRoot "fixture" |> ignore)
+             |> Option.map _.Message)
+
         assertEqual "default options" (Ok defaultOptions) (parseArguments [])
         assertEqual "default target" (Ok(RunTarget("Build", defaultOptions))) (validateOptions defaultOptions)
         assertEqual "CI initialization uses npm ci" CiInstall (installAction true)
@@ -667,13 +690,15 @@ module BuildSelfTest =
             }
             (typeScriptCoveragePlan root)
 
-        let cleanupDirectory = Path.Combine(root, $"fake-coverage-cleanup-{Guid.NewGuid()}")
-
-        Directory.CreateDirectory(cleanupDirectory) |> ignore
-        let staleOutputPath = Path.Combine(cleanupDirectory, "stale-summary.json")
-        File.WriteAllText(staleOutputPath, "{}")
+        let cleanupDirectory =
+            temporaryDirectoryPath root $"fake-coverage-cleanup-{Guid.NewGuid()}"
 
         try
+            Directory.CreateDirectory(cleanupDirectory) |> ignore
+
+            let staleOutputPath = Path.Combine(cleanupDirectory, "stale-summary.json")
+            File.WriteAllText(staleOutputPath, "{}")
+
             cleanOwnedDirectories [ cleanupDirectory ]
             assertEqual "coverage cleanup removes stale output" false (Directory.Exists cleanupDirectory)
             cleanOwnedDirectories [ cleanupDirectory ]
@@ -834,14 +859,14 @@ module BuildSelfTest =
         assertEqual "default parallelism is capped at five" 5 (defaultWorkerCount 12)
 
         let spacedWorkingDirectory =
-            Path.Combine(root, $"fake-build-{Guid.NewGuid()}-with spaces")
-
-        Directory.CreateDirectory(spacedWorkingDirectory) |> ignore
+            temporaryDirectoryPath root $"fake-build-{Guid.NewGuid()}-with spaces"
 
         try
+            Directory.CreateDirectory(spacedWorkingDirectory) |> ignore
             dotnetCommand spacedWorkingDirectory [ "--version" ] |> runOrFail
         finally
-            Directory.Delete(spacedWorkingDirectory)
+            if Directory.Exists spacedWorkingDirectory then
+                Directory.Delete(spacedWorkingDirectory, true)
 
         npmCommand root Version |> runOrFail
         dotnetCommand root [ "--version" ] |> runOrFail
