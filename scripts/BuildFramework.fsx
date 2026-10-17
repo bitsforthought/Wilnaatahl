@@ -60,10 +60,10 @@ module CommandLine =
         "TestTypeScript"
         "TestKoota"
         "Test"
-        "CoverageFSharp"
-        "CoverageTypeScript"
-        "Coverage"
-        "CoverageCheck"
+        "TestFSharpWithCoverage"
+        "TestTypeScriptWithCoverage"
+        "TestWithCoverage"
+        "CheckCoverage"
         "Validate"
         "ReportFSharp"
         "ReportTypeScript"
@@ -527,6 +527,12 @@ module BuildSelfTest =
             "unknown target"
             (Error(UnknownTarget "Missing"))
             (validateOptions { defaultOptions with Target = Some "Missing" })
+
+        for obsoleteTarget in [ "CoverageFSharp"; "CoverageTypeScript"; "Coverage"; "CoverageCheck" ] do
+            assertEqual
+                $"obsolete target '{obsoleteTarget}' is rejected"
+                (Error(UnknownTarget obsoleteTarget))
+                (validateOptions { defaultOptions with Target = Some obsoleteTarget })
 
         assertEqual
             "unknown target message"

@@ -123,10 +123,10 @@ module Build =
     Target.create "TestTypeScript" (fun _ -> typeScriptTestCommand repoRoot |> runCommand)
     Target.create "TestKoota" (fun _ -> kootaTestCommand repoRoot |> runCommand)
     Target.create "Test" (fun _ -> printfn "All test suites completed.")
-    Target.create "CoverageFSharp" (fun _ -> runFSharpCoverage ())
-    Target.create "CoverageTypeScript" (fun _ -> runTypeScriptCoverage ())
-    Target.create "Coverage" (fun _ -> printfn "Coverage reports generated.")
-    Target.create "CoverageCheck" (fun _ -> runCoverageCheck ())
+    Target.create "TestFSharpWithCoverage" (fun _ -> runFSharpCoverage ())
+    Target.create "TestTypeScriptWithCoverage" (fun _ -> runTypeScriptCoverage ())
+    Target.create "TestWithCoverage" (fun _ -> printfn "Coverage reports generated.")
+    Target.create "CheckCoverage" (fun _ -> runCoverageCheck ())
     Target.create "Validate" (fun _ -> printfn "Build, tests, and coverage validation completed.")
     Target.create "ReportFSharp" (fun _ -> runFSharpReport ())
     Target.create "ReportTypeScript" (fun _ -> runTypeScriptReport ())
@@ -149,14 +149,17 @@ module Build =
     "TestTypeScript" <== [ "FormatByPolicy"; "Fable"; "PrepareEcs" ]
     "TestKoota" <== [ "FormatByPolicy"; "Fable"; "PrepareEcs" ]
     "Test" <== [ "TestFSharp"; "TestTypeScript" ]
-    "CoverageFSharp" <== [ "FormatByPolicy" ]
-    "CoverageFSharp" <=? "PrepareEcs"
-    "CoverageTypeScript" <== [ "FormatByPolicy"; "Fable"; "PrepareEcs" ]
-    "Coverage" <== [ "CoverageFSharp"; "CoverageTypeScript" ]
-    "CoverageCheck" <== [ "CoverageFSharp"; "CoverageTypeScript" ]
-    "Validate" <== [ "Build"; "BuildSelfTest"; "CoverageCheck" ]
-    "ReportFSharp" <== [ "CoverageFSharp" ]
-    "ReportTypeScript" <== [ "CoverageTypeScript" ]
+    "TestFSharpWithCoverage" <== [ "FormatByPolicy" ]
+    "TestFSharpWithCoverage" <=? "PrepareEcs"
+    "TestTypeScriptWithCoverage" <== [ "FormatByPolicy"; "Fable"; "PrepareEcs" ]
+
+    "TestWithCoverage"
+    <== [ "TestFSharpWithCoverage"; "TestTypeScriptWithCoverage" ]
+
+    "CheckCoverage" <== [ "TestFSharpWithCoverage"; "TestTypeScriptWithCoverage" ]
+    "Validate" <== [ "Build"; "BuildSelfTest"; "CheckCoverage" ]
+    "ReportFSharp" <== [ "TestFSharpWithCoverage" ]
+    "ReportTypeScript" <== [ "TestTypeScriptWithCoverage" ]
     "Report" <== [ "ReportFSharp"; "ReportTypeScript" ]
 
     match invocation with
