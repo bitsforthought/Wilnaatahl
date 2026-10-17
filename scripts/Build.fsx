@@ -406,7 +406,20 @@ module TargetExecution =
         Environment.SetEnvironmentVariable("parallel-jobs", string workers)
         run workers targetName []
 
-module RefactorIntegration =
+module SelfTestAssertions =
+    let assertEqual name expected actual =
+        if expected <> actual then
+            failwith $"Build self-test failed: {name}. Expected {expected}, got {actual}."
+
+    let failureFrom action =
+        try
+            action ()
+            None
+        with error ->
+            Some error
+
+
+module FSharpRefactor =
     open System.Text.Json
     open ProcessExecution
 
@@ -552,23 +565,10 @@ module RefactorIntegration =
         performanceCommand root mode codes |> ProcessExecution.runCommand
 
 
-module BuildSelfTest =
-    open CommandLine
+module RefactorSelfTest =
+    open SelfTestAssertions
+    open FSharpRefactor
     open ProcessExecution
-    open BuildCommands
-    open TargetExecution
-    open RefactorIntegration
-
-    let assertEqual name expected actual =
-        if expected <> actual then
-            failwith $"Build self-test failed: {name}. Expected {expected}, got {actual}."
-
-    let failureFrom action =
-        try
-            action ()
-            None
-        with error ->
-            Some error
 
     let runSelfTest root =
         for invalidCodes in
@@ -774,6 +774,15 @@ module BuildSelfTest =
             fableCompilerBeforeProcess
             (Environment.GetEnvironmentVariable("FABLE_COMPILER"))
 
+
+module BuildSelfTest =
+    open CommandLine
+    open ProcessExecution
+    open BuildCommands
+    open TargetExecution
+    open SelfTestAssertions
+
+    let runSelfTest root =
         assertEqual "default options" (Ok defaultOptions) (parseArguments [])
         assertEqual "default target" (Ok(RunTarget("Build", defaultOptions))) (validateOptions defaultOptions)
         assertEqual "CI initialization uses npm ci" CiInstall (installAction true)
@@ -1201,8 +1210,7 @@ module Build =
     open ProcessExecution
     open BuildCommands
     open TargetExecution
-    open RefactorIntegration
-    open BuildSelfTest
+    open FSharpRefactor
 
     let repoRoot = repositoryRoot __SOURCE_DIRECTORY__
 
@@ -1275,7 +1283,11 @@ module Build =
 
         openReport reportPath
 
-    Target.create "BuildSelfTest" (fun _ -> runSelfTest repoRoot)
+    let runSelfTests root =
+        RefactorSelfTest.runSelfTest root
+        BuildSelfTest.runSelfTest root
+
+    Target.create "BuildSelfTest" (fun _ -> runSelfTests repoRoot)
 
     Target.create "Init" (fun _ ->
         npmCommand repoRoot (installAction ciMode) |> runOrFail
@@ -1285,9 +1297,9 @@ module Build =
     Target.create "Format" (fun _ -> runFormatting Write)
     Target.create "FormatCheck" (fun _ -> runFormatting Check)
     Target.create "FormatByPolicy" (fun _ -> runFormatting (formattingMode ciMode))
-    Target.create "Refactor" (fun _ -> RefactorIntegration.run repoRoot Apply)
-    Target.create "RefactorCheck" (fun _ -> RefactorIntegration.run repoRoot ReportOnly)
-    Target.create "RefactorByPolicy" (fun _ -> RefactorIntegration.run repoRoot (if ciMode then ReportOnly else Apply))
+    Target.create "Refactor" (fun _ -> FSharpRefactor.run repoRoot Apply)
+    Target.create "RefactorCheck" (fun _ -> FSharpRefactor.run repoRoot ReportOnly)
+    Target.create "RefactorByPolicy" (fun _ -> FSharpRefactor.run repoRoot (if ciMode then ReportOnly else Apply))
     Target.create "Fable" (fun _ -> runFable ())
     Target.create "PrepareEcs" (fun _ -> runEcsPreparation ())
     Target.create "ValidateAgents" (fun _ -> runAgentValidation ())
@@ -1345,6 +1357,6 @@ module Build =
     "Report" <== [ "ReportFSharp"; "ReportTypeScript" ]
 
     match invocation with
-    | SelfTest -> runSelfTest repoRoot
+    | SelfTest -> runSelfTests repoRoot
     | Help -> printfn "%s" (helpText ())
     | RunTarget(target, _) -> runTargetWith Target.run workerCount target
