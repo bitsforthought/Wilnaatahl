@@ -136,8 +136,8 @@ Check the diff against the `fsharp-style` skill. Common regressions to hunt for:
   flag `(xs |> f) =! y`, which should be `xs |> f =! y`.)
 - `emitJsExpr` used where plain F# would work.
 - **Dated idioms / unverified new syntax.** Flag clearly older constructs where
-  the repo's modern convention applies (e.g. `expr.[i]`, `sprintf` for trivial
-  interpolation where `$"…"` reads better, `(fun x -> x.P)` where `_.P` fits). The
+  the repo's modern convention applies (e.g. `expr.[i]`,
+  `(fun x -> x.P)` where `_.P` fits). The
   repo pins an explicit F# `<LangVersion>` (see `Directory.Build.props`); equally,
   be skeptical of _newer_-looking syntax that may not actually compile against the
   pin or under Fable — confirm the author verified it (`dotnet fsi --langversion:`

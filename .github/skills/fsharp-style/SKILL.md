@@ -311,11 +311,9 @@ the defence.
 - **Verified, preferred idioms:**
   - **Modern indexing** `expr[i]` / `expr[i..j]`, never `expr.[i]` (see the bullet
     above; not tool-enforced).
-  - **Interpolated strings** `$"…{value}…"` for simple interpolation — used in
-    `src/` with a green Fable build, so Fable-confirmed. `sprintf` is still fine
-    when you need typed format specifiers (`%0.2f`, `%A`). (The triple-quoted
-    _interpolated_ form `$"""…"""` is not yet used in `src/` — verify it under
-    `npm run build` before using it there.)
+  - **Interpolation support.** Ordinary `$"…{value}…"` strings are Fable-confirmed
+    in `src/`. The triple-quoted interpolated form `$"""…"""` is not yet used
+    there; verify it under `npm run build` before introducing it.
   - **Shorthand member lambdas** `_.Property` / `_.Member.Sub` instead of
     `(fun x -> x.Property)` (F# 8) — used in `src/` (e.g. `Seq.map _.RenderedInWilp`
     in `ViewModel/Scene.fs`, `Seq.map _.Size.Y` in `ViewModel/LayoutUtils.fs`), so
