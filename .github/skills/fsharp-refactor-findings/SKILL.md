@@ -14,8 +14,9 @@ Use the existing command facade described in [Build and Validation](../../../doc
 Identify the rule code, affected source, and whether the output is an automatic
 fix, a blocking advisory without a fix, or a suggestion held outside scope.
 The effective rules come from `fsharprefactor.json`, its per-rule options,
-analysis categories, and the production performance allowlist. A rule disabled
-in the main file can still run when selected by the performance pass's `--codes`.
+analysis categories, and the production performance allowlist in
+`.config/fsharp-refactor-performance.json`. A rule disabled in the main file
+can still run when selected by the performance pass's `--codes`.
 Widening these controls or forcing disabled rules requires explicit approval of
 that policy change, not merely permission to address a finding.
 
@@ -23,6 +24,22 @@ Local analysis applies automatic fixes but still fails for findings encountered;
 inspect the edits and rerun until clean. CI analysis is report-only. A strict
 failure can stop analysis before later inputs, so fixing the first reported
 finding does not establish that the remaining inputs are clean.
+
+These shortened console excerpts illustrate the distinction:
+
+```text
+FR0138 [idiom] Build.fsx(104,73) note: trimming a copy just to test it: ...
+```
+
+An in-scope `note:` has no automatic fix but still blocks the strict gate.
+
+```text
+1 finding(s) held back by scope: 1 FR0022 - public declarations this run may not reshape. ...
+```
+
+A `held back by scope` summary is non-blocking under the current policy and
+requires permission to address. Locations and counts vary; neither zero edits
+nor a successful exit means there were no held suggestions.
 
 ## Evaluate the proposed change
 
@@ -36,6 +53,12 @@ finding does not establish that the remaining inputs are clean.
 - Review automatic edits too. Follow [F# style](../fsharp-style/SKILL.md),
   including semantic naming; a mechanically generated rename is not necessarily
   a good name. Preserve existing exception messages and independent assertions.
+- If adversarial style feedback directly contradicts an enabled automatic
+  rewrite, **fsharp-refactor wins**. Keep its form rather than alternating between
+  reviewer edits and automatic reversions. Compatible improvements, such as
+  semantic names the tool accepts, still apply. Concrete evidence of a
+  correctness regression must be escalated to the user, not handled by an edit
+  loop or an unapproved policy change.
 - Use the executor and testing skills routed in [AGENTS.md](../../../AGENTS.md).
   Test new behaviour before implementation. A mechanical-preservation test may
   already pass against the old implementation; describe that evidence honestly.
