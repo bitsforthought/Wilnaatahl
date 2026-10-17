@@ -353,12 +353,15 @@ or begin a fourth review round.
 | Writing or strengthening F# tests                                                 | `fsharp-testing` skill                                         |
 | Writing or strengthening TypeScript tests                                         | `typescript-testing` skill                                     |
 | Running the build/test/coverage gate                                              | `tdd-coverage-loop` skill                                      |
+| Handling fsharp-refactor findings or strict refactor-gate failures                | [fsharp-refactor-findings] skill                               |
 | Reviewing a change (the mandatory step)                                           | `adversarial-reviewer` agent / `adversarial-code-review` skill |
 | Changing build/CI/codegen infrastructure or the package-command facade            | `infra-scripts-fsharp` skill                                   |
 | Writing/modifying TypeScript / React / Three.js                                   | `typescript-implementer` agent / `typescript-style` skill      |
 | Creating, revising, or reviewing a commit message                                 | `commit-messages` skill                                        |
 | Implementing an approved plan as a stack of reviewed, committed PRs               | `implement-plan` skill                                         |
 | Maintaining a PR stack after a merge, including final cleanup                     | `post-merge-stack-maintenance` skill                           |
+
+[fsharp-refactor-findings]: .github/skills/fsharp-refactor-findings/SKILL.md
 
 Path-scoped custom instructions apply automatically when their `applyTo` pattern
 matches the files being changed. Set `excludeAgent` to `code-review` or
