@@ -37,6 +37,9 @@ to justify every rule choice. Do not promote preferences into contracts or
 require extra machinery just because it could detect a hypothetical mistake.
 Agreement among panelists is not evidence that a requirement exists.
 
+For F# style feedback that conflicts with an enabled automatic rewrite, apply
+the precedence policy in the [findings skill](../fsharp-refactor-findings/SKILL.md).
+
 Follow the review-packet protocol in `AGENTS.md`. A clean result requires
 inspection of the complete supplied scope; missing evidence means incomplete,
 not clean. Keep clean reports short and omit implementation checklists.
