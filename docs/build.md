@@ -38,10 +38,13 @@ browser production code, using the allowlist in
 `.config/fsharp-refactor-performance.json`; tests, infrastructure and CLR mocks
 are excluded from that pass.
 
-Findings, including advisory notes, are currently non-blocking. Tool execution
-failures and malformed configuration still fail the target, because the tool
-silently uses its default rules when `fsharprefactor.json` is malformed. A
-future strict gate can use `--fail-on-findings`.
+Both modes use `--fail-on-findings`: any finding that survives the configured
+filters, including an advisory note with no automatic fix, fails the target.
+A local run that applies fixes also fails for the findings it encountered;
+inspect those edits, address remaining advisories, and rerun until clean.
+Tool execution failures and malformed configuration also fail the target,
+because the tool silently uses its default rules when `fsharprefactor.json`
+is malformed.
 
 ## Generated TypeScript
 
