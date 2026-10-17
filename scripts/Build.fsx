@@ -494,15 +494,14 @@ module RefactorIntegration =
         | Apply -> []
         | ReportOnly -> [ "--dry-run" ]
 
-    // --notes prints advisory-only findings (rules with no automatic fix) to the console, where coding agents can
-    // act on them. --fail-on-findings is deliberately absent: findings stay advisory until we choose to gate on them.
+    // Advisory-only findings have no automatic fix, so print them alongside the fixes that gate the build.
     let private createCommand root mode target categories extraArguments environmentVariables =
         let arguments =
             [ "tool"; "run"; "fsharp-refactor"; "--"; target ]
             @ modeArguments mode
             @ [ "--categories"; categories ]
             @ extraArguments
-            @ [ "--notes" ]
+            @ [ "--notes"; "--fail-on-findings" ]
 
         {
             (dotnetCommand root arguments) with
@@ -709,18 +708,21 @@ module BuildSelfTest =
 
         let commonApply = commonCommand root Apply "Wilnaatahl.slnx"
         let commonCheck = commonCommand root ReportOnly "Wilnaatahl.slnx"
+        let performanceApply = performanceCommand root Apply describedCodes
         let performanceCheck = performanceCommand root ReportOnly describedCodes
 
-        assertEqual "applying fixes never requests dry-run" false (commonApply.Arguments |> List.contains "--dry-run")
+        for command in [ commonApply; performanceApply ] do
+            assertEqual "applying fixes never requests dry-run" false (command.Arguments |> List.contains "--dry-run")
 
-        assertEqual "report-only check requests dry-run" true (commonCheck.Arguments |> List.contains "--dry-run")
+        for command in [ commonCheck; performanceCheck ] do
+            assertEqual "report-only check requests dry-run" true (command.Arguments |> List.contains "--dry-run")
 
-        for command in [ commonApply; commonCheck; performanceCheck ] do
+        for command in [ commonApply; commonCheck; performanceApply; performanceCheck ] do
             assertEqual "analysis surfaces advisory notes" true (command.Arguments |> List.contains "--notes")
 
             assertEqual
-                "advisories are not promoted to a gate"
-                false
+                "configured findings fail the target"
+                true
                 (command.Arguments |> List.contains "--fail-on-findings")
 
         assertEqual
