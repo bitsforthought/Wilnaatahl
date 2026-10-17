@@ -505,6 +505,31 @@ let ``enumerateHuwilpToRender includes outside-Wilp partners that appear in the 
     aPeople =! Set.ofList [ PersonId 0; PersonId 1 ]
 
 [<Fact>]
+let ``enumerateHuwilpToRender preserves depth-first order across branching marriages`` () =
+    let graph = createFamilyGraph extendedFamily extendedCouples []
+
+    let nodeKeys =
+        Scene.enumerateHuwilpToRender graph
+        |> Map.find testWilpName
+        |> Seq.map fst
+        |> Seq.toList
+
+    nodeKeys
+    =! [
+        MemberNode p0.Id
+        PartnerNode(p1.Id, coupleP0P1.Id)
+        MemberNode p2.Id
+        MemberNode p3.Id
+        MemberNode p4.Id
+        MemberNode p5.Id
+        PartnerNode(p6.Id, coupleP5P6.Id)
+        MemberNode p8.Id
+        MemberNode p9.Id
+        PartnerNode(p7.Id, coupleP5P7.Id)
+        MemberNode p10.Id
+    ]
+
+[<Fact>]
 let ``enumerateHuwilpToRender picks the wilp with the most members`` () =
     // Two huwilp: "A" has one member, "B" has two. The most-populous Wilp
     // ("B") must be chosen even though "A" sorts first alphabetically.

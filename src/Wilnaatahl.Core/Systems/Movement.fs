@@ -142,10 +142,16 @@ let move movementTracker (world: IWorld) =
     // ASSUMPTION: Movement runs last among the systems that can change Position (Animation, Dragging, and Undo/Redo).
     // The change tracker passed in can be used to detect changes from those systems before it resets, and then can be
     // used to track changing Positions in the loop below.
-    let mutable results =
-        world.QueryTrait(Position, Changed <=> [| Position |]).ToSequence()
+    let getResults () =
+        let results = ResizeArray<_>()
 
-    while not (results |> Seq.isEmpty) && i < maxIterations do
+        world.QueryTrait(Position, Changed <=> [| Position |]).ForEach(fun result -> results.Add result)
+
+        results
+
+    let mutable results = getResults ()
+
+    while results.Count > 0 && i < maxIterations do
         i <- i + 1
 
         for newPos, changedEntityId in results do
@@ -154,9 +160,9 @@ let move movementTracker (world: IWorld) =
             |> moveBoundingBoxes changedEntityId
             |> moveLineDependants changedEntityId
 
-        results <- world.QueryTrait(Position, Changed <=> [| Position |]).ToSequence()
+        results <- getResults ()
 
-    if not (results |> Seq.isEmpty) then
+    if results.Count > 0 then
         failwith "Error in Movement system: Unbounded kinematic chain found."
 
     world

@@ -112,12 +112,12 @@ type private QueryResult<'T, 'TMutable>
 [<AutoOpen>]
 module private Ids =
     let getWorldId entity =
-        let (EntityId id) = entity
-        id >>> 28 &&& 0xF
+        let (EntityId pid) = entity
+        pid >>> 28 &&& 0xF
 
     let getLocalId entity =
-        let (EntityId id) = entity
-        id &&& 0x0FFFFFFF
+        let (EntityId pid) = entity
+        pid &&& 0x0FFFFFFF
 
     let packEntityId worldId localEntityId =
         worldId <<< 28 ||| (localEntityId &&& 0x0FFFFFFF) |> EntityId
@@ -681,7 +681,7 @@ module private World =
 
     let queryFirst where world =
         let results = world |> query where
-        if Seq.isEmpty results then None else Some(Seq.head results)
+        results |> Seq.tryHead
 
     let spawn specs world =
         let entity = world |> allocEntity

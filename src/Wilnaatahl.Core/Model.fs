@@ -289,7 +289,7 @@ module FamilyGraph =
             |> List.tryFind (fun (_, count) -> count > 1)
 
         match duplicateCoupleId with
-        | Some(id, count) -> failwith $"Duplicate CoupleId %d{id} appears %d{count} times in the supplied couples."
+        | Some(pid, count) -> failwith $"Duplicate CoupleId %d{pid} appears %d{count} times in the supplied couples."
         | None -> ()
 
         let peopleMap = peopleList |> List.map (fun (p, _) -> p.Id.AsInt, p) |> Map.ofList
