@@ -38,7 +38,7 @@ module private RawFileGen =
 
     let private personGen =
         gen {
-            let! pid = intGen
+            let! personId = intGen
             let! name = optString
             let! parents = optInt
             let! wilp = optInt
@@ -52,7 +52,7 @@ module private RawFileGen =
             let! gender = stringGen
 
             return {
-                Id = pid
+                Id = personId
                 Name = name
                 Parents = parents
                 Wilp = wilp
@@ -84,17 +84,17 @@ module private RawFileGen =
 
     let private wilpGen =
         gen {
-            let! pid = intGen
+            let! wilpId = intGen
             let! name = optString
             let! pdeek = optString
-            return { Id = pid; Name = name; Pdeek = pdeek }
+            return { Id = wilpId; Name = name; Pdeek = pdeek }
         }
 
     let private nameGen =
         gen {
-            let! pid = intGen
+            let! nameId = intGen
             let! text = stringGen
-            return { Id = pid; Text = text }
+            return { Id = nameId; Text = text }
         }
 
     let private nameHeldGen =

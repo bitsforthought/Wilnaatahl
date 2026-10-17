@@ -94,7 +94,7 @@
     "FR0163": true, // a System.Threading.Timer constructed and dropped is collected mid-flight
     "FR0164": true, // a collection edited inside a for loop over itself throws; the loop walks a snapshot
     "FR0165": true, // a local DateTime compared with or subtracted from a UTC one flips with the timezone
-    "FR0169": true, // a seq parameter or local enumerated twice on one path runs a query or a generator again
+    "FR0169": false, // Repeated enumeration needs context: a seq may already be a materialized snapshot.
     "FR0175": true, // a date format with hh and no tt, mm between year and day, or MM beside the hours writes...
     "FR0176": true, // a date built from the year of one instant and the month of a shifted one disagrees acro...
     "FR0177": true, // x <> A || x <> B over two constants is always true; x = A && x = B and x > e && x < e a...
@@ -129,7 +129,7 @@
     "FR0051": false, // Avoid quadratic collection append in loops.
     "FR0052": false, // Prefer IsEmpty over Count on concurrent collections.
     "FR0053": false, // Use Convert.ToHexString instead of BitConverter string replacement.
-    "FR0058": false, // Detect nested enumerator allocation in recursive sequence expressions.
+    "FR0058": false, // Replacing recursive sequences can trade iterator overhead for repeated list copying.
     "FR0059": false, // Replace private Option results with ValueOption.
     "FR0069": false, // Replace optional record fields with ValueOption.
     "FR0070": false, // Add Struct to small records.

@@ -185,10 +185,10 @@ module Transform =
 
         let conflictWarnings =
             conflictingEntries
-            |> List.map (fun (pid, wilp) -> ConflictingWilpPdeek(pid, wilp.Name.AsString, wilp.Pdeek))
+            |> List.map (fun (wilpId, wilp) -> ConflictingWilpPdeek(wilpId, wilp.Name.AsString, wilp.Pdeek))
 
         let usableHuwilpById =
-            huwilpById |> Map.filter (fun pid _ -> not (Set.contains pid conflictIds))
+            huwilpById |> Map.filter (fun wilpId _ -> not (Set.contains wilpId conflictIds))
 
         usableHuwilpById, List.rev warningsRev @ conflictWarnings
 
@@ -526,20 +526,20 @@ module Transform =
                 let fromBirthWilp = p.BirthWilp |> Option.map Wilp |> Option.toList
                 fromKinship @ fromBirthWilp)
             |> List.distinct
-            |> List.mapi (fun pid kinship -> kinship, pid)
+            |> List.mapi (fun kinshipId kinship -> kinship, kinshipId)
 
         let huwilpIdByKinship = Map.ofList kinshipsWithIds
 
         let rawHuwilp =
             kinshipsWithIds
-            |> List.map (fun (kinship, id) ->
+            |> List.map (fun (kinship, kinshipId) ->
                 match kinship with
                 | Wilp w -> {
-                    Id = id
+                    Id = kinshipId
                     Name = Some w.Name.AsString
                     Pdeek = Some(pdeekToRaw w.Pdeek)
                   }
-                | UnknownWilp pdeek -> { Id = id; Name = None; Pdeek = Some(pdeekToRaw pdeek) }
+                | UnknownWilp pdeek -> { Id = kinshipId; Name = None; Pdeek = Some(pdeekToRaw pdeek) }
                 | NoneProvided _ -> failwith "NoneProvided was excluded from the huwilp id map above.")
 
         // Each distinct held-Name text becomes one `names` entry; a Name handed
@@ -550,12 +550,13 @@ module Transform =
             holdings
             |> List.map (fun (_, held) -> held.Name.AsString)
             |> List.distinct
-            |> List.mapi (fun pid text -> text, pid)
+            |> List.mapi (fun nameId text -> text, nameId)
 
         let nameIdByText = Map.ofList nameTextsWithIds
 
         let rawNames =
-            nameTextsWithIds |> List.map (fun (text, pid) -> { Id = pid; Text = text })
+            nameTextsWithIds
+            |> List.map (fun (text, nameId) -> { Id = nameId; Text = text })
 
         let rawNamesHeld =
             holdings
