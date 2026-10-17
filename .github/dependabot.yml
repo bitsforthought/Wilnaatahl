@@ -96,6 +96,17 @@ updates:
       nuget-patch-and-minor:
         applies-to: version-updates
         patterns: ["*"]
+        # NuGet can include packages in multiple groups despite first-match ordering.
+        exclude-patterns:
+          - "fable"
+          - "Fable.Core"
+          - "Thoth.Json.Core"
+          - "Thoth.Json.Newtonsoft"
+          - "Thoth.Json.JavaScript"
+          - "xunit.v3"
+          - "FsCheck.Xunit.v3"
+          - "coverlet.MTP"
+          - "fantomas"
         update-types:
           - patch
           - minor
