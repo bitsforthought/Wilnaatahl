@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageVersion Include="Fable.Core" Version="5.3.0" />
+    <PackageVersion Include="Fable.Core" Version="5.4.0" />
     <PackageVersion Include="Thoth.Json.Core" Version="0.10.0" />
     <PackageVersion Include="Thoth.Json.Newtonsoft" Version="0.5.0" />
     <PackageVersion Include="Thoth.Json.JavaScript" Version="0.6.0" />
