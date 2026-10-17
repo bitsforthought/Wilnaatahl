@@ -29,8 +29,5 @@ let private toKootaWorld: Wilnaatahl.ECS.IWorld -> obj = jsNative
 let createTestWorld () = createKootaWorld () |> fromKootaWorld
 
 let disposeTestWorld (world: Wilnaatahl.ECS.IWorld) =
-    try
-        let kootaWorld = toKootaWorld world
-        emitJsExpr kootaWorld "$0.destroy()"
-    with _ ->
-        ()
+    let kootaWorld = toKootaWorld world
+    emitJsExpr kootaWorld "$0.destroy()"

@@ -195,12 +195,15 @@ let ``visitWilpForest computes correct tree statistics`` () =
     let graph = createFamilyGraph extendedFamily extendedCouples []
     let wilp = WilpName "H"
 
-    let aggregateStats stats = {
-        NodeCount = stats |> Seq.sumBy _.NodeCount
-        LeafCount = stats |> Seq.sumBy _.LeafCount
-        MaxDepth = stats |> Seq.map _.MaxDepth |> Seq.max
-        VisitedPeople = stats |> Seq.map _.VisitedPeople |> Array.concat
-    }
+    let aggregateStats stats =
+        let stats = stats |> Seq.toList
+
+        {
+            NodeCount = stats |> List.sumBy _.NodeCount
+            LeafCount = stats |> List.sumBy _.LeafCount
+            MaxDepth = stats |> List.map _.MaxDepth |> List.max
+            VisitedPeople = stats |> List.map _.VisitedPeople |> Array.concat
+        }
 
     // Recursive visitors that accumulate stats in the return value
     let visitLeaf personId = {

@@ -185,10 +185,10 @@ module Transform =
 
         let conflictWarnings =
             conflictingEntries
-            |> List.map (fun (id, wilp) -> ConflictingWilpPdeek(id, wilp.Name.AsString, wilp.Pdeek))
+            |> List.map (fun (pid, wilp) -> ConflictingWilpPdeek(pid, wilp.Name.AsString, wilp.Pdeek))
 
         let usableHuwilpById =
-            huwilpById |> Map.filter (fun id _ -> not (Set.contains id conflictIds))
+            huwilpById |> Map.filter (fun pid _ -> not (Set.contains pid conflictIds))
 
         usableHuwilpById, List.rev warningsRev @ conflictWarnings
 
@@ -526,7 +526,7 @@ module Transform =
                 let fromBirthWilp = p.BirthWilp |> Option.map Wilp |> Option.toList
                 fromKinship @ fromBirthWilp)
             |> List.distinct
-            |> List.mapi (fun id kinship -> kinship, id)
+            |> List.mapi (fun pid kinship -> kinship, pid)
 
         let huwilpIdByKinship = Map.ofList kinshipsWithIds
 
@@ -550,12 +550,12 @@ module Transform =
             holdings
             |> List.map (fun (_, held) -> held.Name.AsString)
             |> List.distinct
-            |> List.mapi (fun id text -> text, id)
+            |> List.mapi (fun pid text -> text, pid)
 
         let nameIdByText = Map.ofList nameTextsWithIds
 
         let rawNames =
-            nameTextsWithIds |> List.map (fun (text, id) -> { Id = id; Text = text })
+            nameTextsWithIds |> List.map (fun (text, pid) -> { Id = pid; Text = text })
 
         let rawNamesHeld =
             holdings

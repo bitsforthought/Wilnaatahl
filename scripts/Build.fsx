@@ -101,7 +101,7 @@ module CommandLine =
                     Error(ConflictingOptions "--help")
                 else
                     Ok options
-            | "--target" :: target :: tail when options.Target.IsNone && target.Trim() <> "" ->
+            | "--target" :: target :: tail when options.Target.IsNone && not (String.IsNullOrWhiteSpace target) ->
                 parse tail { options with Target = Some target }
             | "--target" :: _ when options.Target.IsSome -> Error(DuplicateOption "--target")
             | "--target" :: _ -> Error(MissingOptionValue "--target")
@@ -791,7 +791,11 @@ module BuildSelfTest =
 
         assertEqual "missing target value" (Error(MissingOptionValue "--target")) (parseArguments [ "--target" ])
 
-        assertEqual "empty target value" (Error(MissingOptionValue "--target")) (parseArguments [ "--target"; "" ])
+        for target in [ null; ""; " \t\r\n"; "\u00A0" ] do
+            assertEqual
+                "blank target value"
+                (Error(MissingOptionValue "--target"))
+                (parseArguments [ "--target"; target ])
 
         assertEqual
             "missing target value message"

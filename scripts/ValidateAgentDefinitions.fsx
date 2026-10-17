@@ -106,7 +106,7 @@ let private toFieldValue (node: YamlNode) : FieldValue =
 /// non-scalar keys, multiple documents, and other malformed YAML surface as a
 /// parse error rather than being silently mis-parsed or crashing the run.
 let private parseMapping (block: string) : Result<(string * FieldValue) list, string> =
-    if block.Trim() = "" then
+    if String.IsNullOrWhiteSpace block then
         Ok []
     else
         try
@@ -179,7 +179,7 @@ module Validation =
     /// Centralizes the "present and not just whitespace" check several rules share.
     let private (|NonEmptyScalar|_|) value =
         match value with
-        | Scalar scalar when scalar.Text.Trim() <> "" -> Some(scalar.Text.Trim())
+        | Scalar scalar when not (String.IsNullOrWhiteSpace scalar.Text) -> Some(scalar.Text.Trim())
         | _ -> None
 
     [<RequireQualifiedAccess>]
@@ -207,7 +207,8 @@ module Validation =
     /// block scalars are strings; a plain scalar must classify as a string.
     let private (|NonEmptyStringScalar|_|) value =
         match value with
-        | Scalar scalar when scalar.Text.Trim() <> "" && isStringScalar scalar -> Some(scalar.Text.Trim())
+        | Scalar scalar when not (String.IsNullOrWhiteSpace scalar.Text) && isStringScalar scalar ->
+            Some(scalar.Text.Trim())
         | _ -> None
 
     /// True when `candidate` is exactly one insertion, deletion, or substitution away

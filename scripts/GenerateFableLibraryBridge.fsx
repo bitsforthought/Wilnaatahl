@@ -18,6 +18,7 @@ open System.Diagnostics
 open System.IO
 open System.Text.Json
 open System.Text.RegularExpressions
+open System.Threading.Tasks
 
 module internal CommandLine =
     type Command =
@@ -208,38 +209,49 @@ process.stdout.write(JSON.stringify(results));
                 |> Result.map List.toArray)
         |> Result.mapError errorMessage
 
+    let runParser (operation: unit -> Task<Result<Bridge.BridgeModule array, string>>) =
+        // Handle task faults before Async.AwaitTask wraps them in AggregateException.
+        task {
+            try
+                return! operation ()
+            with
+            | :? Win32Exception as error -> return Error $"ERROR: could not run the TypeScript parser: {error.Message}"
+            | :? IOException as error -> return Error $"ERROR: could not run the TypeScript parser: {error.Message}"
+        }
+        |> Async.AwaitTask
+        |> Async.RunSynchronously
+
     let parseSources sources =
-        try
-            let startInfo = ProcessStartInfo "node"
-            startInfo.WorkingDirectory <- Path.GetDirectoryName(Path.GetFullPath(__SOURCE_DIRECTORY__))
-            startInfo.UseShellExecute <- false
-            startInfo.RedirectStandardInput <- true
-            startInfo.RedirectStandardOutput <- true
-            startInfo.RedirectStandardError <- true
-            startInfo.ArgumentList.Add "-e"
-            startInfo.ArgumentList.Add parserScript
-            use parser = Process.Start startInfo
-            let output = parser.StandardOutput.ReadToEndAsync()
-            let errors = parser.StandardError.ReadToEndAsync()
+        runParser (fun () ->
+            task {
+                let startInfo = ProcessStartInfo "node"
+                startInfo.WorkingDirectory <- Path.GetDirectoryName(Path.GetFullPath(__SOURCE_DIRECTORY__))
+                startInfo.UseShellExecute <- false
+                startInfo.RedirectStandardInput <- true
+                startInfo.RedirectStandardOutput <- true
+                startInfo.RedirectStandardError <- true
+                startInfo.ArgumentList.Add "-e"
+                startInfo.ArgumentList.Add parserScript
+                use parser = Process.Start startInfo
+                let output = parser.StandardOutput.ReadToEndAsync()
+                let errors = parser.StandardError.ReadToEndAsync()
 
-            let input =
-                sources
-                |> Array.map (fun source -> dict [ "Name", source.Name; "Source", source.Source ])
-                |> JsonSerializer.Serialize
+                let input =
+                    sources
+                    |> Array.map (fun source -> dict [ "Name", source.Name; "Source", source.Source ])
+                    |> JsonSerializer.Serialize
 
-            parser.StandardInput.Write input
-            parser.StandardInput.Close()
-            parser.WaitForExit()
-            let output = output.GetAwaiter().GetResult()
-            let errors = errors.GetAwaiter().GetResult()
+                do! parser.StandardInput.WriteAsync input
+                parser.StandardInput.Close()
+                do! parser.WaitForExitAsync()
+                let! output = output
+                let! errors = errors
 
-            if parser.ExitCode <> 0 then
-                Error $"ERROR: TypeScript parser failed (exit {parser.ExitCode}): {errors.Trim()}"
-            else
-                output |> decodeResults sources
-        with
-        | :? Win32Exception as error -> Error $"ERROR: could not run the TypeScript parser: {error.Message}"
-        | :? IOException as error -> Error $"ERROR: could not run the TypeScript parser: {error.Message}"
+                if parser.ExitCode <> 0 then
+                    return Error $"ERROR: TypeScript parser failed (exit {parser.ExitCode}): {errors.Trim()}"
+                else
+                    return output |> decodeResults sources
+            })
 
 module internal FileSystem =
     open Bridge
@@ -437,6 +449,17 @@ import { Decoder } from "./fable_modules/Thoth.Json.Core.0.9.1/Types.fs.ts";
 
         assertEqual "an empty parser batch succeeds" (Ok [||]) (TypeScript.parseSources [||])
         assertEqual "an empty response matches an empty batch" (Ok [||]) (TypeScript.decodeResults [||] "[]")
+
+        assertEqual
+            "faulted parser I/O preserves the structured error"
+            (Error "ERROR: could not run the TypeScript parser: fixture I/O failure")
+            (TypeScript.runParser (fun () ->
+                Task.FromException<Result<Bridge.BridgeModule array, string>>(IOException "fixture I/O failure")))
+
+        assertEqual
+            "parser launch failures preserve the structured error"
+            (Error "ERROR: could not run the TypeScript parser: fixture launch failure")
+            (TypeScript.runParser (fun () -> raise (Win32Exception(5, "fixture launch failure"))))
 
         assertEqual
             "extra parser modules fail"
