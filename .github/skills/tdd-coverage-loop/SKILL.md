@@ -34,8 +34,9 @@ npm run fake "--" --target Lint
 npm run fake "--" --target FormatCheck
 ```
 
-Use `Coverage` followed by `CoverageCheck` when iterating specifically on
-coverage.
+Use `CheckCoverage` to run both instrumented suites and check their coverage
+baselines. Use `TestWithCoverage` only when you need the coverage data without
+checking the baselines.
 
 Focused commands do not replace `npm run validate`: .NET tests alone cannot catch
 invalid TypeScript emitted by Fable, and TypeScript tests alone do not exercise

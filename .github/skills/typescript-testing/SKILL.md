@@ -55,5 +55,5 @@ the trait exists can miss a broken subscription path.
   including Koota conformance.
 - `npm run fake "--" --target TestKoota` runs only the portable Koota conformance
   subset.
-- `npm run fake "--" --target CoverageTypeScript` generates TypeScript coverage
-  data.
+- `npm run fake "--" --target TestTypeScriptWithCoverage` generates TypeScript
+  coverage data.
