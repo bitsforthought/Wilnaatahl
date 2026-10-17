@@ -220,21 +220,23 @@ module Scene =
             |> Seq.head // ASSUMPTION: At least one Wilp is represented in the input data.
 
         let rec collect tree =
-            match tree with
-            | Leaf personId -> [ MemberNode personId ]
-            | Family family ->
-                let collectPartner (partnerId, (couple, descendants)) =
-                    let descendantNodes = descendants |> Seq.toList |> List.collect collect
+            seq {
+                match tree with
+                | Leaf personId -> yield MemberNode personId
+                | Family family ->
+                    yield MemberNode family.WilpParent
 
-                    partnerNodeKey wilpName familyGraph partnerId couple :: descendantNodes
+                    for KeyValue(partnerId, (couple, descendants)) in family.PartnersAndDescendants do
+                        yield partnerNodeKey wilpName familyGraph partnerId couple
 
-                MemberNode family.WilpParent
-                :: (family.PartnersAndDescendants |> Map.toList |> List.collect collectPartner)
+                        for descendant in descendants do
+                            yield! collect descendant
+            }
 
         let nodes =
             familyGraph
             |> huwilpForest wilpName
-            |> Seq.collect (collect >> List.toSeq)
+            |> Seq.collect collect
             |> Seq.distinct
             |> Seq.map (fun nodeKey -> nodeKey, familyGraph |> findPerson nodeKey.PersonId)
 

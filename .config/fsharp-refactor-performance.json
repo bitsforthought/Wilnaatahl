@@ -1,7 +1,6 @@
 [
   "FR0004", // Move collection conversions past pipeline operations.
   "FR0051", // Avoid quadratic collection append in loops.
-  "FR0058", // Detect nested enumerator allocation in recursive sequence expressions.
   "FR0071", // Hoist loop-invariant bindings.
   "FR0076", // Use iter instead of map when the result is discarded.
   "FR0102", // Detect repeated linked-list indexing in loops.

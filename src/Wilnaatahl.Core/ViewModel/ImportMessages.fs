@@ -38,10 +38,10 @@ module ImportWarning =
                 $"{personName}: could not parse {fieldName} value '{rawValue}'."
             | UnparsableCoupleDate(coupleId, rawValue) ->
                 $"Couple #{coupleId}: could not parse dateOfUnion value '{rawValue}'."
-            | DuplicatePersonId pid -> $"Duplicate person id #{pid}; only the first occurrence was kept."
-            | DuplicateCoupleId pid -> $"Duplicate couple id #{pid}; only the first occurrence was kept."
-            | DuplicateWilpId pid -> $"Duplicate wilp id #{pid}; only the first occurrence was kept."
-            | DuplicateNameId pid -> $"Duplicate name id #{pid}; only the first occurrence was kept."
+            | DuplicatePersonId personId -> $"Duplicate person id #{personId}; only the first occurrence was kept."
+            | DuplicateCoupleId coupleId -> $"Duplicate couple id #{coupleId}; only the first occurrence was kept."
+            | DuplicateWilpId wilpId -> $"Duplicate wilp id #{wilpId}; only the first occurrence was kept."
+            | DuplicateNameId nameId -> $"Duplicate name id #{nameId}; only the first occurrence was kept."
             | DuplicateNameText text -> $"Duplicate name '{text}'; the redundant entry was merged."
             | UnresolvedNameId(personId, nameId) ->
                 $"Person #{personId} holds name #{nameId} which does not exist; holding dropped."
@@ -52,8 +52,8 @@ module ImportWarning =
             | UnorderedNameHolding(nameId, personId) ->
                 $"Name #{nameId} held by person #{personId} has no order and no usable date; sorted alphabetically."
             | UnheldName(nameId, text) -> $"Name #{nameId} '{text}' is held by nobody; dropped."
-            | WilpMissingPdeek pid -> $"Wilp #{pid} has no pdeek; dropped."
-            | WilpMissingNameAndPdeek pid -> $"Wilp #{pid} has neither name nor pdeek; dropped."
+            | WilpMissingPdeek wilpId -> $"Wilp #{wilpId} has no pdeek; dropped."
+            | WilpMissingNameAndPdeek wilpId -> $"Wilp #{wilpId} has neither name nor pdeek; dropped."
             | UnknownPdeek(wilpId, rawPdeek) -> $"Wilp #{wilpId} has unrecognized pdeek '{rawPdeek}'; dropped."
             | ConflictingWilpPdeek(wilpId, wilpName, pdeek) ->
                 $"Wilp #{wilpId} '{wilpName}' has pdeek {Pdeek.displayName pdeek} but another wilp of the same name has a different pdeek; dropped."
