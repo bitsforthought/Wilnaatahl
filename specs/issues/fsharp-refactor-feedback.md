@@ -110,11 +110,11 @@ automatic tool rewrite.
 We also excluded these representation rules from our JavaScript-targeted
 performance checks:
 
-| Rules | Suggested change | Why we excluded it |
-| --- | --- | --- |
-| FR0016, FR0070 | Add `[<Struct>]` to small unions or records | JavaScript does not gain CLR value-type storage from the attribute. |
-| FR0059, FR0069 | Replace private option results or optional record fields with `ValueOption` | The CLR allocation-saving rationale does not carry over to the JavaScript runtime representation. |
-| FR0011, FR0093 | Use struct partial active patterns with `ValueSome`/`ValueNone`, or struct tuple record fields | These likewise rely on value-type representation benefits that do not transfer to JavaScript. |
+| Rules          | Suggested change                                                                               | Why we excluded it                                                                                |
+| -------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| FR0016, FR0070 | Add `[<Struct>]` to small unions or records                                                    | JavaScript does not gain CLR value-type storage from the attribute.                               |
+| FR0059, FR0069 | Replace private option results or optional record fields with `ValueOption`                    | The CLR allocation-saving rationale does not carry over to the JavaScript runtime representation. |
+| FR0011, FR0093 | Use struct partial active patterns with `ValueSome`/`ValueNone`, or struct tuple record fields | These likewise rely on value-type representation benefits that do not transfer to JavaScript.     |
 
 These are backend-specific choices, not objections to the rules in general:
 struct representation can be useful when Fable targets Rust.
