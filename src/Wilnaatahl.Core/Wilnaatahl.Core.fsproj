@@ -55,13 +55,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Condition="'$(FABLE_COMPILER)'=='true'" Include="Fable.Core" />
+    <!-- Keep browser packages visible to dependency discovery without FABLE_COMPILER. -->
+    <PackageReference Include="Fable.Core" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Thoth.Json.Core" />
     <PackageReference Condition="'$(FABLE_COMPILER)'!='true'" Include="Thoth.Json.Newtonsoft" />
-    <PackageReference Condition="'$(FABLE_COMPILER)'=='true'" Include="Thoth.Json.JavaScript" />
+    <PackageReference Include="Thoth.Json.JavaScript" />
   </ItemGroup>
 
 </Project>
