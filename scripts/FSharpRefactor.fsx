@@ -232,7 +232,8 @@ module RefactorSelfTest =
                 (failureFrom (fun () -> validateConfiguration invalidConfiguration)
                  |> Option.map _.Message)
 
-        let fixtureRoot = Path.Combine(root, $"refactor-self-test-{Guid.NewGuid():N}")
+        let fixtureRoot =
+            temporaryDirectoryPath root $"refactor-self-test-{Guid.NewGuid():N}"
 
         let writeFixture (relativePath: string) =
             let path = Path.Combine(fixtureRoot, relativePath)
@@ -256,6 +257,12 @@ module RefactorSelfTest =
                 "src/generated/fable_modules/Library/Library.fsproj"
             ]
             |> List.iter writeFixture
+
+            assertEqual
+                "repository-root discovery doesn't include temporary self-test files"
+                false
+                (analysisInputs root
+                 |> List.exists (fun path -> path.Contains(Path.GetFileName fixtureRoot, StringComparison.Ordinal)))
 
             assertEqual
                 "filesystem discovery finds each project and authored script, skipping generated and dependency trees"
@@ -289,7 +296,8 @@ module RefactorSelfTest =
                 (Some "Performance codes must be a nonempty JSON array of nonblank strings.")
                 (failureFrom (fun () -> run fixtureRoot Apply) |> Option.map _.Message)
         finally
-            Directory.Delete(fixtureRoot, true)
+            if Directory.Exists fixtureRoot then
+                Directory.Delete(fixtureRoot, true)
 
         let commonApply = commonCommand root Apply "Wilnaatahl.slnx"
         let commonCheck = commonCommand root ReportOnly "Wilnaatahl.slnx"
