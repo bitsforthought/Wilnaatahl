@@ -53,7 +53,9 @@ are merged by squash or rebase; `main` keeps a linear history.
 ## Conventions
 
 - Source files use LF line endings and spaces for indentation. Fantomas formats
-  F# and Prettier formats everything else; `npm run format` applies both.
+  F# and Prettier formats everything else; `npm run format` applies both without
+  rewriting source, while `npm run refactor` applies enabled F# refactorings and
+  then formats.
 - Write documentation and comments in Canadian English (for example,
   "behaviour" and "colour").
 - Use the correct Gitxsan terms in code and prose. See the terminology section

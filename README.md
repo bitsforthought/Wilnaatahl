@@ -95,12 +95,15 @@ The npm scripts delegate to the FAKE build:
 | `npm run build`    | Run build checks and create the deployment bundle.                                        |
 | `npm test`         | Run both complete test suites, including Koota conformance.                               |
 | `npm run validate` | Run build checks, infrastructure self-tests, instrumented suites and coverage gates once. |
-| `npm run format`   | Apply enabled F# refactorings, then format authored files with Fantomas and Prettier.     |
+| `npm run format`   | Format authored files with Fantomas and Prettier without applying F# refactorings.        |
+| `npm run refactor` | Apply enabled F# refactorings, then format authored files with Fantomas and Prettier.     |
 | `npm run report`   | Generate fresh coverage and open both HTML reports locally.                               |
 
-Local build, test, dev, and format targets apply enabled F# refactorings before
-formatting. CI uses report-only analysis; advisory findings do not fail the
-current gate.
+Local build, test, dev, validate, and report targets apply enabled F# refactorings
+before formatting. `npm run format` runs the formatters only, while
+`npm run refactor` applies rewrites and then formats. CI uses report-only analysis;
+it does not write fixes, but findings that survive the configured filters still
+fail the check.
 
 See [`docs/build.md`](docs/build.md) for focused targets, CI mode, and other
 build options.

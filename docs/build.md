@@ -12,7 +12,8 @@ The npm scripts are a thin facade over the FAKE target graph in
 | `npm run dev`      | Apply enabled F# refactorings, format locally, generate and bridge Fable output, and start Vite.                                                  |
 | `npm test`         | Apply enabled F# refactorings and format locally, then run both complete test suites, including Koota conformance.                                |
 | `npm run validate` | Apply enabled F# refactorings and format locally, then run build checks, infrastructure self-tests, instrumented suites, and coverage gates once. |
-| `npm run format`   | Apply enabled F# refactorings, then format authored files with Fantomas and Prettier.                                                             |
+| `npm run format`   | Format authored files with Fantomas and Prettier without applying F# refactorings.                                                                |
+| `npm run refactor` | Apply enabled F# refactorings, then format authored files with Fantomas and Prettier.                                                             |
 | `npm run report`   | Apply enabled F# refactorings and format, then generate fresh coverage and open both HTML reports locally.                                        |
 
 Run a focused target with:
@@ -25,13 +26,16 @@ Quoting the npm argument separator keeps this form consistent across PowerShell,
 `cmd.exe`, and Unix-like shells. Run `npm run fake "--" --help` to list the
 available targets and options.
 
-Useful focused targets include `Refactor`, `RefactorCheck`, `TestFSharp`,
-`TestTypeScript`, `TestKoota`, `TestWithCoverage`, `TestWithCoverageCheck`, `Lint`,
-`FormatCheck`, `ReportFSharp`, and `ReportTypeScript`.
+Useful focused targets include `Format`, `FormatCheck`, `Refactor`,
+`RefactorWithRewrites`, `RefactorCheck`, `TestFSharp`, `TestTypeScript`,
+`TestKoota`, `TestWithCoverage`, `TestWithCoverageCheck`, `Lint`, `ReportFSharp`,
+and `ReportTypeScript`.
 
-`Refactor` applies the enabled mechanical fixes. `RefactorCheck` previews
-findings without changing source. Both print findings to the console and scan
-F# projects and scripts, including new files not yet tracked in Git.
+`Format` runs Fantomas and Prettier without applying refactorings.
+`RefactorWithRewrites` applies enabled mechanical fixes, and `Refactor` applies
+those fixes before formatting. `RefactorCheck` previews findings without
+changing source. The refactor targets print findings to the console and scan F#
+projects and scripts, including new files not yet tracked in Git.
 
 Rule settings live in `fsharprefactor.json`. Performance rules run only on
 browser production code, using the allowlist in

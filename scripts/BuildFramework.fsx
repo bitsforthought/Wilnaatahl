@@ -46,6 +46,7 @@ module CommandLine =
         "Format"
         "FormatCheck"
         "Refactor"
+        "RefactorWithRewrites"
         "RefactorCheck"
         "Fable"
         "PrepareEcs"
@@ -70,7 +71,15 @@ module CommandLine =
         "Report"
     ]
 
-    let localOnlyTargets = [ "Format"; "Refactor"; "Dev"; "ReportFSharp"; "ReportTypeScript"; "Report" ]
+    let localOnlyTargets = [
+        "Format"
+        "Refactor"
+        "RefactorWithRewrites"
+        "Dev"
+        "ReportFSharp"
+        "ReportTypeScript"
+        "Report"
+    ]
 
     let targetList = String.concat ", " availableTargets
 
@@ -144,6 +153,8 @@ module CommandLine =
         | LocalTargetInCi "Format" -> "Target Format writes files and cannot be combined with --ci; use FormatCheck."
         | LocalTargetInCi "Refactor" ->
             "Target Refactor writes files and cannot be combined with --ci; use RefactorCheck."
+        | LocalTargetInCi "RefactorWithRewrites" ->
+            "Target RefactorWithRewrites writes files and cannot be combined with --ci; use RefactorCheck."
         | LocalTargetInCi targetName -> $"Target {targetName} is local-only and cannot be combined with --ci."
         | MissingTool path -> $"Required local tool was not found: {path}. Run npm run init."
         | ProcessFailure(executable, exitCode) -> $"{executable} exited with code {exitCode}."
@@ -259,7 +270,8 @@ module BuildCommands =
 
     type CoveragePlan = { CleanPaths: string list; Commands: ProcessCommand list }
 
-    let formattingMode ci = if ci then Check else Write
+    let sourceGateTarget ci =
+        if ci then "FormatCheck" else "Refactor"
 
     let formattingCommands root mode =
         let checkOnly = mode = Check
@@ -554,6 +566,20 @@ module BuildSelfTest =
             (formatError (LocalTargetInCi "Refactor"))
 
         assertEqual
+            "CI rejects explicit source-changing refactor rewrites"
+            (Error(LocalTargetInCi "RefactorWithRewrites"))
+            (validateOptions {
+                defaultOptions with
+                    Target = Some "RefactorWithRewrites"
+                    Ci = true
+            })
+
+        assertEqual
+            "refactor rewrite CI error directs to report-only target"
+            "Target RefactorWithRewrites writes files and cannot be combined with --ci; use RefactorCheck."
+            (formatError (LocalTargetInCi "RefactorWithRewrites"))
+
+        assertEqual
             "CI permits report-only refactor check"
             (Ok(RunTarget("RefactorCheck", { defaultOptions with Target = Some "RefactorCheck"; Ci = true })))
             (validateOptions { defaultOptions with Target = Some "RefactorCheck"; Ci = true })
@@ -573,8 +599,8 @@ module BuildSelfTest =
             (Error(LocalTargetInCi "Report"))
             (validateOptions { defaultOptions with Target = Some "Report"; Ci = true })
 
-        assertEqual "CI selects read-only formatting" Check (formattingMode true)
-        assertEqual "local formatting writes" Write (formattingMode false)
+        assertEqual "CI source gate checks without writing" "FormatCheck" (sourceGateTarget true)
+        assertEqual "local source gate applies rewrites before reads" "Refactor" (sourceGateTarget false)
 
         assertEqual
             "CI format commands check without writing"

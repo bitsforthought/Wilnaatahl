@@ -39,6 +39,8 @@ module Build =
         | SelfTest
         | Help -> false
 
+    let sourceGate = sourceGateTarget ciMode
+
     let workerCount =
         match invocation with
         | RunTarget(_, options) ->
@@ -99,10 +101,9 @@ module Build =
 
     Target.create "Format" (fun _ -> runFormatting Write)
     Target.create "FormatCheck" (fun _ -> runFormatting Check)
-    Target.create "FormatByPolicy" (fun _ -> runFormatting (formattingMode ciMode))
-    Target.create "Refactor" (fun _ -> FSharpRefactor.run repoRoot Apply)
+    Target.create "RefactorWithRewrites" (fun _ -> FSharpRefactor.run repoRoot Apply)
     Target.create "RefactorCheck" (fun _ -> FSharpRefactor.run repoRoot ReportOnly)
-    Target.create "RefactorByPolicy" (fun _ -> FSharpRefactor.run repoRoot (if ciMode then ReportOnly else Apply))
+    Target.create "Refactor" (fun _ -> printfn "Refactorings applied and files formatted.")
     Target.create "Fable" (fun _ -> runFable ())
     Target.create "PrepareEcs" (fun _ -> runEcsPreparation ())
     Target.create "ValidateAgents" (fun _ -> runAgentValidation ())
@@ -132,26 +133,26 @@ module Build =
     Target.create "ReportTypeScript" (fun _ -> runTypeScriptReport ())
     Target.create "Report" (fun _ -> printfn "Coverage reports generated and opened.")
 
-    "Format" <== [ "Refactor" ]
+    "Format" <=? "RefactorWithRewrites"
+    "Refactor" <== [ "RefactorWithRewrites"; "Format" ]
     "FormatCheck" <== [ "RefactorCheck" ]
-    "FormatByPolicy" <== [ "RefactorByPolicy" ]
-    "BuildSelfTest" <== [ "FormatByPolicy" ]
-    "Fable" <== [ "FormatByPolicy" ]
+    "BuildSelfTest" <== [ sourceGate ]
+    "Fable" <== [ sourceGate ]
     "PrepareEcs" <== [ "Fable" ]
     "TypeCheck" <== [ "PrepareEcs" ]
     "Lint" <== [ "PrepareEcs" ]
     "Bundle" <== [ "TypeCheck"; "Lint"; "Fable" ]
-    "ValidateAgents" <== [ "FormatByPolicy" ]
+    "ValidateAgents" <== [ sourceGate ]
     "Build" <== [ "TypeCheck"; "Lint"; "Bundle"; "ValidateAgents" ]
-    "Dev" <== [ "FormatByPolicy"; "Fable" ]
-    "TestFSharp" <== [ "FormatByPolicy" ]
+    "Dev" <== [ sourceGate; "Fable" ]
+    "TestFSharp" <== [ sourceGate ]
     "TestFSharp" <=? "PrepareEcs"
-    "TestTypeScript" <== [ "FormatByPolicy"; "Fable"; "PrepareEcs" ]
-    "TestKoota" <== [ "FormatByPolicy"; "Fable"; "PrepareEcs" ]
+    "TestTypeScript" <== [ sourceGate; "Fable"; "PrepareEcs" ]
+    "TestKoota" <== [ sourceGate; "Fable"; "PrepareEcs" ]
     "Test" <== [ "TestFSharp"; "TestTypeScript" ]
-    "TestFSharpWithCoverage" <== [ "FormatByPolicy" ]
+    "TestFSharpWithCoverage" <== [ sourceGate ]
     "TestFSharpWithCoverage" <=? "PrepareEcs"
-    "TestTypeScriptWithCoverage" <== [ "FormatByPolicy"; "Fable"; "PrepareEcs" ]
+    "TestTypeScriptWithCoverage" <== [ sourceGate; "Fable"; "PrepareEcs" ]
 
     "TestWithCoverage"
     <== [ "TestFSharpWithCoverage"; "TestTypeScriptWithCoverage" ]
