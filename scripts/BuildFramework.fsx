@@ -575,6 +575,7 @@ module BuildSelfTest =
             "self-test leaf is not directly selectable"
             (Error(UnknownTarget "BuildSelfTest"))
             (validateOptions { defaultOptions with Target = Some "BuildSelfTest" })
+
         assertEqual
             "unknown target message"
             "Unknown target 'Missing'. Run with --help to list available targets."
@@ -639,13 +640,7 @@ module BuildSelfTest =
 
         assertEqual
             "CI validation includes refactor and format checks"
-            [
-                "Build"
-                "SelfTest"
-                "TestWithCoverageCheck"
-                "RefactorCheck"
-                "FormatCheck"
-            ]
+            [ "Build"; "SelfTest"; "TestWithCoverageCheck"; "RefactorCheck"; "FormatCheck" ]
             (validateDependencies true)
 
         assertEqual
