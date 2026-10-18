@@ -279,7 +279,7 @@ module BuildCommands =
             else
                 [ "Refactor" ]
 
-        [ "Build"; "BuildSelfTest"; "CheckCoverage" ] @ policyTargets
+        [ "Build"; "BuildSelfTest"; "TestWithCoverageCheck" ] @ policyTargets
 
     let formattingCommands root mode =
         let checkOnly = mode = Check
@@ -612,7 +612,13 @@ module BuildSelfTest =
 
         assertEqual
             "CI validation includes refactor and format checks"
-            [ "Build"; "BuildSelfTest"; "TestWithCoverageCheck"; "RefactorCheck"; "FormatCheck" ]
+            [
+                "Build"
+                "BuildSelfTest"
+                "TestWithCoverageCheck"
+                "RefactorCheck"
+                "FormatCheck"
+            ]
             (validateDependencies true)
 
         assertEqual
