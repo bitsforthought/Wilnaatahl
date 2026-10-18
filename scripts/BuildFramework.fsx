@@ -270,8 +270,16 @@ module BuildCommands =
 
     type CoveragePlan = { CleanPaths: string list; Commands: ProcessCommand list }
 
-    let sourceGateTarget ci =
-        if ci then "FormatCheck" else "Refactor"
+    let sourceWriterDependencies ci = if ci then [] else [ "Refactor" ]
+
+    let validateDependencies ci =
+        let policyTargets =
+            if ci then
+                [ "RefactorCheck"; "FormatCheck" ]
+            else
+                [ "Refactor" ]
+
+        [ "Build"; "BuildSelfTest"; "CheckCoverage" ] @ policyTargets
 
     let formattingCommands root mode =
         let checkOnly = mode = Check
@@ -599,8 +607,18 @@ module BuildSelfTest =
             (Error(LocalTargetInCi "Report"))
             (validateOptions { defaultOptions with Target = Some "Report"; Ci = true })
 
-        assertEqual "CI source gate checks without writing" "FormatCheck" (sourceGateTarget true)
-        assertEqual "local source gate applies rewrites before reads" "Refactor" (sourceGateTarget false)
+        assertEqual "CI has no source writer prerequisite" [] (sourceWriterDependencies true)
+        assertEqual "local source readers wait for source writers" [ "Refactor" ] (sourceWriterDependencies false)
+
+        assertEqual
+            "CI validation includes refactor and format checks"
+            [ "Build"; "BuildSelfTest"; "TestWithCoverageCheck"; "RefactorCheck"; "FormatCheck" ]
+            (validateDependencies true)
+
+        assertEqual
+            "local validation includes the refactor aggregate"
+            [ "Build"; "BuildSelfTest"; "TestWithCoverageCheck"; "Refactor" ]
+            (validateDependencies false)
 
         assertEqual
             "CI format commands check without writing"
