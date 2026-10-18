@@ -130,7 +130,11 @@ module internal TypeScript =
     // command-line source arguments or a process per runtime module.
     let private parserScript =
         """
-const sources = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
+(async () => {
+let input = "";
+process.stdin.setEncoding("utf8");
+for await (const chunk of process.stdin) input += chunk;
+const sources = JSON.parse(input);
 const ts = require("typescript");
 const results = sources.map(({ Name, Source }) => {
    const file = ts.createSourceFile(Name + ".ts", Source, ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
@@ -147,6 +151,10 @@ const results = sources.map(({ Name, Source }) => {
    return { Name, HasDefaultExport };
 });
 process.stdout.write(JSON.stringify(results));
+})().catch(error => {
+    console.error(error);
+    process.exitCode = 1;
+});
 """
 
     let private parseDocument (output: string) =
@@ -241,16 +249,29 @@ process.stdout.write(JSON.stringify(results));
                     |> Array.map (fun source -> dict [ "Name", source.Name; "Source", source.Source ])
                     |> JsonSerializer.Serialize
 
-                do! parser.StandardInput.WriteAsync input
-                parser.StandardInput.Close()
+                // A closed stdin must not hide the child's exit status and diagnostic.
+                let! inputResult =
+                    task {
+                        try
+                            use writer = parser.StandardInput
+                            do! writer.WriteAsync input
+                            return Ok()
+                        with :? IOException as error ->
+                            return Error error.Message
+                    }
+
                 do! parser.WaitForExitAsync()
                 let! output = output
                 let! errors = errors
 
-                if parser.ExitCode <> 0 then
+                match inputResult with
+                | Error message ->
+                    return
+                        Error
+                            $"ERROR: could not write to the TypeScript parser: {message} (exit {parser.ExitCode}): {errors.Trim()}"
+                | Ok() when parser.ExitCode <> 0 ->
                     return Error $"ERROR: TypeScript parser failed (exit {parser.ExitCode}): {errors.Trim()}"
-                else
-                    return output |> decodeResults sources
+                | Ok() -> return output |> decodeResults sources
             })
 
 module internal FileSystem =
