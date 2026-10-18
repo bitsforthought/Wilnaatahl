@@ -125,8 +125,8 @@ module Build =
     Target.create "Test" (fun _ -> printfn "All test suites completed.")
     Target.create "TestFSharpWithCoverage" (fun _ -> runFSharpCoverage ())
     Target.create "TestTypeScriptWithCoverage" (fun _ -> runTypeScriptCoverage ())
-    Target.create "TestWithCoverage" (fun _ -> printfn "Coverage reports generated.")
-    Target.create "CheckCoverage" (fun _ -> runCoverageCheck ())
+    Target.create "TestWithCoverage" (fun _ -> printfn "Test coverage data collected.")
+    Target.create "TestWithCoverageCheck" (fun _ -> runCoverageCheck ())
     Target.create "Validate" (fun _ -> printfn "Build, tests, and coverage validation completed.")
     Target.create "ReportFSharp" (fun _ -> runFSharpReport ())
     Target.create "ReportTypeScript" (fun _ -> runTypeScriptReport ())
@@ -156,8 +156,8 @@ module Build =
     "TestWithCoverage"
     <== [ "TestFSharpWithCoverage"; "TestTypeScriptWithCoverage" ]
 
-    "CheckCoverage" <== [ "TestFSharpWithCoverage"; "TestTypeScriptWithCoverage" ]
-    "Validate" <== [ "Build"; "BuildSelfTest"; "CheckCoverage" ]
+    "TestWithCoverageCheck" <== [ "TestWithCoverage" ]
+    "Validate" <== [ "Build"; "BuildSelfTest"; "TestWithCoverageCheck" ]
     "ReportFSharp" <== [ "TestFSharpWithCoverage" ]
     "ReportTypeScript" <== [ "TestTypeScriptWithCoverage" ]
     "Report" <== [ "ReportFSharp"; "ReportTypeScript" ]

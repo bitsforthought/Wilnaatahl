@@ -34,7 +34,7 @@ npm run fake "--" --target Lint
 npm run fake "--" --target FormatCheck
 ```
 
-Use `CheckCoverage` to run both instrumented suites and check their coverage
+Use `TestWithCoverageCheck` to run both instrumented suites and check their coverage
 baselines. Use `TestWithCoverage` only when you need the coverage data without
 checking the baselines.
 
