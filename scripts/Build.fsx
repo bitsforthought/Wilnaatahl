@@ -36,7 +36,6 @@ module Build =
     let ciMode =
         match invocation with
         | RunTarget(_, options) -> options.Ci
-        | SelfTest
         | Help -> false
 
     let sourceWriters = sourceWriterDependencies ciMode
@@ -47,7 +46,6 @@ module Build =
         | RunTarget(_, options) ->
             options.Parallel
             |> Option.defaultValue (defaultWorkerCount Environment.ProcessorCount)
-        | SelfTest
         | Help -> defaultWorkerCount Environment.ProcessorCount
 
     let runFormatting mode =
@@ -193,6 +191,5 @@ module Build =
     "Report" <== [ "ReportFSharp"; "ReportTypeScript" ]
 
     match invocation with
-    | SelfTest -> runSelfTests repoRoot
     | Help -> printfn "%s" (helpText ())
     | RunTarget(target, _) -> runTargetWith Target.run workerCount target
