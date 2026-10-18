@@ -21,6 +21,17 @@ and both coverage ratchets. It runs each test suite once.
 
 Use `npm run validate "--" --ci` for the non-writing CI policy.
 
+## Scope and reuse
+
+- Check the acceptance criteria with focused tests and direct inspection before
+  the full gate. A green build alone does not establish the requested behaviour.
+- Follow `AGENTS.md`'s validation scope and evidence-reuse policy. Record the
+  candidate, command, mode, result, and log path for each check.
+- Run both local and CI policy only when the change affects their differences or
+  acceptance criteria require both. Capture performance baselines before edits,
+  but defer repeated comparison measurements until correctness fixes are settled;
+  repeat measurements only to meet stated criteria or resolve uncertainty.
+
 ## Focused Iteration
 
 Run the smallest target that covers the active change, then finish with the full

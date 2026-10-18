@@ -221,6 +221,10 @@ lean directly lowers cost. When working in this repo:
   findings, not transcripts.
 - **Keep procedures in their owning skills.** Link to them rather than copying
   their checklists into root instructions or handoff prompts.
+- **Preserve evidence before handoffs or compaction.** Keep a compact session-local
+  checkpoint with candidate/base identifiers, completed checks and result paths,
+  decisions, open findings, and the next action. Update it after each review
+  round; resume from these records rather than rediscovering settled evidence.
 
 ## Key Files & Directories
 
@@ -267,6 +271,15 @@ plan (tests before implementation, never batched to the end)
 
 The adversarial review is **not optional** and **not something to wait to be
 prompted for** — it is part of every change.
+
+Run the full gate on the stable code candidate and repeat it after executable
+code, tests, dependencies, or build configuration change, or when a failure or
+unresolved concern invalidates earlier evidence. Documentation-only changes need
+no build/test gate unless documentation checks exist. Prose/comment-only review
+fixes retain prior passing evidence and need only applicable formatting, link,
+or documentation checks; tool-consumed directives and configuration are not prose.
+Reuse valid evidence across handoffs rather than rerunning checks for a fresh
+report. Execution details belong in `tdd-coverage-loop`.
 
 ### Delivering a plan (outer loop)
 
