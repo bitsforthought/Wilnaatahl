@@ -8,13 +8,7 @@ open System.IO
 open Fake.Core
 
 module CommandLine =
-    type Options = {
-        Target: string option
-        Ci: bool
-        Parallel: int option
-        SelfTest: bool
-        Help: bool
-    }
+    type Options = { Target: string option; Ci: bool; Parallel: int option; Help: bool }
 
     type BuildError =
         | MissingOptionValue of optionName: string
@@ -29,17 +23,10 @@ module CommandLine =
         | ReportOpenFailure of path: string * message: string
 
     type Invocation =
-        | SelfTest
         | Help
         | RunTarget of targetName: string * options: Options
 
-    let defaultOptions = {
-        Target = None
-        Ci = false
-        Parallel = None
-        SelfTest = false
-        Help = false
-    }
+    let defaultOptions = { Target = None; Ci = false; Parallel = None; Help = false }
 
     let availableTargets = [
         "Init"
@@ -90,7 +77,6 @@ module CommandLine =
             "  --target <target>       Select target (default: Build)"
             "  --ci                    Use check-only formatting and non-writing coverage"
             "  --parallel <workers>    Set FAKE worker limit (must be positive)"
-            "  --self-test             Run build command self-tests"
             "  --help                  Show this help"
             $"Targets: {targetList}"
         ]
@@ -99,12 +85,7 @@ module CommandLine =
         let rec parse remaining options =
             match remaining with
             | [] ->
-                if
-                    options.SelfTest
-                    && (options.Target.IsSome || options.Ci || options.Parallel.IsSome || options.Help)
-                then
-                    Error(ConflictingOptions "--self-test")
-                elif options.Help && (options.Target.IsSome || options.Ci || options.Parallel.IsSome) then
+                if options.Help && (options.Target.IsSome || options.Ci || options.Parallel.IsSome) then
                     Error(ConflictingOptions "--help")
                 else
                     Ok options
@@ -120,8 +101,6 @@ module CommandLine =
                 | _ -> Error(InvalidParallelValue(Some value))
             | "--parallel" :: _ when options.Parallel.IsSome -> Error(DuplicateOption "--parallel")
             | "--parallel" :: _ -> Error(InvalidParallelValue None)
-            | "--self-test" :: tail when not options.SelfTest -> parse tail { options with SelfTest = true }
-            | "--self-test" :: _ -> Error(DuplicateOption "--self-test")
             | "--help" :: tail when not options.Help -> parse tail { options with Help = true }
             | "--help" :: _ -> Error(DuplicateOption "--help")
             | option :: _ -> Error(UnknownOption option)
@@ -135,8 +114,6 @@ module CommandLine =
             Error(UnknownTarget target)
         elif options.Ci && (localOnlyTargets |> List.contains target) then
             Error(LocalTargetInCi target)
-        elif options.SelfTest then
-            Ok SelfTest
         elif options.Help then
             Ok Help
         else
@@ -547,9 +524,9 @@ module BuildSelfTest =
             (formatError (InvalidParallelValue(Some "0")))
 
         assertEqual
-            "self-test cannot take options"
-            (Error(ConflictingOptions "--self-test"))
-            (parseArguments [ "--self-test"; "--ci" ])
+            "removed self-test option is rejected"
+            (Error(UnknownOption "--self-test"))
+            (parseArguments [ "--self-test" ])
 
         assertEqual
             "help cannot take options"
