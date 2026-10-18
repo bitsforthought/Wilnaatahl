@@ -12,6 +12,7 @@ The npm scripts are a thin facade over the FAKE target graph in
 | `npm run dev`      | Apply enabled F# refactorings, format locally, generate and bridge Fable output, and start Vite.                                                  |
 | `npm test`         | Apply enabled F# refactorings and format locally, then run both complete test suites, including Koota conformance.                                |
 | `npm run validate` | Apply enabled F# refactorings and format locally, then run build checks, infrastructure self-tests, instrumented suites, and coverage gates once. |
+| `npm run selftest` | Apply enabled F# refactorings and format locally, then run infrastructure self-tests without the full validation gate.                            |
 | `npm run format`   | Format authored files with Fantomas and Prettier without applying F# refactorings.                                                                |
 | `npm run refactor` | Apply enabled F# refactorings, then format authored files with Fantomas and Prettier.                                                             |
 | `npm run report`   | Apply enabled F# refactorings and format, then generate fresh coverage and open both HTML reports locally.                                        |
@@ -28,8 +29,13 @@ available targets and options.
 
 Useful focused targets include `Format`, `FormatCheck`, `Refactor`,
 `RefactorWithRewrites`, `RefactorCheck`, `TestFSharp`, `TestTypeScript`,
-`TestKoota`, `TestWithCoverage`, `TestWithCoverageCheck`, `Lint`, `ReportFSharp`,
-and `ReportTypeScript`.
+`TestKoota`, `SelfTest`, `TestWithCoverage`, `TestWithCoverageCheck`, `Lint`,
+`ReportFSharp`, and `ReportTypeScript`.
+
+`SelfTest` runs the infrastructure self-tests as one aggregate; `Validate`
+depends on that same target. Use `npm run selftest` for focused feedback when
+changing build, CI, or code-generation scripts. Its component targets are
+internal leaves and are not selectable directly.
 
 `Format` runs Fantomas and Prettier without applying refactorings.
 `RefactorWithRewrites` applies enabled mechanical fixes, and `Refactor` applies
@@ -78,8 +84,8 @@ npm run validate "--" --ci
 CI mode uses `npm ci`, runs F# refactoring report-only, checks formatting
 without writing, prevents coverage baseline updates, and rejects targets that
 launch a development server or open a report. The report-only `RefactorCheck`
-target can also be run directly in CI mode. Local build, test, dev, and focused
-F# targets apply enabled fixes before Fantomas. Local development should
+target can also be run directly in CI mode. Local build, test, dev, validate,
+self-test, and focused F# targets apply enabled fixes before Fantomas. Local development should
 normally use `npm run init` and `npm run validate` without this option.
 
 ## Continuous Integration

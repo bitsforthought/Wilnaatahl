@@ -56,7 +56,13 @@ module Build =
     let runAgentValidation () =
         agentValidationCommands repoRoot |> runCommands
 
+    let runAgentValidationSelfTest () =
+        agentValidationSelfTestCommand repoRoot |> runCommand
+
     let runFable () = fableCommands repoRoot |> runCommands
+
+    let runFableBridgeSelfTest () =
+        fableBridgeSelfTestCommand repoRoot |> runCommand
 
     let runEcsPreparation () =
         ecsPreparationCommand repoRoot |> runOrFail
@@ -69,6 +75,9 @@ module Build =
 
     let runCoverageCheck () =
         coverageCheckCommands repoRoot ciMode |> runCommands
+
+    let runCoverageCheckSelfTest () =
+        coverageCheckSelfTestCommand repoRoot |> runCommand
 
     let runFSharpReport () =
         let resultsDirectory = Path.Combine(repoRoot, "TestResults")
@@ -94,6 +103,10 @@ module Build =
         BuildSelfTest.runSelfTest root
 
     Target.create "BuildSelfTest" (fun _ -> runSelfTests repoRoot)
+    Target.create "ValidateAgentsSelfTest" (fun _ -> runAgentValidationSelfTest ())
+    Target.create "FableBridgeSelfTest" (fun _ -> runFableBridgeSelfTest ())
+    Target.create "CheckCoverageSelfTest" (fun _ -> runCoverageCheckSelfTest ())
+    Target.create "SelfTest" (fun _ -> printfn "Infrastructure self-tests completed.")
 
     Target.create "Init" (fun _ ->
         npmCommand repoRoot (installAction ciMode) |> runOrFail
@@ -138,6 +151,18 @@ module Build =
     "Refactor" <== [ "RefactorWithRewrites"; "Format" ]
     "FormatCheck" <== [ "RefactorCheck" ]
     "BuildSelfTest" <== sourceWriters
+    "ValidateAgentsSelfTest" <== sourceWriters
+    "FableBridgeSelfTest" <== sourceWriters
+    "CheckCoverageSelfTest" <== sourceWriters
+
+    "SelfTest"
+    <== [
+        "BuildSelfTest"
+        "ValidateAgentsSelfTest"
+        "FableBridgeSelfTest"
+        "CheckCoverageSelfTest"
+    ]
+
     "Fable" <== sourceWriters
     "PrepareEcs" <== sourceWriters
     // Serialize RefactorCheck's Fable-flavour build against Fable and PrepareEcs, which use the same obj/fable outputs.
