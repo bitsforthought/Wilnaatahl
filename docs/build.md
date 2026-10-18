@@ -26,7 +26,7 @@ Quoting the npm argument separator keeps this form consistent across PowerShell,
 available targets and options.
 
 Useful focused targets include `Refactor`, `RefactorCheck`, `TestFSharp`,
-`TestTypeScript`, `TestKoota`, `TestWithCoverage`, `CheckCoverage`, `Lint`,
+`TestTypeScript`, `TestKoota`, `TestWithCoverage`, `TestWithCoverageCheck`, `Lint`,
 `FormatCheck`, `ReportFSharp`, and `ReportTypeScript`.
 
 `Refactor` applies the enabled mechanical fixes. `RefactorCheck` previews
