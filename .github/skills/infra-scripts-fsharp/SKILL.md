@@ -52,6 +52,9 @@ description: >-
 
 - Start with a failing test for each repository-owned policy or observable effect
   before implementing it. State the concrete regression that the test prevents.
+- Run `npm run selftest` for focused feedback when changing build, CI, coverage,
+  or code-generation scripts; `npm run validate` also runs the self-test
+  aggregate.
 - Do not calculate the expected value by walking the same declarations, target
   graph, or command table as the implementation. Such a test only proves that the
   implementation agrees with itself.

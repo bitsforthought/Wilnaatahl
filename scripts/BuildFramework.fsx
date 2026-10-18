@@ -56,7 +56,7 @@ module CommandLine =
         "Bundle"
         "Build"
         "Dev"
-        "BuildSelfTest"
+        "SelfTest"
         "TestFSharp"
         "TestTypeScript"
         "TestKoota"
@@ -279,7 +279,7 @@ module BuildCommands =
             else
                 [ "Refactor" ]
 
-        [ "Build"; "BuildSelfTest"; "TestWithCoverageCheck" ] @ policyTargets
+        [ "Build"; "SelfTest"; "TestWithCoverageCheck" ] @ policyTargets
 
     let formattingCommands root mode =
         let checkOnly = mode = Check
@@ -297,13 +297,37 @@ module BuildCommands =
             nodeCommand root "node_modules/prettier/bin/prettier.cjs" prettierArguments
         ]
 
-    let agentValidationCommands root =
-        let validator = "scripts/ValidateAgentDefinitions.fsx"
-        let fsiArguments = [ "fsi"; "--warnaserror"; "--warnon:3886"; validator ]
+    let agentValidationCommand root arguments =
+        dotnetCommand
+            root
+            ([
+                "fsi"
+                "--warnaserror"
+                "--warnon:3886"
+                "scripts/ValidateAgentDefinitions.fsx"
+             ]
+             @ arguments)
 
-        [
-            dotnetCommand root (fsiArguments @ [ "--self-test" ])
-            dotnetCommand root fsiArguments
+    let agentValidationCommands root = [ agentValidationCommand root [] ]
+
+    let agentValidationSelfTestCommand root =
+        agentValidationCommand root [ "--self-test" ]
+
+    let fableBridgeSelfTestCommand root =
+        dotnetCommand root [
+            "fsi"
+            "--warnaserror"
+            "--warnon:3886"
+            "scripts/GenerateFableLibraryBridge.fsx"
+            "--self-test"
+        ]
+
+    let fableBridgeCommand root =
+        dotnetCommand root [
+            "fsi"
+            "--warnaserror"
+            "--warnon:3886"
+            "scripts/GenerateFableLibraryBridge.fsx"
         ]
 
     let fableCommands root = [
@@ -316,19 +340,7 @@ module BuildCommands =
             "--cwd"
             "./src/Wilnaatahl.Core"
         ]
-        dotnetCommand root [
-            "fsi"
-            "--warnaserror"
-            "--warnon:3886"
-            "scripts/GenerateFableLibraryBridge.fsx"
-            "--self-test"
-        ]
-        dotnetCommand root [
-            "fsi"
-            "--warnaserror"
-            "--warnon:3886"
-            "scripts/GenerateFableLibraryBridge.fsx"
-        ]
+        fableBridgeCommand root
     ]
 
     let ecsPreparationCommand root =
@@ -394,9 +406,15 @@ module BuildCommands =
 
         let policyArguments = if ci then [ "--check-only" ] else []
 
-        [
-            dotnetCommand root (scriptArguments @ [ "--self-test" ])
-            dotnetCommand root (scriptArguments @ policyArguments)
+        [ dotnetCommand root (scriptArguments @ policyArguments) ]
+
+    let coverageCheckSelfTestCommand root =
+        dotnetCommand root [
+            "fsi"
+            "--warnaserror"
+            "--warnon:3886"
+            "scripts/CheckCoverage.fsx"
+            "--self-test"
         ]
 
     let cleanOwnedDirectories paths =
@@ -549,6 +567,15 @@ module BuildSelfTest =
             (validateOptions { defaultOptions with Target = Some "Missing" })
 
         assertEqual
+            "aggregate self-test target is selectable"
+            (Ok(RunTarget("SelfTest", { defaultOptions with Target = Some "SelfTest" })))
+            (validateOptions { defaultOptions with Target = Some "SelfTest" })
+
+        assertEqual
+            "self-test leaf is not directly selectable"
+            (Error(UnknownTarget "BuildSelfTest"))
+            (validateOptions { defaultOptions with Target = Some "BuildSelfTest" })
+        assertEqual
             "unknown target message"
             "Unknown target 'Missing'. Run with --help to list available targets."
             (formatError (UnknownTarget "Missing"))
@@ -614,7 +641,7 @@ module BuildSelfTest =
             "CI validation includes refactor and format checks"
             [
                 "Build"
-                "BuildSelfTest"
+                "SelfTest"
                 "TestWithCoverageCheck"
                 "RefactorCheck"
                 "FormatCheck"
@@ -623,7 +650,7 @@ module BuildSelfTest =
 
         assertEqual
             "local validation includes the refactor aggregate"
-            [ "Build"; "BuildSelfTest"; "TestWithCoverageCheck"; "Refactor" ]
+            [ "Build"; "SelfTest"; "TestWithCoverageCheck"; "Refactor" ]
             (validateDependencies false)
 
         assertEqual
@@ -643,7 +670,7 @@ module BuildSelfTest =
             (formattingCommands root Write)
 
         assertEqual
-            "Fable compilation is followed by bridge generation"
+            "Fable compilation is followed by bridge generation without an embedded self-test"
             [
                 dotnetCommand root [
                     "fable"
@@ -659,16 +686,20 @@ module BuildSelfTest =
                     "--warnaserror"
                     "--warnon:3886"
                     "scripts/GenerateFableLibraryBridge.fsx"
-                    "--self-test"
-                ]
-                dotnetCommand root [
-                    "fsi"
-                    "--warnaserror"
-                    "--warnon:3886"
-                    "scripts/GenerateFableLibraryBridge.fsx"
                 ]
             ]
             (fableCommands root)
+
+        assertEqual
+            "Fable bridge self-test is a separate command"
+            (dotnetCommand root [
+                "fsi"
+                "--warnaserror"
+                "--warnon:3886"
+                "scripts/GenerateFableLibraryBridge.fsx"
+                "--self-test"
+            ])
+            (fableBridgeSelfTestCommand root)
 
         assertEqual
             "ECS output keeps no-cache option"
@@ -758,29 +789,15 @@ module BuildSelfTest =
                 Directory.Delete(cleanupDirectory, true)
 
         assertEqual
-            "local coverage ratchets and CI coverage checks without writing"
+            "local coverage check command excludes its self-test"
             [
-                dotnetCommand root [
-                    "fsi"
-                    "--warnaserror"
-                    "--warnon:3886"
-                    "scripts/CheckCoverage.fsx"
-                    "--self-test"
-                ]
                 dotnetCommand root [ "fsi"; "--warnaserror"; "--warnon:3886"; "scripts/CheckCoverage.fsx" ]
             ]
             (coverageCheckCommands root false)
 
         assertEqual
-            "CI coverage check uses non-writing mode"
+            "CI coverage check command excludes its self-test"
             [
-                dotnetCommand root [
-                    "fsi"
-                    "--warnaserror"
-                    "--warnon:3886"
-                    "scripts/CheckCoverage.fsx"
-                    "--self-test"
-                ]
                 dotnetCommand root [
                     "fsi"
                     "--warnaserror"
@@ -790,6 +807,17 @@ module BuildSelfTest =
                 ]
             ]
             (coverageCheckCommands root true)
+
+        assertEqual
+            "coverage self-test is a separate command"
+            (dotnetCommand root [
+                "fsi"
+                "--warnaserror"
+                "--warnon:3886"
+                "scripts/CheckCoverage.fsx"
+                "--self-test"
+            ])
+            (coverageCheckSelfTestCommand root)
 
         assertEqual
             "F# HTML report generator"
@@ -819,15 +847,8 @@ module BuildSelfTest =
             (formatError (ReportOpenFailure(fSharpReportIndex, "Browser launch failed...")))
 
         assertEqual
-            "agent validation self-test precedes validation"
+            "agent validation command excludes its self-test"
             [
-                dotnetCommand root [
-                    "fsi"
-                    "--warnaserror"
-                    "--warnon:3886"
-                    "scripts/ValidateAgentDefinitions.fsx"
-                    "--self-test"
-                ]
                 dotnetCommand root [
                     "fsi"
                     "--warnaserror"
@@ -836,6 +857,17 @@ module BuildSelfTest =
                 ]
             ]
             (agentValidationCommands root)
+
+        assertEqual
+            "agent validation self-test is a separate command"
+            (dotnetCommand root [
+                "fsi"
+                "--warnaserror"
+                "--warnon:3886"
+                "scripts/ValidateAgentDefinitions.fsx"
+                "--self-test"
+            ])
+            (agentValidationSelfTestCommand root)
 
         let spacedRoot = Path.Combine(root, "fake build test with spaces")
         let viteScript = "node_modules/vite/bin/vite.js"

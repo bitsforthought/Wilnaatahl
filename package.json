@@ -10,6 +10,7 @@
     "dev": "npm run fake -- --target Dev",
     "test": "npm run fake -- --target Test",
     "validate": "npm run fake -- --target Validate",
+    "selftest": "npm run fake -- --target SelfTest",
     "format": "npm run fake -- --target Format",
     "refactor": "npm run fake -- --target Refactor",
     "report": "npm run fake -- --target Report"
