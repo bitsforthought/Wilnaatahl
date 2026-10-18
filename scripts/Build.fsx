@@ -39,7 +39,8 @@ module Build =
         | SelfTest
         | Help -> false
 
-    let sourceGate = sourceGateTarget ciMode
+    let sourceWriters = sourceWriterDependencies ciMode
+    let validateDependencies = BuildCommands.validateDependencies ciMode
 
     let workerCount =
         match invocation with
@@ -136,29 +137,32 @@ module Build =
     "Format" <=? "RefactorWithRewrites"
     "Refactor" <== [ "RefactorWithRewrites"; "Format" ]
     "FormatCheck" <== [ "RefactorCheck" ]
-    "BuildSelfTest" <== [ sourceGate ]
-    "Fable" <== [ sourceGate ]
-    "PrepareEcs" <== [ "Fable" ]
-    "TypeCheck" <== [ "PrepareEcs" ]
-    "Lint" <== [ "PrepareEcs" ]
-    "Bundle" <== [ "TypeCheck"; "Lint"; "Fable" ]
-    "ValidateAgents" <== [ sourceGate ]
+    "BuildSelfTest" <== sourceWriters
+    "Fable" <== sourceWriters
+    "PrepareEcs" <== sourceWriters
+    // Serialize RefactorCheck's Fable-flavour build against Fable and PrepareEcs, which use the same obj/fable outputs.
+    "Fable" <=? "RefactorCheck"
+    "PrepareEcs" <=? "RefactorCheck"
+    "TypeCheck" <== [ "Fable"; "PrepareEcs" ]
+    "Lint" <== [ "Fable"; "PrepareEcs" ]
+    "Bundle" <== [ "Fable" ]
+    "ValidateAgents" <== sourceWriters
     "Build" <== [ "TypeCheck"; "Lint"; "Bundle"; "ValidateAgents" ]
-    "Dev" <== [ sourceGate; "Fable" ]
-    "TestFSharp" <== [ sourceGate ]
-    "TestFSharp" <=? "PrepareEcs"
-    "TestTypeScript" <== [ sourceGate; "Fable"; "PrepareEcs" ]
-    "TestKoota" <== [ sourceGate; "Fable"; "PrepareEcs" ]
+    "Dev" <== (sourceWriters @ [ "Fable" ])
+    "TestFSharp" <== sourceWriters
+    "TestTypeScript" <== [ "Fable"; "PrepareEcs" ]
+    "TestKoota" <== [ "Fable"; "PrepareEcs" ]
     "Test" <== [ "TestFSharp"; "TestTypeScript" ]
-    "TestFSharpWithCoverage" <== [ sourceGate ]
-    "TestFSharpWithCoverage" <=? "PrepareEcs"
-    "TestTypeScriptWithCoverage" <== [ sourceGate; "Fable"; "PrepareEcs" ]
+    "TestFSharpWithCoverage" <== sourceWriters
+    // RefactorCheck's common pass and F# coverage both use Core's CLR Debug intermediates.
+    "TestFSharpWithCoverage" <=? "RefactorCheck"
+    "TestTypeScriptWithCoverage" <== [ "Fable"; "PrepareEcs" ]
 
     "TestWithCoverage"
     <== [ "TestFSharpWithCoverage"; "TestTypeScriptWithCoverage" ]
 
     "TestWithCoverageCheck" <== [ "TestWithCoverage" ]
-    "Validate" <== [ "Build"; "BuildSelfTest"; "TestWithCoverageCheck" ]
+    "Validate" <== validateDependencies
     "ReportFSharp" <== [ "TestFSharpWithCoverage" ]
     "ReportTypeScript" <== [ "TestTypeScriptWithCoverage" ]
     "Report" <== [ "ReportFSharp"; "ReportTypeScript" ]
