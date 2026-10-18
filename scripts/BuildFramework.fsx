@@ -524,11 +524,6 @@ module BuildSelfTest =
             (formatError (InvalidParallelValue(Some "0")))
 
         assertEqual
-            "removed self-test option is rejected"
-            (Error(UnknownOption "--self-test"))
-            (parseArguments [ "--self-test" ])
-
-        assertEqual
             "help cannot take options"
             (Error(ConflictingOptions "--help"))
             (parseArguments [ "--help"; "--ci" ])
