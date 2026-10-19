@@ -61,6 +61,9 @@ touched, ask:
   under test. These tests agree with any coordinated mistake and protect no
   independent behaviour. Require an observable repository contract and a
   concrete regression mechanism.
+- **History-based tests.** Flag tests whose only purpose is to record a rename or
+  migration, rather than protect current behaviour. Git records history; retain
+  old/new-name assertions only for an explicit compatibility contract.
 - For TypeScript tests, apply the `typescript-testing` skill in full.
 - Does any new `.tsx` contain computation rather than hook/state/props/style
   wiring? Because `.tsx` is excluded from the coverage denominator, arithmetic,

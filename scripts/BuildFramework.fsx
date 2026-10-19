@@ -553,16 +553,6 @@ module BuildSelfTest =
             "Unknown target 'Missing'. Run with --help to list available targets."
             (formatError (UnknownTarget "Missing"))
 
-        for target in [ "RewriteSource"; "FableCompileSrc"; "FableCompileTests" ] do
-            let options = { defaultOptions with Target = Some target }
-            assertEqual "renamed target is selectable" (Ok(RunTarget(target, options))) (validateOptions options)
-
-        for target in [ "RefactorWithRewrites"; "Fable"; "PrepareEcs" ] do
-            assertEqual
-                "obsolete target is rejected"
-                (Error(UnknownTarget target))
-                (validateOptions { defaultOptions with Target = Some target })
-
         assertEqual
             "CI rejects write-mode format"
             (Error(LocalTargetInCi "Format"))
