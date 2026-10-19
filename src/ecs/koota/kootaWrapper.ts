@@ -45,7 +45,7 @@ import {
   SpawnSpec_$union as SpawnSpec,
   SpawnSpec_Map,
   ITracker,
-} from "../../generated/ECS/Types";
+} from "../../generated/Wilnaatahl.ECS/Types";
 
 type KootaSchema<T> = T extends Schema ? T : never;
 type KootaValueFactory<T> = () => T extends number
@@ -240,7 +240,7 @@ export function createEntityOperations(): IEntityOperations {
     // write into the relation store regardless (setRelationDataAtIndex does store[eid] = value),
     // silently corrupting state. The documented contract is to throw. The message prefix (up to the
     // entity id) is the cross-backend contract, mirrored verbatim in the .NET mock
-    // (src/Wilnaatahl.Core/ECS/Mocks/TestECS.fs); the trailing entity id is non-deterministic across
+    // (src/Wilnaatahl.ECS/Mocks/TestECS.fs); the trailing entity id is non-deterministic across
     // backends and not part of it.
     if (!entity.has(pair)) {
       throw new Error(

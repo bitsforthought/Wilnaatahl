@@ -6,7 +6,7 @@ import {
   fromKootaWorld,
   toKootaRelation,
 } from "../../../src/ecs/koota/kootaWrapper";
-import { EntityId, SpawnSpec_Val } from "../../../src/generated/ECS/Types";
+import { EntityId, SpawnSpec_Val } from "../../../src/generated/Wilnaatahl.ECS/Types";
 
 function expectExactError(action: () => unknown, expectedMessage: string): void {
   let thrown: unknown;

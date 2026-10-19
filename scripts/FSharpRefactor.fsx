@@ -23,8 +23,8 @@ module FSharpRefactor =
         let codes =
             document.RootElement.EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
 
-        // performanceCommand forwards these via --codes, and an empty --codes means "no filter" to the tool,
-        // which would silently enable every performance rule instead of none.
+        // An empty --codes means "no filter" to the tool, which would silently enable every performance rule
+        // instead of none.
         if List.isEmpty codes || codes |> List.exists String.IsNullOrWhiteSpace then
             failwith "Performance codes must be a nonempty JSON array of nonblank strings."
 
@@ -115,20 +115,24 @@ module FSharpRefactor =
     /// This pass therefore analyses the browser build flavour: --define FABLE_COMPILER selects the #if FABLE_COMPILER
     /// source branches, and the environment variable (which MSBuild reads as a property) selects Fable's package
     /// references and excludes the CLR-only ECS mock. Directory.Build.props gives that flavour its own bin/obj.
-    let performanceCommand root mode codes =
-        let productionSourceDirectory = Path.Combine("src", "Wilnaatahl.Core")
+    let performanceCommands root mode codes =
         let selectedCodes = String.concat "," codes
 
         if List.isEmpty codes then
             failwith "Performance analysis requires nonempty codes."
 
-        createCommand
-            root
-            mode
-            productionSourceDirectory
-            "performance"
-            [ "--codes"; selectedCodes; "--define"; "FABLE_COMPILER" ]
-            (Map [ ("FABLE_COMPILER", "true") ])
+        [
+            Path.Combine("src", "Wilnaatahl.Core")
+            Path.Combine("src", "Wilnaatahl.ECS")
+        ]
+        |> List.map (fun productionSourceDirectory ->
+            createCommand
+                root
+                mode
+                productionSourceDirectory
+                "performance"
+                [ "--codes"; selectedCodes; "--define"; "FABLE_COMPILER" ]
+                (Map [ ("FABLE_COMPILER", "true") ]))
 
     let run root mode =
         // Both configuration files are checked before any analysis, so a bad edit cannot leave sources partly rewritten.
@@ -147,7 +151,7 @@ module FSharpRefactor =
         |> List.map (commonCommand root mode)
         |> List.iter ProcessExecution.runCommand
 
-        performanceCommand root mode codes |> ProcessExecution.runCommand
+        performanceCommands root mode codes |> List.iter ProcessExecution.runCommand
 
 
 module RefactorSelfTest =
@@ -301,16 +305,16 @@ module RefactorSelfTest =
 
         let commonApply = commonCommand root Apply "Wilnaatahl.slnx"
         let commonCheck = commonCommand root ReportOnly "Wilnaatahl.slnx"
-        let performanceApply = performanceCommand root Apply describedCodes
-        let performanceCheck = performanceCommand root ReportOnly describedCodes
+        let performanceApply = performanceCommands root Apply describedCodes
+        let performanceCheck = performanceCommands root ReportOnly describedCodes
 
-        for command in [ commonApply; performanceApply ] do
+        for command in ([ commonApply ] @ performanceApply) do
             assertEqual "applying fixes never requests dry-run" false (command.Arguments |> List.contains "--dry-run")
 
-        for command in [ commonCheck; performanceCheck ] do
+        for command in ([ commonCheck ] @ performanceCheck) do
             assertEqual "report-only check requests dry-run" true (command.Arguments |> List.contains "--dry-run")
 
-        for command in [ commonApply; commonCheck; performanceApply; performanceCheck ] do
+        for command in ([ commonApply; commonCheck ] @ performanceApply @ performanceCheck) do
             assertEqual "analysis surfaces advisory notes" true (command.Arguments |> List.contains "--notes")
 
             assertEqual
@@ -319,24 +323,28 @@ module RefactorSelfTest =
                 (command.Arguments |> List.contains "--fail-on-findings")
 
         assertEqual
-            "performance analysis scopes to the production project"
-            (Path.Combine("src", "Wilnaatahl.Core"))
-            (performanceCheck.Arguments |> List.item 4)
+            "performance analysis covers both production projects"
+            [
+                Path.Combine("src", "Wilnaatahl.Core")
+                Path.Combine("src", "Wilnaatahl.ECS")
+            ]
+            (performanceCheck |> List.map (fun command -> command.Arguments |> List.item 4))
 
-        assertEqual
-            "performance pass forwards the configured rules"
-            "EXAMPLE1,EXAMPLE2"
-            (performanceCheck.Arguments |> List.skipWhile ((<>) "--codes") |> List.item 1)
+        for command in performanceCheck do
+            assertEqual
+                "performance pass forwards the configured rules"
+                "EXAMPLE1,EXAMPLE2"
+                (command.Arguments |> List.skipWhile ((<>) "--codes") |> List.item 1)
 
-        assertEqual
-            "performance pass supplies the Fable preprocessor define"
-            "FABLE_COMPILER"
-            (performanceCheck.Arguments |> List.skipWhile ((<>) "--define") |> List.item 1)
+            assertEqual
+                "performance pass supplies the Fable preprocessor define"
+                "FABLE_COMPILER"
+                (command.Arguments |> List.skipWhile ((<>) "--define") |> List.item 1)
 
-        assertEqual
-            "only the performance child receives the Fable conditional"
-            (Map [ ("FABLE_COMPILER", "true") ])
-            performanceCheck.EnvironmentVariables
+            assertEqual
+                "only the performance child receives the Fable conditional"
+                (Map [ ("FABLE_COMPILER", "true") ])
+                command.EnvironmentVariables
 
         assertEqual
             "common pass does not inherit performance-only environment"
@@ -346,7 +354,7 @@ module RefactorSelfTest =
         assertEqual
             "empty performance selection cannot broaden analysis"
             (Some "Performance analysis requires nonempty codes.")
-            (failureFrom (fun () -> performanceCommand root ReportOnly [] |> ignore)
+            (failureFrom (fun () -> performanceCommands root ReportOnly [] |> ignore)
              |> Option.map _.Message)
 
         let fableCompilerBeforeProcess =

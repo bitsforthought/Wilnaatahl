@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/Wilnaatahl.Core/Wilnaatahl.Core.fsproj" />
+    <ProjectReference Include="../../src/Wilnaatahl.ECS/Wilnaatahl.ECS.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

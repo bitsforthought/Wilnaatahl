@@ -4,6 +4,7 @@
         <Platform Name="x64" />
         <Platform Name="x86" />
     </Configurations>
+    <Project Path="src\Wilnaatahl.ECS\Wilnaatahl.ECS.fsproj" />
     <Project Path="src\Wilnaatahl.Core\Wilnaatahl.Core.fsproj" />
     <Project Path="tests\Wilnaatahl.Core.Tests\Wilnaatahl.Core.Tests.fsproj" />
     <Project Path="tests\Wilnaatahl.ECS.Tests\Wilnaatahl.ECS.Tests.fsproj" />

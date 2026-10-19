@@ -3,7 +3,7 @@ import { Vector3 } from "three";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { getLinePositions } from "../../../src/ecs/connectors";
 import { fromKootaWorld } from "../../../src/ecs/koota/kootaWrapper";
-import { EntityId } from "../../../src/generated/ECS/Types";
+import { EntityId } from "../../../src/generated/Wilnaatahl.ECS/Types";
 import { spawn as spawnLine } from "../../../src/generated/Entities/Line";
 
 describe("getLinePositions", () => {
