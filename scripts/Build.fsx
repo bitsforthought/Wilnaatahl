@@ -57,13 +57,14 @@ module Build =
     let runAgentValidationSelfTest () =
         agentValidationSelfTestCommand repoRoot |> runCommand
 
-    let runFable () = fableCommands repoRoot |> runCommands
+    let runFableCompileSrc () =
+        fableCompileSrcCommands repoRoot |> runCommands
 
     let runFableBridgeSelfTest () =
         fableBridgeSelfTestCommand repoRoot |> runCommand
 
-    let runEcsPreparation () =
-        ecsPreparationCommand repoRoot |> runOrFail
+    let runFableCompileTests () =
+        fableCompileTestsCommand repoRoot |> runOrFail
 
     let runFSharpCoverage () =
         fSharpCoveragePlan repoRoot |> runCoveragePlan
@@ -113,11 +114,11 @@ module Build =
 
     Target.create "Format" (fun _ -> runFormatting Write)
     Target.create "FormatCheck" (fun _ -> runFormatting Check)
-    Target.create "RefactorWithRewrites" (fun _ -> FSharpRefactor.run repoRoot Apply)
+    Target.create "Refactor" (fun _ -> FSharpRefactor.run repoRoot Apply)
     Target.create "RefactorCheck" (fun _ -> FSharpRefactor.run repoRoot ReportOnly)
-    Target.create "Refactor" (fun _ -> printfn "Refactorings applied and files formatted.")
-    Target.create "Fable" (fun _ -> runFable ())
-    Target.create "PrepareEcs" (fun _ -> runEcsPreparation ())
+    Target.create "RewriteSource" (fun _ -> printfn "Refactorings applied and files formatted.")
+    Target.create "FableCompileSrc" (fun _ -> runFableCompileSrc ())
+    Target.create "FableCompileTests" (fun _ -> runFableCompileTests ())
     Target.create "ValidateAgents" (fun _ -> runAgentValidation ())
 
     Target.create "Lint" (fun _ ->
@@ -130,7 +131,7 @@ module Build =
 
     Target.create "TypeCheck" (fun _ -> runNode repoRoot "node_modules/typescript/bin/tsc" [])
     Target.create "Bundle" (fun _ -> runNode repoRoot "node_modules/vite/bin/vite.js" [ "build" ])
-    Target.create "Build" (fun _ -> printfn "Build checks completed.")
+    Target.create "Build" (fun _ -> printfn "Build completed.")
     Target.create "Dev" (fun _ -> runNode repoRoot "node_modules/vite/bin/vite.js" [])
     Target.create "TestFSharp" (fun _ -> fSharpTestCommand repoRoot |> runOrFail)
     Target.create "TestTypeScript" (fun _ -> typeScriptTestCommand repoRoot |> runCommand)
@@ -145,8 +146,8 @@ module Build =
     Target.create "ReportTypeScript" (fun _ -> runTypeScriptReport ())
     Target.create "Report" (fun _ -> printfn "Coverage reports generated and opened.")
 
-    "Format" <=? "RefactorWithRewrites"
-    "Refactor" <== [ "RefactorWithRewrites"; "Format" ]
+    "Format" <=? "Refactor"
+    "RewriteSource" <== [ "Refactor"; "Format" ]
     "FormatCheck" <== [ "RefactorCheck" ]
     "BuildSelfTest" <== sourceWriters
     "ValidateAgentsSelfTest" <== sourceWriters
@@ -161,25 +162,25 @@ module Build =
         "CheckCoverageSelfTest"
     ]
 
-    "Fable" <== sourceWriters
-    "PrepareEcs" <== sourceWriters
-    // Serialize RefactorCheck's Fable-flavour build against Fable and PrepareEcs, which use the same obj/fable outputs.
-    "Fable" <=? "RefactorCheck"
-    "PrepareEcs" <=? "RefactorCheck"
-    "TypeCheck" <== [ "Fable"; "PrepareEcs" ]
-    "Lint" <== [ "Fable"; "PrepareEcs" ]
-    "Bundle" <== [ "Fable" ]
+    "FableCompileSrc" <== sourceWriters
+    "FableCompileTests" <== sourceWriters
+    // RefactorCheck and both Fable compilations share production projects' obj/fable outputs.
+    "FableCompileSrc" <=? "RefactorCheck"
+    "FableCompileTests" <=? "RefactorCheck"
+    "TypeCheck" <== [ "FableCompileSrc"; "FableCompileTests" ]
+    "Lint" <== [ "FableCompileSrc"; "FableCompileTests" ]
+    "Bundle" <== [ "FableCompileSrc" ]
     "ValidateAgents" <== sourceWriters
     "Build" <== [ "TypeCheck"; "Lint"; "Bundle"; "ValidateAgents" ]
-    "Dev" <== (sourceWriters @ [ "Fable" ])
+    "Dev" <== (sourceWriters @ [ "FableCompileSrc" ])
     "TestFSharp" <== sourceWriters
-    "TestTypeScript" <== [ "Fable"; "PrepareEcs" ]
-    "TestKoota" <== [ "Fable"; "PrepareEcs" ]
+    "TestTypeScript" <== [ "FableCompileSrc"; "FableCompileTests" ]
+    "TestKoota" <== [ "FableCompileSrc"; "FableCompileTests" ]
     "Test" <== [ "TestFSharp"; "TestTypeScript" ]
     "TestFSharpWithCoverage" <== sourceWriters
     // RefactorCheck's common pass and F# coverage both use Core's CLR Debug intermediates.
     "TestFSharpWithCoverage" <=? "RefactorCheck"
-    "TestTypeScriptWithCoverage" <== [ "Fable"; "PrepareEcs" ]
+    "TestTypeScriptWithCoverage" <== [ "FableCompileSrc"; "FableCompileTests" ]
 
     "TestWithCoverage"
     <== [ "TestFSharpWithCoverage"; "TestTypeScriptWithCoverage" ]

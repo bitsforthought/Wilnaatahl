@@ -27,8 +27,8 @@ Quoting the npm argument separator keeps this form consistent across PowerShell,
 `cmd.exe`, and Unix-like shells. Run `npm run fake "--" --help` to list the
 available targets and options.
 
-Useful focused targets include `Format`, `FormatCheck`, `Refactor`,
-`RefactorWithRewrites`, `RefactorCheck`, `TestFSharp`, `TestTypeScript`,
+Useful focused targets include `Format`, `FormatCheck`, `RewriteSource`,
+`Refactor`, `RefactorCheck`, `FableCompileSrc`, `FableCompileTests`, `TestFSharp`, `TestTypeScript`,
 `TestKoota`, `SelfTest`, `TestWithCoverage`, `TestWithCoverageCheck`, `Lint`,
 `ReportFSharp`, and `ReportTypeScript`.
 
@@ -38,7 +38,7 @@ changing build, CI, or code-generation scripts. Its component targets are
 internal leaves and are not selectable directly.
 
 `Format` runs Fantomas and Prettier without applying refactorings.
-`RefactorWithRewrites` applies enabled mechanical fixes, and `Refactor` applies
+`Refactor` applies enabled mechanical fixes, and `RewriteSource` applies
 those fixes before formatting. `RefactorCheck` previews findings without
 changing source. The refactor targets print findings to the console and scan F#
 projects and scripts, including new files not yet tracked in Git.
@@ -57,6 +57,14 @@ because the tool silently uses its default rules when `fsharprefactor.json`
 is malformed.
 
 ## Generated TypeScript
+
+`FableCompileSrc` compiles Core and its referenced ECS project into `src/generated`,
+then generates the stable Fable runtime bridge. `FableCompileTests` compiles the
+portable ECS tests and their referenced ECS project into `tests/generated`.
+The compilation targets are independent: each emits its own dependency copies,
+and compiling tests does not populate the source output or its runtime bridge.
+TypeScript tests also import application code, so test execution and the
+monolithic `TypeCheck` target require both generated trees.
 
 TypeScript root-file discovery excludes the vendored Fable runtime and its
 generated bridge, configured in `tsconfig.json`. Fable includes runtime modules

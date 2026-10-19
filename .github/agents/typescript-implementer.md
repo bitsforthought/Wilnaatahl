@@ -15,7 +15,7 @@ You implement and modify the TypeScript frontend in `src/react-components/` and
 `src/ecs/`. This layer is deliberately thin: it consumes the F#-generated view
 model and the F# ECS systems and must not reimplement domain logic. Business-logic
 changes belong in F# (use the `fsharp-implementer` agent), after which
-`npm run fake "--" --target Fable` regenerates `src/generated/` — never hand-edit
+`npm run fake "--" --target FableCompileSrc` regenerates `src/generated/` — never hand-edit
 generated files.
 
 Apply the `typescript-style` skill (named hot-path callbacks, imports at top, the

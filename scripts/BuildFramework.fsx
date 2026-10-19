@@ -32,11 +32,11 @@ module CommandLine =
         "Init"
         "Format"
         "FormatCheck"
+        "RewriteSource"
         "Refactor"
-        "RefactorWithRewrites"
         "RefactorCheck"
-        "Fable"
-        "PrepareEcs"
+        "FableCompileSrc"
+        "FableCompileTests"
         "ValidateAgents"
         "Lint"
         "TypeCheck"
@@ -61,7 +61,7 @@ module CommandLine =
     let localOnlyTargets = [
         "Format"
         "Refactor"
-        "RefactorWithRewrites"
+        "RewriteSource"
         "Dev"
         "ReportFSharp"
         "ReportTypeScript"
@@ -130,8 +130,8 @@ module CommandLine =
         | LocalTargetInCi "Format" -> "Target Format writes files and cannot be combined with --ci; use FormatCheck."
         | LocalTargetInCi "Refactor" ->
             "Target Refactor writes files and cannot be combined with --ci; use RefactorCheck."
-        | LocalTargetInCi "RefactorWithRewrites" ->
-            "Target RefactorWithRewrites writes files and cannot be combined with --ci; use RefactorCheck."
+        | LocalTargetInCi "RewriteSource" ->
+            "Target RewriteSource writes files and cannot be combined with --ci; use RefactorCheck and FormatCheck."
         | LocalTargetInCi targetName -> $"Target {targetName} is local-only and cannot be combined with --ci."
         | MissingTool path -> $"Required local tool was not found: {path}. Run npm run init."
         | ProcessFailure(executable, exitCode) -> $"{executable} exited with code {exitCode}."
@@ -247,14 +247,14 @@ module BuildCommands =
 
     type CoveragePlan = { CleanPaths: string list; Commands: ProcessCommand list }
 
-    let sourceWriterDependencies ci = if ci then [] else [ "Refactor" ]
+    let sourceWriterDependencies ci = if ci then [] else [ "RewriteSource" ]
 
     let validateDependencies ci =
         let policyTargets =
             if ci then
                 [ "RefactorCheck"; "FormatCheck" ]
             else
-                [ "Refactor" ]
+                [ "RewriteSource" ]
 
         [ "Build"; "SelfTest"; "TestWithCoverageCheck" ] @ policyTargets
 
@@ -307,7 +307,7 @@ module BuildCommands =
             "scripts/GenerateFableLibraryBridge.fsx"
         ]
 
-    let fableCommands root = [
+    let fableCompileSrcCommands root = [
         dotnetCommand root [
             "fable"
             "--lang"
@@ -320,14 +320,14 @@ module BuildCommands =
         fableBridgeCommand root
     ]
 
-    let ecsPreparationCommand root =
+    let fableCompileTestsCommand root =
         dotnetCommand root [
             "fable"
             "tests/Wilnaatahl.ECS.Tests"
             "--lang"
             "typescript"
             "--outDir"
-            "tests/Wilnaatahl.ECS.Tests/out"
+            "tests/generated"
             "--noCache"
         ]
 
@@ -472,11 +472,11 @@ module BuildSelfTest =
             "target, CI, and parallel options"
             (Ok {
                 defaultOptions with
-                    Target = Some "Fable"
+                    Target = Some "FableCompileSrc"
                     Ci = true
                     Parallel = Some 1
             })
-            (parseArguments [ "--target"; "Fable"; "--ci"; "--parallel"; "1" ])
+            (parseArguments [ "--target"; "FableCompileSrc"; "--ci"; "--parallel"; "1" ])
 
         assertEqual "missing target value" (Error(MissingOptionValue "--target")) (parseArguments [ "--target" ])
 
@@ -553,6 +553,16 @@ module BuildSelfTest =
             "Unknown target 'Missing'. Run with --help to list available targets."
             (formatError (UnknownTarget "Missing"))
 
+        for target in [ "RewriteSource"; "FableCompileSrc"; "FableCompileTests" ] do
+            let options = { defaultOptions with Target = Some target }
+            assertEqual "renamed target is selectable" (Ok(RunTarget(target, options))) (validateOptions options)
+
+        for target in [ "RefactorWithRewrites"; "Fable"; "PrepareEcs" ] do
+            assertEqual
+                "obsolete target is rejected"
+                (Error(UnknownTarget target))
+                (validateOptions { defaultOptions with Target = Some target })
+
         assertEqual
             "CI rejects write-mode format"
             (Error(LocalTargetInCi "Format"))
@@ -574,18 +584,14 @@ module BuildSelfTest =
             (formatError (LocalTargetInCi "Refactor"))
 
         assertEqual
-            "CI rejects explicit source-changing refactor rewrites"
-            (Error(LocalTargetInCi "RefactorWithRewrites"))
-            (validateOptions {
-                defaultOptions with
-                    Target = Some "RefactorWithRewrites"
-                    Ci = true
-            })
+            "CI rejects aggregate source rewriting"
+            (Error(LocalTargetInCi "RewriteSource"))
+            (validateOptions { defaultOptions with Target = Some "RewriteSource"; Ci = true })
 
         assertEqual
-            "refactor rewrite CI error directs to report-only target"
-            "Target RefactorWithRewrites writes files and cannot be combined with --ci; use RefactorCheck."
-            (formatError (LocalTargetInCi "RefactorWithRewrites"))
+            "source rewrite CI error directs to report-only targets"
+            "Target RewriteSource writes files and cannot be combined with --ci; use RefactorCheck and FormatCheck."
+            (formatError (LocalTargetInCi "RewriteSource"))
 
         assertEqual
             "CI permits report-only refactor check"
@@ -608,7 +614,7 @@ module BuildSelfTest =
             (validateOptions { defaultOptions with Target = Some "Report"; Ci = true })
 
         assertEqual "CI has no source writer prerequisite" [] (sourceWriterDependencies true)
-        assertEqual "local source readers wait for source writers" [ "Refactor" ] (sourceWriterDependencies false)
+        assertEqual "local source readers wait for source writers" [ "RewriteSource" ] (sourceWriterDependencies false)
 
         assertEqual
             "CI validation includes refactor and format checks"
@@ -617,7 +623,7 @@ module BuildSelfTest =
 
         assertEqual
             "local validation includes the refactor aggregate"
-            [ "Build"; "SelfTest"; "TestWithCoverageCheck"; "Refactor" ]
+            [ "Build"; "SelfTest"; "TestWithCoverageCheck"; "RewriteSource" ]
             (validateDependencies false)
 
         assertEqual
@@ -655,7 +661,7 @@ module BuildSelfTest =
                     "scripts/GenerateFableLibraryBridge.fsx"
                 ]
             ]
-            (fableCommands root)
+            (fableCompileSrcCommands root)
 
         assertEqual
             "Fable bridge self-test is a separate command"
@@ -676,10 +682,10 @@ module BuildSelfTest =
                 "--lang"
                 "typescript"
                 "--outDir"
-                "tests/Wilnaatahl.ECS.Tests/out"
+                "tests/generated"
                 "--noCache"
             ])
-            (ecsPreparationCommand root)
+            (fableCompileTestsCommand root)
 
         assertEqual
             "F# tests run the complete .NET test solution"

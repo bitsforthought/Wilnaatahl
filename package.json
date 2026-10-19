@@ -12,7 +12,7 @@
     "validate": "npm run fake -- --target Validate",
     "selftest": "npm run fake -- --target SelfTest",
     "format": "npm run fake -- --target Format",
-    "refactor": "npm run fake -- --target Refactor",
+    "refactor": "npm run fake -- --target RewriteSource",
     "report": "npm run fake -- --target Report"
   },
   "devDependencies": {

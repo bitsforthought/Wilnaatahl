@@ -77,11 +77,11 @@ export * from "{{specifier}}";
     let errorMessage error =
         match error with
         | NoRuntimeImports ->
-            "ERROR: no Fable runtime imports found in src/generated. Run `npm run fake \"--\" --target Fable` first."
+            "ERROR: no Fable runtime imports found in src/generated. Run `npm run fake \"--\" --target FableCompileSrc` first."
         | ConflictingVersions versions ->
             let versionList = versions |> String.concat ", "
 
-            $"ERROR: generated code imports several Fable runtime versions (%s{versionList}). Delete src/generated and run the Fable target again."
+            $"ERROR: generated code imports several Fable runtime versions (%s{versionList}). Delete src/generated and run the FableCompileSrc target again."
         | RuntimeDirectoryMissing path -> $"ERROR: Fable runtime directory %s{path} is missing."
 
 module internal TypeScript =
@@ -502,12 +502,12 @@ import { Decoder } from "./fable_modules/Thoth.Json.Core.0.9.1/Types.fs.ts";
 
         assertEqual
             "missing runtime imports explain how to recover"
-            "ERROR: no Fable runtime imports found in src/generated. Run `npm run fake \"--\" --target Fable` first."
+            "ERROR: no Fable runtime imports found in src/generated. Run `npm run fake \"--\" --target FableCompileSrc` first."
             (Bridge.errorMessage Bridge.NoRuntimeImports)
 
         assertEqual
             "conflicting versions are listed and explain how to recover"
-            "ERROR: generated code imports several Fable runtime versions (5.1.0, 5.20.0). Delete src/generated and run the Fable target again."
+            "ERROR: generated code imports several Fable runtime versions (5.1.0, 5.20.0). Delete src/generated and run the FableCompileSrc target again."
             (Bridge.errorMessage (Bridge.ConflictingVersions [ "5.1.0"; "5.20.0" ]))
 
         assertEqual

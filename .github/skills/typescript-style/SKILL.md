@@ -17,7 +17,7 @@ not reimplement domain logic.
 ## General TS conventions
 
 - **Never hand-edit `src/generated/`.** Regenerate with
-  `npm run fake "--" --target Fable` after F# changes.
+  `npm run fake "--" --target FableCompileSrc` after F# changes.
 - **Import the Fable runtime through `src/generated/fable-library/`.** The
   versioned `fable_modules/fable-library-ts.<version>/` path breaks on every
   Fable upgrade; ESLint rejects it.

@@ -4,7 +4,8 @@
 // behaviourally equivalent — that equivalence is what lets every other F# test
 // run against the mock with confidence. The F# sources live in
 // tests/Wilnaatahl.ECS.Tests and are compiled to TypeScript by Fable
-// (`npm run test:koota`); this file discovers and drives the compiled output.
+// (`npm run fake "--" --target TestKoota`); this file discovers and drives the
+// compiled output.
 //
 // It replaces a hand-rolled runner (the former Runner.fs) that printed
 // PASS/FAIL lines and returned an exit code. Registering a real Vitest test per
@@ -21,12 +22,12 @@
 // in this Fable/Vitest harness.
 
 import { describe, test } from "vitest";
-import * as EntityTests from "../Wilnaatahl.ECS.Tests/out/ECS/EntityTests.ts";
-import * as QueryTests from "../Wilnaatahl.ECS.Tests/out/ECS/QueryTests.ts";
-import * as RelationTests from "../Wilnaatahl.ECS.Tests/out/ECS/RelationTests.ts";
-import * as TrackingTests from "../Wilnaatahl.ECS.Tests/out/ECS/TrackingTests.ts";
-import * as TraitTests from "../Wilnaatahl.ECS.Tests/out/ECS/TraitTests.ts";
-import * as WorldTests from "../Wilnaatahl.ECS.Tests/out/ECS/WorldTests.ts";
+import * as EntityTests from "../generated/ECS/EntityTests.ts";
+import * as QueryTests from "../generated/ECS/QueryTests.ts";
+import * as RelationTests from "../generated/ECS/RelationTests.ts";
+import * as TrackingTests from "../generated/ECS/TrackingTests.ts";
+import * as TraitTests from "../generated/ECS/TraitTests.ts";
+import * as WorldTests from "../generated/ECS/WorldTests.ts";
 
 type FableModule = Record<string, unknown>;
 
