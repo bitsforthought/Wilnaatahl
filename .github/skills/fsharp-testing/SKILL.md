@@ -38,6 +38,11 @@ deliberately enumerate:
 - **Tests must be strong.** Every assertion should verify observable behavior
   that would fail if the code-under-test were broken. Avoid tautological tests
   (e.g., checking a value didn't change when nothing could have changed it).
+- **Test enduring contracts, not chronology.** Do not keep tests whose only
+  purpose is to record implementation or migration history, or to preserve
+  behavior that is no longer required. Git records how the code changed; tests
+  should protect behaviour that callers are still promised. Retain regression or
+  compatibility tests when they verify a current contract.
 - **Don't silently weaken tests.** If an assertion is removed, explain why it was
   necessary. Removing assertions to make things compile is not acceptable.
 - **Primitives of fundamental types deserve direct tests.** The "all public F#
