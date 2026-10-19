@@ -233,7 +233,7 @@ lean directly lowers cost. When working in this repo:
 - `src/Wilnaatahl.Core/Traits/` – F# ECS trait definitions
 - `src/Wilnaatahl.Core/Entities/` – Entity factories
 - `src/Wilnaatahl.Core/Systems/` – F# ECS systems (add new systems to `Runner.fs`)
-- `src/Wilnaatahl.Core/ECS/` – ECS interfaces and Koota bindings
+- `src/Wilnaatahl.ECS/` – reusable ECS interfaces and Koota bindings
 - `src/generated/` – Auto-generated TS from F# (do not edit)
 - `src/ecs/` – TypeScript ECS layer: Koota wrapper, traits, rendering, hooks
 - `src/react-components/` – React UI components

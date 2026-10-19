@@ -1,6 +1,6 @@
 import { Vector3 } from "three";
 import { Entity, World } from "koota";
-import { EntityId } from "../generated/ECS/Types";
+import { EntityId } from "../generated/Wilnaatahl.ECS/Types";
 import { getPositions as wrappedGetLinePositions } from "../generated/Entities/Line";
 import { fromKootaWorld } from "./koota/kootaWrapper";
 

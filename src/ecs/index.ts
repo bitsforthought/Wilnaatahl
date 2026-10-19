@@ -2,7 +2,7 @@ import { createActions, Entity, World } from "koota";
 import { Matrix4, Quaternion, Vector3 } from "three";
 import { ThreeEvent } from "@react-three/fiber";
 import { FamilyGraph_FamilyGraph as FamilyGraph } from "../generated/Model";
-import { EntityId } from "../generated/ECS/Types";
+import { EntityId } from "../generated/Wilnaatahl.ECS/Types";
 import * as Events from "../generated/Traits/Events";
 import { layoutNodes } from "../generated/Systems/Layout";
 import { runSystems as runFableSystems } from "../generated/Systems/Runner";

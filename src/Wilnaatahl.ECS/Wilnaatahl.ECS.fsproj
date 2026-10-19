@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Wilnaatahl.Core.Tests" />
+    <InternalsVisibleTo Include="Wilnaatahl.ECS.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="Types.fs" />
+    <Compile Include="ECS.fs" />
+    <!-- The Mock ECS implementation is for .NET testing only. It remains in this
+         project so it can show up in code coverage reports for the unit test runs. -->
+    <Compile Condition="'$(FABLE_COMPILER)'!='true'" Include="Mocks/TestECS.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Keep browser packages visible to dependency discovery without FABLE_COMPILER.
+         Fable.Core otherwise resolves its transitive FSharp.Core 4.7.2, which is
+         incompatible with this repository's pinned F# language features. -->
+    <PackageReference Include="Fable.Core" />
+    <!-- Match the SDK's current FSharp.Core library used by the other F# projects. -->
+    <PackageReference Include="FSharp.Core" />
+  </ItemGroup>
+
+</Project>

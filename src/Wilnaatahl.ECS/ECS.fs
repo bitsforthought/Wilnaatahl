@@ -6,10 +6,10 @@ open Fable.Core
 
 /// Exposes Koota functionality via wrappers defined in F# and implemented in TypeScript.
 module private KootaWrapper =
-    [<Import("createTraitFactory", "../../ecs/koota/kootaWrapper.ts")>]
+    [<Import("createTraitFactory", "../ecs/koota/kootaWrapper.ts")>]
     let createTraitFactory: unit -> ITraitFactory = nativeOnly
 
-    [<Import("createEntityOperations", "../../ecs/koota/kootaWrapper.ts")>]
+    [<Import("createEntityOperations", "../ecs/koota/kootaWrapper.ts")>]
     let createEntityOperations: unit -> IEntityOperations = nativeOnly
 
 #else

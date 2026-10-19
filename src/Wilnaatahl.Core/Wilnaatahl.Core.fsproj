@@ -7,16 +7,10 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Wilnaatahl.Core.Tests" />
-    <InternalsVisibleTo Include="Wilnaatahl.ECS.Tests" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Include="Model.fs" />
-    <Compile Include="ECS/Types.fs" />
-    <Compile Include="ECS/ECS.fs" />
-    <!-- The Mock ECS implementation is for .NET testing only. It's here instead of in the
-         test project so it can show up in code coverage reports for the unit test runs themselves. -->
-    <Compile Condition="'$(FABLE_COMPILER)'!='true'" Include="ECS/Mocks/TestECS.fs" />
     <Compile Include="ViewModel/LayoutUtils.fs" />
     <Compile Include="ViewModel/Vector.fs" />
     <Compile Include="ViewModel/Palette.fs" />
@@ -52,6 +46,10 @@
     <Compile Include="Persistence/Transform.fs" />
     <Compile Include="Persistence/ImportService.fs" />
     <Compile Include="ViewModel/ImportMessages.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Wilnaatahl.ECS/Wilnaatahl.ECS.fsproj" />
   </ItemGroup>
 
   <ItemGroup>
