@@ -43,7 +43,7 @@ This convention does not apply to Sim Algyax/Gitxsanimx text.
   in `src/Wilnaatahl.Core/`, compiled to JS via Fable.
 - **Interop:** TypeScript types in `src/generated/` are auto-generated from F# for
   type-safe interop. Never hand-edit these files — regenerate with
-  `npm run fake "--" --target Fable`. Import the Fable runtime library from
+  `npm run fake "--" --target FableCompileSrc`. Import the Fable runtime library from
   `src/generated/fable-library/`, never from the versioned
   `fable_modules/fable-library-ts.<version>/` path; the bridge is regenerated
   for whichever runtime Fable emits, so Fable upgrades don't break imports.
@@ -387,7 +387,7 @@ the table.
 ## Examples
 
 - **Add a domain property:** Update F# in `Model.fs`, run
-  `npm run fake "--" --target Fable` to
+  `npm run fake "--" --target FableCompileSrc` to
   regenerate TS types, and use via the view model or ECS traits in React.
 - **Add a UI feature:** Add or update a React component that reads Koota traits via
   hooks, with logic driven by F# systems.

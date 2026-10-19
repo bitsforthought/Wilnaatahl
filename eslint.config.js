@@ -4,7 +4,7 @@ import tseslint from "typescript-eslint";
 
 export default defineConfig(
   {
-    ignores: ["src/generated/**", "tests/Wilnaatahl.ECS.Tests/out/**", "dist/**"],
+    ignores: ["src/generated/**", "tests/generated/**", "dist/**"],
   },
   {
     files: ["src/**/*.{ts,tsx}", "tests/typescript/**/*.{ts,tsx}", "{vite,vitest}.config.ts"],
