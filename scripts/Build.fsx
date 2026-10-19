@@ -121,13 +121,9 @@ module Build =
     Target.create "FableCompileTests" (fun _ -> runFableCompileTests ())
     Target.create "ValidateAgents" (fun _ -> runAgentValidation ())
 
-    Target.create "Lint" (fun _ ->
-        runNode repoRoot "node_modules/eslint/bin/eslint.js" [
-            "src"
-            "tests/typescript"
-            "vite.config.ts"
-            "vitest.config.ts"
-        ])
+    Target.create "LintSrc" (fun _ -> lintSrcCommand repoRoot |> runCommand)
+    Target.create "LintTests" (fun _ -> lintTestsCommand repoRoot |> runCommand)
+    Target.create "Lint" (fun _ -> printfn "Lint completed.")
 
     Target.create "TypeCheck" (fun _ -> runNode repoRoot "node_modules/typescript/bin/tsc" [])
     Target.create "Bundle" (fun _ -> runNode repoRoot "node_modules/vite/bin/vite.js" [ "build" ])
@@ -168,7 +164,9 @@ module Build =
     "FableCompileSrc" <=? "RefactorCheck"
     "FableCompileTests" <=? "RefactorCheck"
     "TypeCheck" <== [ "FableCompileSrc"; "FableCompileTests" ]
-    "Lint" <== [ "FableCompileSrc"; "FableCompileTests" ]
+    "LintSrc" <== [ "FableCompileSrc" ]
+    "LintTests" <== [ "FableCompileSrc"; "FableCompileTests" ]
+    "Lint" <== [ "LintSrc"; "LintTests" ]
     "Bundle" <== [ "FableCompileSrc" ]
     "ValidateAgents" <== sourceWriters
     "Build" <== [ "TypeCheck"; "Lint"; "Bundle"; "ValidateAgents" ]

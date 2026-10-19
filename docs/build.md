@@ -29,7 +29,7 @@ available targets and options.
 
 Useful focused targets include `Format`, `FormatCheck`, `RewriteSource`,
 `Refactor`, `RefactorCheck`, `FableCompileSrc`, `FableCompileTests`, `TestFSharp`, `TestTypeScript`,
-`TestKoota`, `SelfTest`, `TestWithCoverage`, `TestWithCoverageCheck`, `Lint`,
+`TestKoota`, `SelfTest`, `TestWithCoverage`, `TestWithCoverageCheck`, `LintSrc`, `LintTests`, `Lint`,
 `ReportFSharp`, and `ReportTypeScript`.
 
 `SelfTest` runs the infrastructure self-tests as one aggregate; `Validate`
@@ -55,6 +55,14 @@ inspect those edits, address remaining advisories, and rerun until clean.
 Tool execution failures and malformed configuration also fail the target,
 because the tool silently uses its default rules when `fsharprefactor.json`
 is malformed.
+
+`LintSrc` lints `src` and `vite.config.ts`, requiring only `FableCompileSrc`.
+`LintTests` lints `tests/typescript` and `vitest.config.ts`, requiring both Fable
+compilation targets because tests import application code. `Lint` runs both
+lint scopes. Their file selections are disjoint: type-aware ESLint may load
+shared TypeScript information, but it does not lint imported files again.
+`TypeCheck` remains one target checking source, TypeScript tests, and
+`vitest.config.ts`, including modules reached through imports.
 
 ## Generated TypeScript
 

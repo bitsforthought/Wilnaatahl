@@ -39,6 +39,8 @@ module CommandLine =
         "FableCompileTests"
         "ValidateAgents"
         "Lint"
+        "LintSrc"
+        "LintTests"
         "TypeCheck"
         "Bundle"
         "Build"
@@ -331,6 +333,12 @@ module BuildCommands =
             "--noCache"
         ]
 
+    let lintSrcCommand root =
+        nodeCommand root "node_modules/eslint/bin/eslint.js" [ "src"; "vite.config.ts" ]
+
+    let lintTestsCommand root =
+        nodeCommand root "node_modules/eslint/bin/eslint.js" [ "tests/typescript"; "vitest.config.ts" ]
+
     let fSharpTestCommand root = dotnetCommand root [ "test" ]
 
     let typeScriptTestCommand root =
@@ -557,6 +565,14 @@ module BuildSelfTest =
             let options = { defaultOptions with Target = Some target }
             assertEqual "renamed target is selectable" (Ok(RunTarget(target, options))) (validateOptions options)
 
+        for target in [ "Lint"; "LintSrc"; "LintTests" ] do
+            let options = { defaultOptions with Target = Some target; Ci = true }
+
+            assertEqual
+                "focused and aggregate lint are selectable in CI"
+                (Ok(RunTarget(target, options)))
+                (validateOptions options)
+
         for target in [ "RefactorWithRewrites"; "Fable"; "PrepareEcs" ] do
             assertEqual
                 "obsolete target is rejected"
@@ -686,6 +702,16 @@ module BuildSelfTest =
                 "--noCache"
             ])
             (fableCompileTestsCommand root)
+
+        assertEqual
+            "source lint selects only source and its tool configuration"
+            (nodeCommand root "node_modules/eslint/bin/eslint.js" [ "src"; "vite.config.ts" ])
+            (lintSrcCommand root)
+
+        assertEqual
+            "test lint selects only tests and their tool configuration"
+            (nodeCommand root "node_modules/eslint/bin/eslint.js" [ "tests/typescript"; "vitest.config.ts" ])
+            (lintTestsCommand root)
 
         assertEqual
             "F# tests run the complete .NET test solution"
