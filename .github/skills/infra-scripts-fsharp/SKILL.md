@@ -62,9 +62,9 @@ description: >-
   lists merely to echo their declarations. Test parsing, forwarding, side
   effects, exit status, or another consumer-visible contract instead. Pin text
   only when its exact wording is itself the contract.
-- Test current behaviour, not migration history. Do not add permanent assertions
-  merely that renamed targets are accepted or their former names are rejected;
-  keep those as disposable checks unless compatibility is an explicit contract.
+- Tests should protect current behaviour, not record implementation or migration
+  history. Keep regression or compatibility tests when they verify an enduring
+  contract; use Git history for chronology.
 - Do not commit experiments that test FAKE, npm, FSI, or another dependency's
   documented behaviour. Use a disposable probe to answer the question, then keep
   a repository test only when Wilnaatahl adds policy or an adaptation that could

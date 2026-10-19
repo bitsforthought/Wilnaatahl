@@ -23,6 +23,11 @@ assertion before implementing the behaviour.
 
 ## Assertions
 
+- **Test enduring contracts, not chronology.** Do not keep tests whose only
+  purpose is to record implementation or migration history, or to preserve
+  behavior that is no longer required. Git records how the code changed; tests
+  should protect behaviour that callers are still promised. Retain regression or
+  compatibility tests when they verify a current contract.
 - **Choose matchers by contract.** `toBe` uses `Object.is`, so use it for primitive
   values and required reference identity. `toEqual` recursively compares values;
   `toStrictEqual` also pins strict shape and prototype semantics. Prefer one
