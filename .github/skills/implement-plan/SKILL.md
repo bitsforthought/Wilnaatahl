@@ -27,7 +27,7 @@ the evidence exposes an unresolved concern.
 
 Run **Prepare → Implement → Publish**, resuming from recorded state when needed.
 Stop after creating the PRs. Monitoring, review responses, and merge maintenance
-are future phases; use `post-merge-stack-maintenance` only when asked.
+are future phases; use `post-merge-maintenance` only when asked.
 
 ## Plan shape
 
