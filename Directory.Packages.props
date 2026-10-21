@@ -14,7 +14,7 @@
     <!-- The extracted ECS project needs an explicit current FSharp.Core reference because
          Fable.Core's transitive 4.7.2 dependency otherwise wins resolution. -->
     <PackageVersion Include="FSharp.Core" Version="10.1.402" />
-    <PackageVersion Include="Thoth.Json.Core" Version="0.10.0" />
+    <PackageVersion Include="Thoth.Json.Core" Version="0.10.1" />
     <PackageVersion Include="Thoth.Json.Newtonsoft" Version="0.5.0" />
     <PackageVersion Include="Thoth.Json.JavaScript" Version="0.6.0" />
     <PackageVersion Include="coverlet.MTP" Version="10.1.0" />
