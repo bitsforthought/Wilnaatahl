@@ -78,6 +78,9 @@ module Build =
     let runCoverageCheckSelfTest () =
         coverageCheckSelfTestCommand repoRoot |> runCommand
 
+    let runPostMergeMaintenanceSelfTest () =
+        postMergeMaintenanceSelfTestCommand repoRoot |> runCommand
+
     let runFSharpReport () =
         let resultsDirectory = Path.Combine(repoRoot, "TestResults")
         let reportDirectory = Path.Combine(repoRoot, "coveragereport")
@@ -105,6 +108,7 @@ module Build =
     Target.create "ValidateAgentsSelfTest" (fun _ -> runAgentValidationSelfTest ())
     Target.create "FableBridgeSelfTest" (fun _ -> runFableBridgeSelfTest ())
     Target.create "CheckCoverageSelfTest" (fun _ -> runCoverageCheckSelfTest ())
+    Target.create "PostMergeMaintenanceSelfTest" (fun _ -> runPostMergeMaintenanceSelfTest ())
     Target.create "SelfTest" (fun _ -> printfn "Infrastructure self-tests completed.")
 
     Target.create "Init" (fun _ ->
@@ -153,6 +157,7 @@ module Build =
     "ValidateAgentsSelfTest" <== sourceWriters
     "FableBridgeSelfTest" <== sourceWriters
     "CheckCoverageSelfTest" <== sourceWriters
+    "PostMergeMaintenanceSelfTest" <== sourceWriters
 
     "SelfTest"
     <== [
@@ -160,6 +165,7 @@ module Build =
         "ValidateAgentsSelfTest"
         "FableBridgeSelfTest"
         "CheckCoverageSelfTest"
+        "PostMergeMaintenanceSelfTest"
     ]
 
     "FableCompileSrc" <== sourceWriters

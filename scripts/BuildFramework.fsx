@@ -394,6 +394,15 @@ module BuildCommands =
             "--self-test"
         ]
 
+    let postMergeMaintenanceSelfTestCommand root =
+        dotnetCommand root [
+            "fsi"
+            "--warnaserror"
+            "--warnon:3886"
+            "scripts/PostMergeMaintenance.fsx"
+            "--self-test"
+        ]
+
     let cleanOwnedDirectories paths =
         paths
         |> List.iter (fun path ->
@@ -781,6 +790,17 @@ module BuildSelfTest =
                 "--self-test"
             ])
             (coverageCheckSelfTestCommand root)
+
+        assertEqual
+            "post-merge maintenance self-test is a separate command"
+            (dotnetCommand root [
+                "fsi"
+                "--warnaserror"
+                "--warnon:3886"
+                "scripts/PostMergeMaintenance.fsx"
+                "--self-test"
+            ])
+            (postMergeMaintenanceSelfTestCommand root)
 
         assertEqual
             "F# HTML report generator"

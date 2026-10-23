@@ -20,69 +20,70 @@ already-merged changes.
 
 ## Classify the merged PR
 
-1. Require a clean worktree with `git status --short --branch`. Do not stash,
-   discard, or move unrelated changes. Record the starting branch.
-2. Confirm the PR with
-   `gh pr view <number> --json state,mergedAt,mergeCommit,headRefName,headRefOid,baseRefName,url`
-   and verify `state` is `MERGED`. Retain the PR number, URL, head branch, head
-   SHA, base branch, and merge commit.
-3. Check whether the PR has a GitHub stack using the GraphQL
-   `pullRequest.stack` field. Substitute the repository owner/name and PR
-   number in:
+Run the branch-non-mutating classifier with the merged PR number (extract it from the PR
+URL if needed). If the user supplied a URL, verify the returned
+`pullRequest.url` identifies that same PR before continuing:
 
-   ```bash
-   gh api graphql -f query='query { repository(owner:"OWNER",name:"REPO") { pullRequest(number:PR) { stack { number } } } }'
-   ```
+```text
+dotnet fsi --warnaserror --warnon:3886 scripts/PostMergeMaintenance.fsx <number>
+```
 
-   The query was verified against PR #65 in this repository and returned
-   `stack: null`. A `null` stack means it is not currently in a GitHub stack;
-   an API error or missing field is not evidence of no stack. Do not infer a
-   stack number from a PR number.
+It requires a clean worktree, records the starting branch, verifies the PR is
+merged, and checks the repository's trunk, GitHub stack membership, local
+`gh-stack` registration, and active dependants. It prints those facts and one
+classification as JSON. To detect local branches and PRs retargeted to trunk,
+it verifies the merged PR head, lists open PRs based on both the merged head
+and the trunk, and checks up to 999 trunk-based PR heads for ancestry. Those
+fetches update only `FETCH_HEAD`. It never changes branches or stack
+registrations.
+The report includes all matching and related local registrations, dependent PR
+head branches, and dependent local branches. Collection failures are written
+to standard error and return a non-zero exit code.
 
-4. Check the repository-local registration at
-   `git rev-parse --git-path gh-stack`. This is read-only classification: parse
-   the JSON and match the merged PR's `headRefName` to a branch entry. Do not
-   edit this file. If it is missing or cannot be read, use GitHub stack state
-   and the local branch list; if registration state remains ambiguous, stop and
-   ask rather than assuming the PR is standalone.
-5. Only when the PR has neither a GitHub stack nor a local registration,
-   determine whether it has active dependent PRs. First list open PRs based on
-   the merged head branch:
-   `gh pr list --state open --base <headRefName> --limit 1000 --json number,headRefName,headRefOid`.
-   Check whether the merged head branch still exists on GitHub with
-   `git ls-remote --exit-code origin refs/heads/<headRefName>`; distinguish
-   exit 2 (ref absent) from authentication/network errors. If it exists, the
-   first query finds direct dependants. If it is absent, GitHub may have
-   retargeted dependent PRs to the trunk. In that case, list open PRs based on
-   the trunk with
-   `gh pr list --state open --base <trunk> --limit 1000 --json number,headRefOid`.
-   For each result other than the merged PR, fetch
-   `refs/pull/<dependent-number>/head` from `origin` and run
-   `git merge-base --is-ancestor <confirmed-headRefOid> FETCH_HEAD`. A
-   successful check means the PR still contains the merged layer and is a
-   dependant; exit 1 means it does not, and any other error means the check
-   failed. If either PR list reaches 1000 results, or any query, fetch, or
-   ancestry check fails, stop and ask rather than treating the result as
-   complete. Closed or merged dependent PRs do not prevent standalone cleanup.
-6. Select exactly one path:
-   - **Standalone:** the merged PR's `baseRefName` is the trunk, there are no
-     active dependent PRs, no GitHub stack, and no local registration
-     containing the merged PR branch.
-   - **Local-only registration:** no GitHub stack, but a local registration
-     contains the branch. Inspect that exact registration; do not select an
-     unrelated active stack.
-   - **GitHub stack:** a GitHub stack contains the PR. Continue with **Establish
-     and inspect a GitHub stack**.
+Follow only the returned classification:
 
-For a PR with a known GitHub stack, its recorded stack composition is
-authoritative even when the merged layer has a non-trunk base; do not apply the
-standalone checks to it. For a local-only registration, inspect that exact
-registration and its PR bases. If there is an active dependent PR without
-either a GitHub stack or a local registration, or a PR with no known stack has
-a non-trunk base, stop before deleting branches and ask how to handle the
-chain. If the local registration cannot be selected unambiguously or its
-membership cannot be verified, stop and ask. Do not reconstruct a missing
-branch without the user's approval.
+- **`standalone`:** use **Standalone PR cleanup**.
+- **`local-only-registration`:** inspect the reported registration's complete
+  PR states, then use **Clean up a local-only registration**.
+- **`github-stack`:** use **Establish and inspect a GitHub stack**.
+- **`stop`:** do not clean up or synchronize. Report the reason and ask for
+  guidance when the classification identifies an ambiguous or unregistered
+  dependency chain.
+
+Do not infer a stack number or membership from a PR number or branch name. A
+malformed or unreadable registration, an API or Git error, an incomplete
+dependent-PR query, or an ambiguous registration is not evidence that the PR
+is standalone. Missing registration metadata is treated as no registration
+only when local branch and GitHub dependant checks complete; multiple
+worktrees without registration metadata are ambiguous and stop. The script
+handles these cases as explicit errors or `stop` classifications. It only
+classifies; branch deletion, pruning, stack synchronization, and conflict
+resolution remain governed by the procedures below. Never reconstruct a
+missing branch without the user's approval.
+
+If classification reports a dirty worktree or fails because of local changes,
+stop and report the status. Never stash, discard, reset, or otherwise alter
+unrelated changes to make maintenance proceed; ask the user how to handle them.
+
+## Verify stack dependants before mutation
+
+Before synchronizing, pruning, or unregistering any stack, use its verified
+ordered branch list and head SHAs from `gh stack view --json`. Compare every
+reported `activeDependants` head branch and `activeLocalDependants` branch with
+that list. Then check every stack branch for additional dependants:
+
+1. For each stack branch, run
+   `gh pr list --state open --base <branch> --limit 1000 --json number,headRefName`.
+   Every returned PR head must also be a branch in the verified stack. If a
+   result reaches the 1000-item limit, or any PR head is outside the stack,
+   stop and ask before changing branches.
+2. For each stack branch head SHA, run
+   `git branch --contains <head-sha> --format=%(refname:short)`. Ignore the
+   verified stack branches and its trunk; any other local descendant is an
+   external dependency and must be preserved. Stop before mutation and ask.
+
+This check covers dependants based on an intermediate stack layer as well as
+the merged PR. A PR number or branch name alone does not prove stack membership.
 
 ## Standalone PR cleanup
 
@@ -139,7 +140,9 @@ belongs unambiguously to the verified registration. Then run
 verified chain and PR bases. Do not use `gh stack checkout` if it could resolve
 to a different GitHub stack. Continue at step 2 of **Synchronize remaining
 layers**, skipping its checkout step. If branch selection or active
-registration remains ambiguous, stop and ask.
+registration remains ambiguous, stop and ask. Before either partial-stack
+synchronization or final cleanup, complete **Verify stack dependants before
+mutation** against the exact local registration.
 
 For an all-merged local-only registration:
 
@@ -175,6 +178,8 @@ For an all-merged local-only registration:
 2. Run `gh stack view --json`. Read branches in stack order and retain the
    trunk, each branch name and head SHA, merge/queue state, and PR number.
    Never infer stack order from PR numbers.
+   Then complete **Verify stack dependants before mutation** against this exact
+   GitHub stack before synchronizing or pruning it.
 3. If any branch has `isMerged: false` or is queued, continue with
    **Synchronize remaining layers**. If every branch is merged, continue with
    **Clean up a fully merged stack**.
