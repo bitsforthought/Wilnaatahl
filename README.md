@@ -85,6 +85,34 @@ npm run init
 
 This installs npm dependencies and restores the .NET solution and local tools.
 
+#### Optional: Browser E2E testing
+
+Browser E2E tests use Docker with Linux containers. Install and start Docker
+Desktop manually using the
+[Windows installation guide](https://docs.docker.com/desktop/setup/install/windows-install/).
+The engine must be configured for Linux containers; Windows 11 may require WSL 2
+and hardware virtualization. Do not install or enable these machine-level
+features through project scripts.
+
+On macOS, use [Docker Desktop](https://docs.docker.com/desktop/setup/install/mac-install/)
+or another Linux-container engine. On Linux, install and start a compatible
+[Docker Engine](https://docs.docker.com/engine/install/). The project uses a
+Linux/amd64 browser image; ARM machines may rely on emulation and should be
+validated in that environment.
+
+Verify that the engine is running:
+
+```powershell
+docker version
+docker info --format '{{.OSType}}/{{.Architecture}}'
+```
+
+The first browser-test run downloads the pinned Playwright image. Docker is
+needed only for browser E2E tests and screenshot-reference updates; it is not
+required for ordinary setup, application use, unit tests, or `npm run validate`.
+See [`docs/build.md`](docs/build.md#browser-e2e-tests) for the run commands and
+operational details.
+
 ### Common Development Commands
 
 The npm scripts delegate to the FAKE build:

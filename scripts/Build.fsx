@@ -1,5 +1,5 @@
 #r "nuget: Fake.Core.Target, 6.1.4"
-#load "BuildFramework.fsx" "FSharpRefactor.fsx"
+#load "BuildFramework.fsx" "FSharpRefactor.fsx" "E2EContainer.fsx"
 
 open System
 open System.IO
@@ -14,6 +14,7 @@ module Build =
     open BuildCommands
     open TargetExecution
     open FSharpRefactor
+    open E2EContainer
 
     let repoRoot = repositoryRoot __SOURCE_DIRECTORY__
 
@@ -66,6 +67,11 @@ module Build =
     let runFableCompileTests () =
         fableCompileTestsCommand repoRoot |> runOrFail
 
+    let runBuildE2E () =
+        E2EContainer.buildCommand repoRoot |> runCommand
+
+    let runE2E mode = E2EContainer.run repoRoot mode
+
     let runFSharpCoverage () =
         fSharpCoveragePlan repoRoot |> runCoveragePlan
 
@@ -100,6 +106,7 @@ module Build =
     let runSelfTests root =
         RefactorSelfTest.runSelfTest root
         BuildSelfTest.runSelfTest root
+        E2EContainer.runSelfTest root
 
     Target.create "BuildSelfTest" (fun _ -> runSelfTests repoRoot)
     Target.create "ValidateAgentsSelfTest" (fun _ -> runAgentValidationSelfTest ())
@@ -125,12 +132,17 @@ module Build =
         runNode repoRoot "node_modules/eslint/bin/eslint.js" [
             "src"
             "tests/typescript"
+            "tests/e2e"
             "vite.config.ts"
             "vitest.config.ts"
+            "playwright.config.ts"
         ])
 
     Target.create "TypeCheck" (fun _ -> runNode repoRoot "node_modules/typescript/bin/tsc" [])
     Target.create "Bundle" (fun _ -> runNode repoRoot "node_modules/vite/bin/vite.js" [ "build" ])
+    Target.create "BuildE2E" (fun _ -> runBuildE2E ())
+    Target.create "TestE2E" (fun _ -> runE2E E2EContainer.Verify)
+    Target.create "UpdateE2ESnapshots" (fun _ -> runE2E E2EContainer.Update)
     Target.create "Build" (fun _ -> printfn "Build completed.")
     Target.create "Dev" (fun _ -> runNode repoRoot "node_modules/vite/bin/vite.js" [])
     Target.create "TestFSharp" (fun _ -> fSharpTestCommand repoRoot |> runOrFail)
@@ -170,6 +182,9 @@ module Build =
     "TypeCheck" <== [ "FableCompileSrc"; "FableCompileTests" ]
     "Lint" <== [ "FableCompileSrc"; "FableCompileTests" ]
     "Bundle" <== [ "FableCompileSrc" ]
+    "BuildE2E" <== [ "FableCompileSrc" ]
+    "TestE2E" <== [ "BuildE2E" ]
+    "UpdateE2ESnapshots" <== [ "BuildE2E" ]
     "ValidateAgents" <== sourceWriters
     "Build" <== [ "TypeCheck"; "Lint"; "Bundle"; "ValidateAgents" ]
     "Dev" <== (sourceWriters @ [ "FableCompileSrc" ])

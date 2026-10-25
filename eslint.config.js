@@ -7,7 +7,13 @@ export default defineConfig(
     ignores: ["src/generated/**", "tests/generated/**", "dist/**"],
   },
   {
-    files: ["src/**/*.{ts,tsx}", "tests/typescript/**/*.{ts,tsx}", "{vite,vitest}.config.ts"],
+    files: [
+      "src/**/*.{ts,tsx}",
+      "tests/typescript/**/*.{ts,tsx}",
+      "tests/e2e/**/*.{ts,tsx}",
+      "{vite,vitest}.config.ts",
+      "playwright.config.ts",
+    ],
     extends: [js.configs.recommended, tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       parserOptions: {

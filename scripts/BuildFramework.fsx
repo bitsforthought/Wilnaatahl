@@ -38,6 +38,9 @@ module CommandLine =
         "FableCompileSrc"
         "FableCompileTests"
         "ValidateAgents"
+        "BuildE2E"
+        "TestE2E"
+        "UpdateE2ESnapshots"
         "Lint"
         "TypeCheck"
         "Bundle"
@@ -66,6 +69,7 @@ module CommandLine =
         "ReportFSharp"
         "ReportTypeScript"
         "Report"
+        "UpdateE2ESnapshots"
     ]
 
     let targetList = String.concat ", " availableTargets
@@ -602,6 +606,11 @@ module BuildSelfTest =
             "CI rejects report browser launch"
             (Error(LocalTargetInCi "Report"))
             (validateOptions { defaultOptions with Target = Some "Report"; Ci = true })
+
+        assertEqual
+            "CI rejects screenshot reference updates"
+            (Error(LocalTargetInCi "UpdateE2ESnapshots"))
+            (validateOptions { defaultOptions with Target = Some "UpdateE2ESnapshots"; Ci = true })
 
         assertEqual "CI has no source writer prerequisite" [] (sourceWriterDependencies true)
         assertEqual "local source readers wait for source writers" [ "RewriteSource" ] (sourceWriterDependencies false)
