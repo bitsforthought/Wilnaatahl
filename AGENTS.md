@@ -372,7 +372,9 @@ or begin a fourth review round.
 | Writing/modifying TypeScript / React / Three.js                                   | `typescript-implementer` agent / `typescript-style` skill      |
 | Creating, revising, or reviewing a commit message                                 | `commit-messages` skill                                        |
 | Implementing an approved plan as a stack of reviewed, committed PRs               | `implement-plan` skill                                         |
-| Maintaining a PR stack after a merge, including final cleanup                     | `post-merge-stack-maintenance` skill                           |
+| Cleaning up a standalone merged PR                                                | `pr-cleanup` skill                                             |
+| Synchronizing remaining layers of a partially merged PR stack                     | `stack-sync` skill                                             |
+| Cleaning up a fully merged PR stack                                               | `stack-cleanup` skill                                          |
 
 [fsharp-refactor-findings]: .github/skills/fsharp-refactor-findings/SKILL.md
 
