@@ -25,10 +25,17 @@ the evidence exposes an unresolved concern.
 
 ## Phases
 
-Run **Prepare → Implement → Publish**, resuming from recorded state when needed.
-Stop after creating the PRs. Monitoring, review responses, and merge maintenance
-are future phases; use the user-selected `pr-cleanup`, `stack-sync`, or
-`stack-cleanup` skill only when asked.
+Run **Prepare**, then **Implement → Publish for each step in plan order**,
+resuming from recorded state when needed. Publish each step as soon as its
+implementation, validation, and review are complete, before starting the next
+step. This lets human reviewers review in parallel with implementation; it does
+not add an agent feedback loop. Do not poll for PR feedback, wait for approval,
+act on review comments, or monitor lower-layer merges while implementing the
+remaining steps. Human reviewers should expect feedback to be addressed only
+after the whole plan is implemented and the complete stack is published. Stop
+after publishing the last step. Monitoring, review responses, and merge
+maintenance are future phases; use the user-selected `pr-cleanup`, `stack-sync`,
+or `stack-cleanup` skill only when asked.
 
 ## Plan shape
 
@@ -80,7 +87,7 @@ On every entry:
    run and start Prepare.
 3. A step is `committed` only when its branch is in the stack and contains the
    reviewed commit for that step.
-4. A step is `published` only when
+4. A step is `published` only when its PR exists and
    `gh pr view <number> --json state,isDraft,url` reports `OPEN` and
    `isDraft: false`. Get the number from `branches[].pr.number`.
 5. For an interrupted `implementing` step, show the status and diff stat. Ask
@@ -102,11 +109,13 @@ Stop and ask if recorded and actual state otherwise disagree.
 
 ## Implement
 
-Process steps in position order. For each step:
+Process steps in position order. Finish publishing a step before creating its
+successor. For each step:
 
 1. **Create the layer.** Run `gh stack init <branch>` for the first step, or
-   `gh stack top` then `gh stack add <branch>` for later steps. Confirm the
-   branch and set the step to `implementing`.
+   `gh stack top` then `gh stack add <branch>` for later steps. For later steps,
+   require the preceding step to be `published`. Confirm the branch and set the
+   step to `implementing`.
 2. **Dispatch the executor synchronously.** For a `primary` step, do the work in
    the current session. Provide the task, acceptance criteria, relevant
    lower-layer context, and the parent branch as the review base. Require the
@@ -129,29 +138,56 @@ Process steps in position order. For each step:
 4. **Commit.** Stage only the reported files, including a coverage-baseline
    update, and compare the staged file list with the report. Commit with the
    `commit-messages` skill and `git commit -F`. Record the review summary in
-   `notes`, set the step to `committed`, and prefer one commit per layer.
+   `notes` and set the step to `committed`. Then publish this step before
+   creating its successor, except when committing a lower-layer repair; follow
+   the repair procedure below before publishing the updated stack.
 
 If a later step exposes a lower-layer problem, keep the fix in its owning
 layer. Never switch with uncommitted changes: finish the current step or ask the
 user. Then check out the owning layer, redispatch its executor using that
-layer's parent as the review base, then apply Implement steps 3–4 to check and commit
-the fix. Run `gh stack rebase --upstack`, return with `gh stack top`, and run
-the full gate on each rebased layer. Stop on failure. Never place a lower-layer
+layer's parent as the review base, then apply Implement steps 3–4 to check and
+commit the fix. Mark the repaired step `committed`; do not publish it yet. Run
+`gh stack rebase --upstack`, return with `gh stack top`, and run the full gate on
+each rebased layer. Stop on failure. Then run `gh stack submit --auto --open` to
+push the repaired and rebased layers, update affected PR bodies if their scope
+changed, and verify each affected PR is still `OPEN` and not a draft. Record the
+repaired steps as `published` before proceeding. Never place a lower-layer
 concern above it.
 
-## Publish
+## Publish each step
 
-1. Run `gh stack view --json`. Require every branch in plan order, no
-   `needsRebase`, and every step `committed`.
+Run this procedure immediately after committing each step, before starting its
+successor:
+
+1. Run `gh stack view --json`. Require the current step's branch to be present
+   and have no `needsRebase`. Earlier plan steps must be `published`; later
+   steps may not have branches yet.
 2. Run `gh stack submit --auto --open`. On exit code 9, report that stacked PRs
-   are unavailable; do not change repository settings.
-3. Run `gh stack view --json` again, then map branches to
-   `branches[].pr.number`. For each PR, use `gh pr edit` with a session-folder
-   body file describing its purpose, dependency, acceptance criteria,
-   validation, and review summary. Do not include the full ledger.
-4. Run `gh pr view <number> --json state,isDraft,url`. Require `OPEN`; if it is
+   are unavailable; do not change repository settings or continue to the next
+   step.
+3. Run `gh stack view --json` again and map the current branch to
+   `branches[].pr.number`. If publication was interrupted, reconcile against
+   this existing PR rather than creating a duplicate; `submit` updates branches
+   that already have PRs.
+4. Use `gh pr edit` with a session-folder body file describing this step's
+   purpose, dependency, acceptance criteria, validation, and review summary.
+   State that human feedback is expected to be addressed after the full plan is
+   implemented and the complete stack is published. Do not include the full
+   ledger.
+5. Run `gh pr view <number> --json state,isDraft,url`. Require `OPEN`; if it is
    still a draft, run `gh pr ready <number>` and recheck. Record the number, set
-   the step to `published`, and report URLs from bottom to top.
+   the step to `published`, and report its URL. Only then start the next step.
+
+On resume, first inspect the stack order. If a `committed` plan step has any
+stack branch above it, treat it as an interrupted lower-layer repair: check out
+that step, resume the repair procedure at `gh stack rebase --upstack`, rerun the
+full gate on each rebased layer, then submit and verify the updated stack. Do not
+run ordinary publication or start another step until the repair is published.
+Otherwise, publish a `committed` step before creating its successor. If the PR
+was created before the interruption, reconcile its number and state from the
+stack rather than creating another. Publication failures stop progression; do
+not continue implementing later steps while a committed step remains
+unpublished.
 
 ## Guardrails
 

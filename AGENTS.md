@@ -285,8 +285,8 @@ report. Execution details belong in `tdd-coverage-loop`.
 
 After plan approval, use `implement-plan`: each step becomes one reviewed,
 committed `gh stack` layer and PR. Each executor completes the mandatory dev
-loop; the primary session owns state-changing git operations and publishes the
-finished stack.
+loop; the primary session owns state-changing git operations and publishes each
+completed layer before starting the next.
 
 Write plans bottom-up. Each step must stand alone, leave the repository green,
 and name its branch, acceptance criteria, and executor
