@@ -118,6 +118,8 @@ out
 # Nuxt.js build / generate output
 .nuxt
 dist
+dist-e2e
+.e2e-output
 
 # Gatsby files
 .cache/

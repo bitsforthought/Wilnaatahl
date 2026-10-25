@@ -29,8 +29,9 @@ available targets and options.
 
 Useful focused targets include `Format`, `FormatCheck`, `RewriteSource`,
 `Refactor`, `RefactorCheck`, `FableCompileSrc`, `FableCompileTests`, `TestFSharp`, `TestTypeScript`,
-`TestKoota`, `SelfTest`, `TestWithCoverage`, `TestWithCoverageCheck`, `Lint`,
-`ReportFSharp`, and `ReportTypeScript`.
+`TestKoota`, `BuildE2E`, `TestE2E`, `UpdateE2ESnapshots`, `SelfTest`,
+`TestWithCoverage`, `TestWithCoverageCheck`, `Lint`, `ReportFSharp`, and
+`ReportTypeScript`.
 
 `SelfTest` runs the infrastructure self-tests as one aggregate; `Validate`
 depends on that same target. Use `npm run selftest` for focused feedback when
@@ -95,6 +96,44 @@ launch a development server or open a report. The report-only `RefactorCheck`
 target can also be run directly in CI mode. Local build, test, dev, validate,
 self-test, and focused F# targets apply enabled fixes before Fantomas. Local development should
 normally use `npm run init` and `npm run validate` without this option.
+
+## Browser E2E tests
+
+The browser E2E workflow uses the real built application in Chromium. The host
+must have the .NET SDK and Node version already used by the build, plus a
+running Linux-container engine; setup details are in the
+[README prerequisites](../README.md#optional-browser-e2e-testing). Fable
+compilation and the isolated E2E bundle run on the host. The Playwright process
+uses the built static bundle, test sources, and lockfile from a read-only
+repository mount; it does not require or invoke .NET or F# projects.
+
+Run the focused targets from PowerShell:
+
+```powershell
+npm run fake "--" --target BuildE2E
+npm run fake "--" --target TestE2E
+```
+
+`TestE2E` builds the isolated `dist-e2e` output, then starts the pinned
+Playwright image. Docker caches the image after its first pull, but each
+operation creates a fresh temporary Linux `node_modules` volume and installs
+packages from the lockfile again. The host's `node_modules` is never mounted
+over it. The Playwright process uses the host UID/GID on Unix so reports and
+locally updated references remain writable by the developer. The app preview
+server and browser run inside the same container. Playwright reports and
+diagnostics remain under `.e2e-output/`.
+
+Ordinary `TestE2E` runs explicitly disable screenshot updates and mount project
+files read-only. Updating references is a separate local-only action:
+
+```powershell
+npm run fake "--" --target UpdateE2ESnapshots
+```
+
+Inspect any generated references before committing them with their test
+changes. The update target is rejected in CI mode; verification never writes
+missing or changed references. Neither Docker nor browser execution is part of
+`npm run validate`.
 
 ## Continuous Integration
 
