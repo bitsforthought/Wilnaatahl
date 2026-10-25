@@ -374,7 +374,7 @@ or begin a fourth review round.
 | Implementing an approved plan as a stack of reviewed, committed PRs               | `implement-plan` skill                                         |
 | Cleaning up a standalone merged PR                                                | `pr-cleanup` skill                                             |
 | Synchronizing remaining layers of a partially merged PR stack                        | `stack-sync` skill                                             |
-| Cleaning up a fully merged stack                                                  | `stack-cleanup` skill                                          |
+| Cleaning up a fully merged PR stack                                                  | `stack-cleanup` skill                                          |
 
 [fsharp-refactor-findings]: .github/skills/fsharp-refactor-findings/SKILL.md
 
