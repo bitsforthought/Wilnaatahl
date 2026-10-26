@@ -32,7 +32,17 @@ export default defineConfig({
   projects: [
     {
       name: "desktop",
+      testIgnore: "**/touch.spec.ts",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } },
+    },
+    {
+      name: "mobile",
+      testMatch: "**/touch.spec.ts",
+      use: {
+        ...devices["Pixel 7"],
+        viewport: { width: 390, height: 844 },
+        deviceScaleFactor: 1,
+      },
     },
   ],
 });
