@@ -143,9 +143,27 @@ pins, not desired behaviour; remove or replace them when the application
 defects are fixed. A third pin records that selected-node drag and its
 undo/redo path cannot be exercised while projected Move-mode selection is
 empty. The remaining intentionally uncovered matrix items are edge-specific
-detail placement (the fixture does not place a node at an edge), touch/cancel
-gestures (outside this desktop-only layer), and redo invalidation after a
-successful drag (blocked by the same selection defect).
+detail placement (the fixture does not place a node at an edge) and redo
+invalidation after a successful drag (blocked by the same selection defect).
+
+The mobile Playwright project uses Chromium's Pixel 7 emulation at a narrow
+390 × 844 CSS-pixel viewport; it is not physical-device coverage. Use
+`page.touchscreen.tap` for taps and the typed CDP touch helper for continuous or
+multi-contact gestures. CDP requires `touchEnd` and `touchCancel` requests to have
+no touch points, so it cannot target an arbitrary finger for partial release.
+The suite avoids asserting how an in-progress gesture continues after one finger
+lifts. Tests confirm trusted touch pointer events and observe camera and logical
+node state separately.
+
+The touch suite pins two current behaviours: in narrow View mode, a node-label
+HTML wrapper intercepts a projected touch instead of opening the detail card;
+in Move mode, projected touch leaves the node unselected. These are diagnostic
+pins, not desired contracts. One-finger background drag rotates the camera;
+two-finger spread/contract changes camera distance; parallel two-finger movement
+changes the camera target; a subsequent gesture works after contact release or
+cancellation. Cancellation verifies pointer cleanup and input recovery, not rollback
+of camera movement already applied. The suite does not define how an in-progress
+gesture behaves when a second contact arrives or one contact is released.
 
 ## Continuous Integration
 
