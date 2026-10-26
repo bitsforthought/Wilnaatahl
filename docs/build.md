@@ -135,6 +135,18 @@ changes. The update target is rejected in CI mode; verification never writes
 missing or changed references. Neither Docker nor browser execution is part of
 `npm run validate`.
 
+`tests/e2e/desktop.spec.ts` contains three explicitly named `[known defect pin]`
+tests. They currently pass by documenting two out-of-scope application defects:
+the first imported node label is absent from the DOM, and projected
+Move-mode clicks leave multi-selection empty. These assertions are diagnostic
+pins, not desired behaviour; remove or replace them when the application
+defects are fixed. A third pin records that selected-node drag and its
+undo/redo path cannot be exercised while projected Move-mode selection is
+empty. The remaining intentionally uncovered matrix items are edge-specific
+detail placement (the fixture does not place a node at an edge), touch/cancel
+gestures (outside this desktop-only layer), and redo invalidation after a
+successful drag (blocked by the same selection defect).
+
 ## Continuous Integration
 
 `.github/workflows/validate.yml` runs the CI-mode commands above on Ubuntu and

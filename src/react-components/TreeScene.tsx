@@ -1,8 +1,11 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { useHas, useQuery, useWorld } from "koota/react";
+import { Vector3 } from "three";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { DragInFlight, MeshRef, Selected, runSystems, useOverlayVisible } from "../ecs";
+import type { ObserverSession } from "../testing/observer";
 import { HuwilpGroup } from "./HuwilpGroup";
 import { projectAnchor, OverlayAnchor } from "./anchor";
 
@@ -46,11 +49,44 @@ export default function TreeScene({
   onOverlayAnchor: (anchor: OverlayAnchor | null) => void;
 }) {
   const world = useWorld();
+  const camera = useThree((state) => state.camera);
+  const gl = useThree((state) => state.gl);
+  const controlsRef = useRef<OrbitControlsImpl>(null);
+  const observerRef = useRef<ObserverSession | null>(null);
   const isDragInProgress = useHas(world, DragInFlight);
   const overlayVisible = useOverlayVisible();
 
-  useFrame((_state, delta) => {
+  useEffect(() => {
+    if (import.meta.env.MODE !== "e2e") return;
+
+    let disposed = false;
+    let disposeObserver: (() => void) | undefined;
+
+    void import("../testing/observer").then(({ registerE2EObserver }) => {
+      if (disposed) return;
+      const registration = registerE2EObserver({
+        world,
+        camera,
+        readTarget: () => controlsRef.current?.target ?? new Vector3(),
+        readCanvas: () => {
+          const { left, top, width, height } = gl.domElement.getBoundingClientRect();
+          return { left, top, width, height };
+        },
+      });
+      observerRef.current = registration;
+      disposeObserver = () => registration.dispose();
+    });
+
+    return () => {
+      disposed = true;
+      disposeObserver?.();
+      observerRef.current = null;
+    };
+  }, [camera, gl, world]);
+
+  useFrame(function runFrame(_state, delta) {
     runSystems({ world, delta });
+    observerRef.current?.advanceFrame();
   });
 
   return (
@@ -61,7 +97,7 @@ export default function TreeScene({
       <directionalLight position={[5, 5, 7]} intensity={1} castShadow />
       {/* Additional point light for more dynamic lighting */}
       <pointLight position={[1, -1, 2]} intensity={5} castShadow />
-      <OrbitControls enabled={!isDragInProgress && !overlayVisible} />
+      <OrbitControls ref={controlsRef} enabled={!isDragInProgress && !overlayVisible} />
       <HuwilpGroup />
       <OverlayProjector onAnchor={onOverlayAnchor} />
     </group>
