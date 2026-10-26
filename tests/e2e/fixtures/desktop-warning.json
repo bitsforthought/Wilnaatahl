@@ -1,0 +1,10 @@
+{
+  "people": [{ "id": 201, "name": "Warning Person", "wilp": 0, "birthOrder": 0, "gender": "F" }],
+  "couples": [],
+  "huwilp": [
+    { "id": 0, "name": "Warning House", "pdeek": "Ganeda" },
+    { "id": 1, "name": "Incomplete House" }
+  ],
+  "names": [],
+  "namesHeld": []
+}

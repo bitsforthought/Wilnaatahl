@@ -1,0 +1,33 @@
+{
+  "people": [
+    {
+      "id": 101,
+      "name": "Ada North",
+      "wilp": 0,
+      "birthOrder": 0,
+      "gender": "F",
+      "normalizedDateOfBirth": "1940-01-02"
+    },
+    { "id": 102, "name": "Ben North", "wilp": 0, "birthOrder": 1, "gender": "M" },
+    {
+      "id": 103,
+      "name": "Cora East",
+      "birthOrder": 0,
+      "gender": "F",
+      "dateOfBirth": "circa 1965"
+    },
+    { "id": 104, "name": "Drew West", "birthOrder": 1, "gender": "M" }
+  ],
+  "couples": [{ "coupleId": 101, "member1": 101, "member2": 103 }],
+  "huwilp": [{ "id": 0, "name": "North House", "pdeek": "Ganeda" }],
+  "names": [
+    { "id": 101, "text": "Ada's title" },
+    { "id": 102, "text": "Ben's title" },
+    { "id": 103, "text": "Cora's title" }
+  ],
+  "namesHeld": [
+    { "nameId": 101, "personId": 101, "nameDate": "1970-01-01", "nameOrder": 1 },
+    { "nameId": 102, "personId": 102, "nameOrder": 1 },
+    { "nameId": 103, "personId": 103, "nameOrder": 1 }
+  ]
+}
