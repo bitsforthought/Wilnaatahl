@@ -110,6 +110,10 @@ docker info --format '{{.OSType}}/{{.Architecture}}'
 The first browser-test run downloads the pinned Playwright image. Docker is
 needed only for browser E2E tests and screenshot-reference updates; it is not
 required for ordinary setup, application use, unit tests, or `npm run validate`.
+The separate browser E2E workflow is non-gating: it runs on pushes to `main`,
+nightly, or manual dispatch, not on pull requests. GitHub only offers manual
+dispatch after the workflow exists on the default branch; it can then target a
+selected branch.
 See [`docs/build.md`](docs/build.md#browser-e2e-tests) for the run commands and
 operational details.
 

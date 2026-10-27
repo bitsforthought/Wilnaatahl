@@ -207,6 +207,53 @@ trailing comment. Dependabot (.github/dependabot.yml) checks for new action
 releases weekly and opens one grouped pull request that updates both the SHA and
 the comment.
 
+### Browser E2E workflow
+
+`.github/workflows/e2e.yml` is deliberately separate from required pull-request
+validation. It runs on pushes to `main`, nightly at 03:15 UTC, and on
+`workflow_dispatch`; it has no `pull_request` trigger and is not a merge gate.
+GitHub may delay scheduled runs during high load. All actions are pinned to full
+commit SHAs, and the workflow has read-only repository permissions.
+
+The workflow has two jobs because the Playwright image does not contain the
+repository's .NET SDK:
+
+1. **Build E2E bundle** runs on Ubuntu with Node from `.nvmrc` and .NET from
+   `global.json`. It runs CI initialization and `BuildE2E`, then uploads only
+   `dist-e2e/` as a seven-day artifact.
+2. **Playwright Chromium** runs in the same pinned Linux/amd64 image used by
+   local E2E tests. It checks out the selected commit, downloads that run's
+   bundle, installs the lockfile's npm dependencies, and runs Playwright with
+   snapshot updates disabled. It uses the runtime bundled in the pinned image,
+   which may differ from host `.nvmrc`; local container tests and CI use the
+   same image. It does not run FAKE, Fable, or .NET. The HTML report, traces,
+   screenshots, and other `.e2e-output/` diagnostics are uploaded even when the
+   browser test step fails and retained for 14 days.
+
+To run it manually, open **Actions → Browser E2E → Run workflow**, select a
+branch, and start the run. GitHub only exposes `workflow_dispatch` after the
+workflow file exists on the default branch ([manual workflow documentation](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)).
+Therefore, a new workflow in an unmerged PR cannot be manually dispatched yet;
+validate that candidate locally with `npm run fake "--" --target TestE2E`, then
+use manual dispatch against the topic branch after the workflow has reached the
+default branch.
+
+To investigate a run, open its **Playwright Chromium** job and download the
+`e2e-diagnostics-<run-id>-<run-attempt>` artifact. Including the attempt
+distinguishes reruns of the same workflow run. Extract its contents to
+`.e2e-output/` in the repository root, then open the HTML report:
+
+```powershell
+node node_modules/@playwright/test/cli.js show-report .e2e-output/playwright-report
+```
+
+The report links to failed tests and their traces. Inspect the corresponding
+entries in `.e2e-output/test-results/` for actual/expected/diff screenshots and
+other attachments. The build artifact is retained separately for seven days.
+The workflow never updates or commits screenshot references; update them
+locally with `UpdateE2ESnapshots`, inspect the image changes, and submit them in
+a normal PR.
+
 ## Parallelism
 
 FAKE uses up to five workers by default. Override the worker limit when
