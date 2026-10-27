@@ -231,6 +231,6 @@ delta packet with the files needed to adjudicate it, even when otherwise
 unchanged. Resolve each deferral as accepted or rejected before the final
 permitted review round. If any genuine finding remains unaddressed after the
 final permitted round, stop and raise it to the user for manual human review; do
-not declare the change done or begin a fourth review round. Iterate this
-address-and-re-solicit loop for **at most three rounds**, stopping as soon as a
+not declare the change done or begin a sixth review round. Iterate this
+address-and-re-solicit loop for **at most five rounds**, stopping as soon as a
 round surfaces no genuine findings. Only then is the change done.

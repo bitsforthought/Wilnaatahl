@@ -266,7 +266,7 @@ plan (tests before implementation, never batched to the end)
     panelist to report before consolidating — a late/lone dissenter often caught
     the real bug)
   → address every genuine finding, re-validate, re-solicit a fresh pass
-    (iterate ≤ 3 rounds, stopping early once a round is clean) → only then "done"
+    (iterate ≤ 5 rounds, stopping early once a round is clean) → only then "done"
 ```
 
 The adversarial review is **not optional** and **not something to wait to be
@@ -326,10 +326,10 @@ each later packet until it is accepted or rejected with evidence. Use the ledger
 to consolidate the panel and scope re-reviews. Do not commit the ledger or create
 repository tracking files unless the user explicitly asks. Resolve every
 deferred finding as accepted or rejected no later than the final permitted review
-round; the three-round cap does not permit declaring a change done with one open.
+round; the five-round cap does not permit declaring a change done with one open.
 If any genuine finding remains unaddressed after the final permitted round, stop
 and raise it to the user for manual human review; do not declare the change done
-or begin a fourth review round.
+or begin a sixth review round.
 
 ## Committing and source hygiene
 
