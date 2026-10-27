@@ -32,12 +32,12 @@ export default defineConfig({
   projects: [
     {
       name: "desktop",
-      testIgnore: "**/touch.spec.ts",
+      testIgnore: ["**/touch.spec.ts", "**/screenshots-mobile.spec.ts"],
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } },
     },
     {
       name: "mobile",
-      testMatch: "**/touch.spec.ts",
+      testMatch: ["**/touch.spec.ts", "**/screenshots-mobile.spec.ts"],
       use: {
         // Chromium device emulation does not cover physical devices.
         ...devices["Pixel 7"],
