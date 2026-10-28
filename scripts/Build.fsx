@@ -106,7 +106,7 @@ module Build =
     let runSelfTests root =
         RefactorSelfTest.runSelfTest root
         BuildSelfTest.runSelfTest root
-        E2EContainer.runSelfTest root
+        E2EContainerSelfTest.runSelfTest root
 
     Target.create "BuildSelfTest" (fun _ -> runSelfTests repoRoot)
     Target.create "ValidateAgentsSelfTest" (fun _ -> runAgentValidationSelfTest ())
