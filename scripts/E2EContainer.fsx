@@ -18,7 +18,7 @@ module E2EContainer =
         | Verify
         | Update
 
-    module private WorkflowContract =
+    module internal WorkflowContract =
         type private Node =
             | Scalar of string
             | Sequence of Node list
