@@ -50,6 +50,8 @@ description: >-
 
 ## Behavioural self-tests
 
+- Put self-tests in their own module, separate from the implementation module.
+  Keep relocation mechanical and update the self-test runner to call that module.
 - Start with a failing test for each repository-owned policy or observable effect
   before implementing it. State the concrete regression that the test prevents.
 - Run `npm run selftest` for focused feedback when changing build, CI, coverage,

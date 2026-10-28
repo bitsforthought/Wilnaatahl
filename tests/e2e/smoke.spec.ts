@@ -24,6 +24,7 @@ test("boots the sample visualization with WebGL and rendered labels", async ({ p
   expect(rendering?.width).toBeGreaterThan(0);
   expect(rendering?.height).toBeGreaterThan(0);
 
+  // Hide DOM overlays so labels cannot make a blank WebGL scene pass.
   const canvasScreenshot = await canvas.screenshot({
     style: "body * { visibility: hidden !important; } canvas { visibility: visible !important; }",
   });
@@ -42,14 +43,25 @@ test("boots the sample visualization with WebGL and rendered labels", async ({ p
 
       context.drawImage(image, 0, 0);
       const pixels = context.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height).data;
-      const background = pixels.slice(0, 4);
+      const channelsPerPixel = 4;
+      const redChannelOffset = 0;
+      const greenChannelOffset = 1;
+      const blueChannelOffset = 2;
+      const alphaChannelOffset = 3;
 
-      for (let pixel = 4; pixel < pixels.length; pixel += 4) {
+      // getImageData packs RGBA bytes; slice copies the top-left pixel as the background reference.
+      const background = pixels.slice(0, channelsPerPixel);
+
+      for (
+        let pixelOffset = channelsPerPixel;
+        pixelOffset < pixels.length;
+        pixelOffset += channelsPerPixel
+      ) {
         if (
-          pixels[pixel] !== background[0] ||
-          pixels[pixel + 1] !== background[1] ||
-          pixels[pixel + 2] !== background[2] ||
-          pixels[pixel + 3] !== background[3]
+          pixels[pixelOffset + redChannelOffset] !== background[redChannelOffset] ||
+          pixels[pixelOffset + greenChannelOffset] !== background[greenChannelOffset] ||
+          pixels[pixelOffset + blueChannelOffset] !== background[blueChannelOffset] ||
+          pixels[pixelOffset + alphaChannelOffset] !== background[alphaChannelOffset]
         ) {
           return true;
         }

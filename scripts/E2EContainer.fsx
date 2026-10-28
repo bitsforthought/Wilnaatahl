@@ -11,7 +11,6 @@ open BuildFramework
 module E2EContainer =
     open CommandLine
     open ProcessExecution
-    open SelfTestAssertions
 
     type SnapshotMode =
         | Verify
@@ -137,7 +136,7 @@ module E2EContainer =
             else
                 Some $"{getuid ()}:{getgid ()}"
 
-    let rec private missingDockerExecutable (error: exn) =
+    let rec internal missingDockerExecutable (error: exn) =
         match error with
         | :? Win32Exception as processError when processError.NativeErrorCode = 2 -> Some processError.NativeErrorCode
         | _ -> error.InnerException |> Option.ofObj |> Option.bind missingDockerExecutable
@@ -150,7 +149,7 @@ module E2EContainer =
         finally
             runCommand removeCommand
 
-    let private runDockerCommandWith runCommand command =
+    let internal runDockerCommandWith runCommand command =
         try
             runCommand command
         with error when missingDockerExecutable error |> Option.isSome ->
@@ -177,6 +176,12 @@ module E2EContainer =
             (fun () ->
                 containerCommands root volumeName mode UnixUser.current
                 |> List.iter runDockerCommand)
+
+module internal E2EContainerSelfTest =
+    open CommandLine
+    open ProcessExecution
+    open SelfTestAssertions
+    open E2EContainer
 
     let runSelfTest root =
         let buildArguments = (buildCommand root).Arguments
