@@ -427,7 +427,7 @@ export function fromKootaWorld(world: World): IWorld {
       return ops.map((op) => {
         switch (op.type) {
           case "with":
-            return toKootaTrait(op.Item);
+            return toKootaTrait(op.someTrait);
           case "not": {
             const notOperands = Array.from(op.Item, toKootaTrait);
             return Not(...notOperands);
@@ -454,7 +454,7 @@ export function fromKootaWorld(world: World): IWorld {
           case "related":
             return toKootaRelation(op.Item1)(op.Item2 as Entity);
           case "relatedToAny":
-            return toKootaRelation(op.Item)("*");
+            return toKootaRelation(op.relation)("*");
         }
       });
     }
