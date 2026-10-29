@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageVersion Include="Fable.Core" Version="5.4.0" />
+    <PackageVersion Include="Fable.Core" Version="5.6.0" />
     <!-- The extracted ECS project needs an explicit current FSharp.Core reference because
          Fable.Core's transitive 4.7.2 dependency otherwise wins resolution. -->
     <PackageVersion Include="FSharp.Core" Version="10.1.403" />
