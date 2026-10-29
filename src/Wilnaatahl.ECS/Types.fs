@@ -105,7 +105,7 @@ type ITagRelation = IRelation<unit, unit>
 #endif
 type QueryOperator =
     /// Matches entities with the given trait.
-    | With of ITrait
+    | With of someTrait: ITrait
     /// Matches entities that do not have any of the given traits.
     | Not of ITrait[]
     /// Matches entities that have any of the given traits.
@@ -120,7 +120,7 @@ type QueryOperator =
     /// Matches subjects related to the given target via the given relation.
     | Related of IRelation * EntityId
     /// Matches subjects related to any target via the given relation (wildcard).
-    | RelatedToAny of IRelation
+    | RelatedToAny of relation: IRelation
 
 /// An initializer for a new entity: it either adds a trait to the entity (a tag trait is its own
 /// instance; a value trait carries a value) or relates the entity, as the subject, to a target via a
