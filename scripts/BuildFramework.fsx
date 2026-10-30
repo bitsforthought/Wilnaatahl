@@ -175,6 +175,9 @@ module ProcessExecution =
 
     let dotnetCommand root arguments = processCommand root "dotnet" arguments
 
+    let fsiCommand root arguments =
+        dotnetCommand root ([ "fsi"; "--warnaserror"; "--warnon:3886" ] @ arguments)
+
     let npmCommandFor isWindows root action =
         let arguments =
             match action with
@@ -279,15 +282,7 @@ module BuildCommands =
         ]
 
     let agentValidationCommand root arguments =
-        dotnetCommand
-            root
-            ([
-                "fsi"
-                "--warnaserror"
-                "--warnon:3886"
-                "scripts/ValidateAgentDefinitions.fsx"
-             ]
-             @ arguments)
+        fsiCommand root ("scripts/ValidateAgentDefinitions.fsx" :: arguments)
 
     let agentValidationCommands root = [ agentValidationCommand root [] ]
 
@@ -295,21 +290,10 @@ module BuildCommands =
         agentValidationCommand root [ "--self-test" ]
 
     let fableBridgeSelfTestCommand root =
-        dotnetCommand root [
-            "fsi"
-            "--warnaserror"
-            "--warnon:3886"
-            "scripts/GenerateFableLibraryBridge.fsx"
-            "--self-test"
-        ]
+        fsiCommand root [ "scripts/GenerateFableLibraryBridge.fsx"; "--self-test" ]
 
     let fableBridgeCommand root =
-        dotnetCommand root [
-            "fsi"
-            "--warnaserror"
-            "--warnon:3886"
-            "scripts/GenerateFableLibraryBridge.fsx"
-        ]
+        fsiCommand root [ "scripts/GenerateFableLibraryBridge.fsx" ]
 
     let fableCompileSrcCommands root = [
         dotnetCommand root [
@@ -383,20 +367,12 @@ module BuildCommands =
         }
 
     let coverageCheckCommands root ci =
-        let scriptArguments = [ "fsi"; "--warnaserror"; "--warnon:3886"; "scripts/CheckCoverage.fsx" ]
-
         let policyArguments = if ci then [ "--check-only" ] else []
 
-        [ dotnetCommand root (scriptArguments @ policyArguments) ]
+        [ fsiCommand root ("scripts/CheckCoverage.fsx" :: policyArguments) ]
 
     let coverageCheckSelfTestCommand root =
-        dotnetCommand root [
-            "fsi"
-            "--warnaserror"
-            "--warnon:3886"
-            "scripts/CheckCoverage.fsx"
-            "--self-test"
-        ]
+        fsiCommand root [ "scripts/CheckCoverage.fsx"; "--self-test" ]
 
     let cleanOwnedDirectories paths =
         paths
@@ -471,6 +447,18 @@ module BuildSelfTest =
         assertEqual "default target" (Ok(RunTarget("Build", defaultOptions))) (validateOptions defaultOptions)
         assertEqual "CI initialization uses npm ci" CiInstall (installAction true)
         assertEqual "local initialization uses npm install" Install (installAction false)
+
+        assertEqual
+            "FSI command adds common warning arguments before script arguments"
+            (dotnetCommand root [
+                "fsi"
+                "--warnaserror"
+                "--warnon:3886"
+                "scripts/probe.fsx"
+                "--custom"
+                "value"
+            ])
+            (fsiCommand root [ "scripts/probe.fsx"; "--custom"; "value" ])
 
         assertEqual
             "target, CI, and parallel options"
