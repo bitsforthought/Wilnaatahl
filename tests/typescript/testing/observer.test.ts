@@ -1,10 +1,12 @@
-import { createWorld } from "koota";
+import { createWorld, type World } from "koota";
 import { Group, Mesh, PerspectiveCamera, Vector3 } from "three";
 import { describe, expect, test } from "vitest";
 import {
   createObserverSession,
   projectWorldToCss,
   registerE2EObserver,
+  type E2EObserverOptions,
+  type ObserverSession,
   type ObserverSnapshot,
 } from "../../../src/testing/observer";
 import {
@@ -22,6 +24,51 @@ import {
   Position,
   Selected,
 } from "../../../src/ecs/traits";
+
+type TestObserverOverrides = Partial<Omit<E2EObserverOptions, "world">>;
+
+const testCanvas = { left: 0, top: 0, width: 100, height: 100 };
+
+function createTestCamera(aspectRatio = 1): PerspectiveCamera {
+  const verticalFieldOfViewDegrees = 50;
+  const nearClippingPlane = 0.1;
+  const farClippingPlane = 100;
+  return new PerspectiveCamera(
+    verticalFieldOfViewDegrees,
+    aspectRatio,
+    nearClippingPlane,
+    farClippingPlane
+  );
+}
+
+function withTestWorld(
+  run: (
+    world: World,
+    registerObserver: (overrides?: TestObserverOverrides) => ObserverSession
+  ) => void
+): void {
+  const world = createWorld();
+  const sessions: ObserverSession[] = [];
+
+  function registerObserver(overrides: TestObserverOverrides = {}): ObserverSession {
+    const session = registerE2EObserver({
+      world,
+      camera: createTestCamera(),
+      readTarget: () => new Vector3(),
+      readCanvas: () => testCanvas,
+      ...overrides,
+    });
+    sessions.push(session);
+    return session;
+  }
+
+  try {
+    run(world, registerObserver);
+  } finally {
+    for (const session of sessions) session.dispose();
+    world.destroy();
+  }
+}
 
 function snapshotFor(frame: number, session: number): ObserverSnapshot {
   return {
@@ -50,11 +97,8 @@ function snapshotFor(frame: number, session: number): ObserverSnapshot {
 
 describe("E2E observer", () => {
   test("projects world coordinates into CSS pixels using the canvas offset", () => {
-    const fov = 50;
-    const aspect = 4 / 3;
-    const near = 0.1;
-    const far = 100;
-    const camera = new PerspectiveCamera(fov, aspect, near, far);
+    const aspectRatio = 4 / 3;
+    const camera = createTestCamera(aspectRatio);
     camera.position.set(0, 0, 8);
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
@@ -111,136 +155,94 @@ describe("E2E observer", () => {
   });
 
   test("registers only serializable current-world data and removes the public observer on dispose", () => {
-    const world = createWorld();
-    const fov = 50;
-    const aspect = 1;
-    const near = 0.1;
-    const far = 100;
-    const camera = new PerspectiveCamera(fov, aspect, near, far);
-    camera.position.set(0, 0, 8);
-    world.add(CurrentMode);
-    world.set(CurrentMode, AppMode_Viewing() as AppMode_$union);
-    const mesh = new Mesh();
-    world.spawn(
-      PersonRef(Person_get_Empty()),
-      Position({ x: 1, y: 2, z: 3 }),
-      MeshRef(mesh),
-      Selected
-    );
+    withTestWorld((world, registerObserver) => {
+      const camera = createTestCamera();
+      camera.position.set(0, 0, 8);
+      world.add(CurrentMode);
+      world.set(CurrentMode, AppMode_Viewing() as AppMode_$union);
+      const mesh = new Mesh();
+      world.spawn(
+        PersonRef(Person_get_Empty()),
+        Position({ x: 1, y: 2, z: 3 }),
+        MeshRef(mesh),
+        Selected
+      );
 
-    const session = registerE2EObserver({
-      world,
-      camera,
-      readTarget: () => new Vector3(1, 2, 3),
-      readCanvas: () => ({ left: 4, top: 5, width: 200, height: 100 }),
+      const session = registerObserver({
+        camera,
+        readTarget: () => new Vector3(1, 2, 3),
+        readCanvas: () => ({ left: 4, top: 5, width: 200, height: 100 }),
+      });
+
+      const snapshot = session.snapshot();
+      expect(snapshot.selectedPersonIds).toEqual([0]);
+      expect(snapshot.nodes[0]?.logicalPosition).toEqual({ x: 1, y: 2, z: 3 });
+      expect(snapshot.nodes[0]?.renderedQuaternion).toEqual({ x: 0, y: 0, z: 0, w: 1 });
+      expect(snapshot.nodes[0]?.cssPosition.x).toBeGreaterThan(4);
+      expect(snapshot.nodes[0]?.cssPosition.y).toBeGreaterThan(5);
+      expect(snapshot.camera.target).toEqual({ x: 1, y: 2, z: 3 });
+      expect(snapshot.canvas).toEqual({ left: 4, top: 5, width: 200, height: 100 });
+      expect(JSON.parse(JSON.stringify(snapshot))).toEqual(snapshot);
+      expect(globalThis.__WILNAATAHL_E2E_OBSERVER__?.snapshot()).toEqual(snapshot);
+
+      session.advanceFrame();
+      expect(session.snapshot().frame).toBe(1);
+      const replacement = registerObserver({
+        readCanvas: () => ({ left: 4, top: 5, width: 200, height: 100 }),
+      });
+      session.dispose();
+      expect(globalThis.__WILNAATAHL_E2E_OBSERVER__).toBeDefined();
+      replacement.dispose();
+      expect(globalThis.__WILNAATAHL_E2E_OBSERVER__).toBeUndefined();
     });
-
-    const snapshot = session.snapshot();
-    expect(snapshot.selectedPersonIds).toEqual([0]);
-    expect(snapshot.nodes[0]?.logicalPosition).toEqual({ x: 1, y: 2, z: 3 });
-    expect(snapshot.nodes[0]?.renderedQuaternion).toEqual({ x: 0, y: 0, z: 0, w: 1 });
-    expect(snapshot.nodes[0]?.cssPosition.x).toBeGreaterThan(4);
-    expect(snapshot.nodes[0]?.cssPosition.y).toBeGreaterThan(5);
-    expect(snapshot.camera.target).toEqual({ x: 1, y: 2, z: 3 });
-    expect(snapshot.canvas).toEqual({ left: 4, top: 5, width: 200, height: 100 });
-    expect(JSON.parse(JSON.stringify(snapshot))).toEqual(snapshot);
-    expect(globalThis.__WILNAATAHL_E2E_OBSERVER__?.snapshot()).toEqual(snapshot);
-
-    session.advanceFrame();
-    expect(session.snapshot().frame).toBe(1);
-    const replacement = registerE2EObserver({
-      world,
-      camera,
-      readTarget: () => new Vector3(),
-      readCanvas: () => ({ left: 4, top: 5, width: 200, height: 100 }),
-    });
-    session.dispose();
-    expect(globalThis.__WILNAATAHL_E2E_OBSERVER__).toBeDefined();
-    replacement.dispose();
-    expect(globalThis.__WILNAATAHL_E2E_OBSERVER__).toBeUndefined();
-    world.destroy();
   });
 
   test("omits people whose render data is incomplete", () => {
-    const world = createWorld();
-    world.spawn(PersonRef(Person_get_Empty()));
-    const fov = 50;
-    const aspect = 1;
-    const near = 0.1;
-    const far = 100;
-    const camera = new PerspectiveCamera(fov, aspect, near, far);
-    const session = registerE2EObserver({
-      world,
-      camera,
-      readTarget: () => new Vector3(),
-      readCanvas: () => ({ left: 0, top: 0, width: 100, height: 100 }),
+    withTestWorld((world, registerObserver) => {
+      world.spawn(PersonRef(Person_get_Empty()));
+      const session = registerObserver();
+
+      expect(session.snapshot().nodes).toEqual([]);
     });
-
-    expect(session.snapshot().nodes).toEqual([]);
-
-    session.dispose();
-    world.destroy();
   });
 
   test("reads mode, dragging, hidden filtering, and world-space render transforms", () => {
-    const world = createWorld();
-    world.add(CurrentMode);
-    world.set(CurrentMode, AppMode_Moving() as AppMode_$union);
-    world.add(DragInFlight);
+    withTestWorld((world, registerObserver) => {
+      world.add(CurrentMode);
+      world.set(CurrentMode, AppMode_Moving() as AppMode_$union);
+      world.add(DragInFlight);
 
-    const parent = new Group();
-    parent.position.set(1, 2, 3);
-    const mesh = new Mesh();
-    mesh.position.set(2, 0, 0);
-    mesh.scale.set(2, 2, 2);
-    parent.add(mesh);
+      const parent = new Group();
+      parent.position.set(1, 2, 3);
+      const mesh = new Mesh();
+      mesh.position.set(2, 0, 0);
+      mesh.scale.set(2, 2, 2);
+      parent.add(mesh);
 
-    world.spawn(PersonRef(Person_get_Empty()), Position({ x: 9, y: 8, z: 7 }), MeshRef(mesh));
-    world.spawn(
-      PersonRef(Person_get_Empty()),
-      Position({ x: 0, y: 0, z: 0 }),
-      MeshRef(new Mesh()),
-      Hidden
-    );
+      world.spawn(PersonRef(Person_get_Empty()), Position({ x: 9, y: 8, z: 7 }), MeshRef(mesh));
+      world.spawn(
+        PersonRef(Person_get_Empty()),
+        Position({ x: 0, y: 0, z: 0 }),
+        MeshRef(new Mesh()),
+        Hidden
+      );
 
-    const fov = 50;
-    const aspect = 1;
-    const near = 0.1;
-    const far = 100;
-    const session = registerE2EObserver({
-      world,
-      camera: new PerspectiveCamera(fov, aspect, near, far),
-      readTarget: () => new Vector3(),
-      readCanvas: () => ({ left: 0, top: 0, width: 100, height: 100 }),
+      const session = registerObserver();
+
+      const snapshot = session.snapshot();
+      expect(snapshot.mode).toBe("move");
+      expect(snapshot.dragging).toBe(true);
+      expect(snapshot.nodes).toHaveLength(1);
+      expect(snapshot.nodes[0]?.renderedPosition).toEqual({ x: 3, y: 2, z: 3 });
+      expect(snapshot.nodes[0]?.renderedScale).toEqual({ x: 2, y: 2, z: 2 });
     });
-
-    const snapshot = session.snapshot();
-    expect(snapshot.mode).toBe("move");
-    expect(snapshot.dragging).toBe(true);
-    expect(snapshot.nodes).toHaveLength(1);
-    expect(snapshot.nodes[0]?.renderedPosition).toEqual({ x: 3, y: 2, z: 3 });
-    expect(snapshot.nodes[0]?.renderedScale).toEqual({ x: 2, y: 2, z: 2 });
-
-    session.dispose();
-    world.destroy();
   });
 
   test("reports unknown mode when no current mode exists", () => {
-    const world = createWorld();
-    const fov = 50;
-    const aspect = 1;
-    const near = 0.1;
-    const far = 100;
-    const session = registerE2EObserver({
-      world,
-      camera: new PerspectiveCamera(fov, aspect, near, far),
-      readTarget: () => new Vector3(),
-      readCanvas: () => ({ left: 0, top: 0, width: 100, height: 100 }),
+    withTestWorld((world, registerObserver) => {
+      const session = registerObserver();
+
+      expect(session.snapshot().mode).toBe("unknown");
     });
-
-    expect(session.snapshot().mode).toBe("unknown");
-
-    session.dispose();
-    world.destroy();
   });
 });

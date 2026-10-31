@@ -72,6 +72,8 @@ export function projectWorldToCss(
   canvas: CanvasRect
 ): CssPoint {
   const projected = worldPosition.clone().project(camera);
+  // Projection yields normalized device coordinates; scale to CSS pixels, flip y for screen
+  // coordinates, and offset by the canvas position.
   return {
     x: canvas.left + ((projected.x + 1) / 2) * canvas.width,
     y: canvas.top + ((1 - projected.y) / 2) * canvas.height,
