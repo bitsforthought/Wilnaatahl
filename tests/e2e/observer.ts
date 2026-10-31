@@ -1,6 +1,9 @@
 import { expect, type Page } from "@playwright/test";
 import type { ObserverSnapshot } from "../../src/testing/observer";
 
+const observerWaitTimeoutMs = 5_000;
+const observerPollIntervalsMs = [50, 100, 200];
+
 export async function readObserver(page: Page): Promise<ObserverSnapshot> {
   return page.evaluate(() => {
     const observer = globalThis.__WILNAATAHL_E2E_OBSERVER__;
@@ -12,8 +15,8 @@ export async function readObserver(page: Page): Promise<ObserverSnapshot> {
 export async function waitForStableObserver(page: Page): Promise<ObserverSnapshot> {
   await expect
     .poll(() => page.evaluate(() => globalThis.__WILNAATAHL_E2E_OBSERVER__ !== undefined), {
-      timeout: 5000,
-      intervals: [50, 100, 200],
+      timeout: observerWaitTimeoutMs,
+      intervals: observerPollIntervalsMs,
     })
     .toBe(true);
 
@@ -27,7 +30,7 @@ export async function waitForStableObserver(page: Page): Promise<ObserverSnapsho
           return false;
         }
       },
-      { timeout: 5000, intervals: [50, 100, 200] }
+      { timeout: observerWaitTimeoutMs, intervals: observerPollIntervalsMs }
     )
     .toBe(true);
 
@@ -64,7 +67,7 @@ export async function waitForStableObserver(page: Page): Promise<ObserverSnapsho
         previous = latest;
         return stableSamples;
       },
-      { timeout: 5000, intervals: [50, 100, 200] }
+      { timeout: observerWaitTimeoutMs, intervals: observerPollIntervalsMs }
     )
     .toBeGreaterThanOrEqual(2);
 
@@ -84,7 +87,7 @@ export async function waitForNewObserverSession(
           return previousSession;
         }
       },
-      { timeout: 5000, intervals: [50, 100, 200] }
+      { timeout: observerWaitTimeoutMs, intervals: observerPollIntervalsMs }
     )
     .toBeGreaterThan(previousSession);
   return waitForStableObserver(page);
@@ -103,7 +106,7 @@ export async function waitForFrameAfter(
           latest.session === previous.session && latest.frame > previous.frame && !latest.dragging
         );
       },
-      { timeout: 5000, intervals: [50, 100, 200] }
+      { timeout: observerWaitTimeoutMs, intervals: observerPollIntervalsMs }
     )
     .toBe(true);
   return latest;

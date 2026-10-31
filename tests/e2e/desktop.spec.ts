@@ -26,7 +26,8 @@ test("[known defect pin] initial import omits the first rendered node label", as
   expect(snapshot.nodes.map((node) => node.personId).sort()).toEqual([101, 102, 103]);
   await expect(page.getByText("Ben's title")).toBeVisible();
   await expect(page.getByText("Cora's title")).toBeVisible();
-  // Temporary diagnostic pin: this is observed incorrect behaviour, not a UI contract.
+  // Diagnostic pin for https://github.com/bitsforthought/Wilnaatahl/issues/116;
+  // it records observed behaviour, not the intended UI contract.
   await expect(page.getByText("Ada's title")).toHaveCount(0);
 });
 
@@ -107,10 +108,12 @@ test("[known defect pin] Move-mode projected clicks are intercepted and leave mu
     const element = document.elementFromPoint(x, y);
     return element?.tagName;
   }, projectedNode.cssPosition);
+  // Diagnostic pin for https://github.com/bitsforthought/Wilnaatahl/issues/117.
   expect(hitTarget).not.toBe("CANVAS");
   await clickNode(page, 102);
   await clickNode(page, 103);
-  // Temporary diagnostic pin: this is observed incorrect behaviour, not a UI contract.
+  // Diagnostic pin for https://github.com/bitsforthought/Wilnaatahl/issues/117;
+  // it records observed behaviour, not the intended UI contract.
   expect((await waitForStableObserver(page)).selectedPersonIds).toEqual([]);
 });
 
@@ -128,8 +131,7 @@ test("[known defect pin] selected-node drag and undo remain blocked by empty pro
   const node = before.nodes.find((candidate) => candidate.personId === 102);
   if (!node) throw new Error("Projected fixture node was not rendered.");
   await clickNode(page, 102);
-  // Temporary diagnostic pin: the projected click is intercepted, so the node
-  // remains unselected and its drag/undo path cannot currently be exercised.
+  // Diagnostic pin for https://github.com/bitsforthought/Wilnaatahl/issues/117.
   expect((await readObserver(page)).selectedPersonIds).toEqual([]);
   await page.mouse.move(node.cssPosition.x, node.cssPosition.y);
   await page.mouse.down();
@@ -139,8 +141,7 @@ test("[known defect pin] selected-node drag and undo remain blocked by empty pro
   const after = await waitForFrameAfter(page, before);
   const beforeNode = before.nodes.find((candidate) => candidate.personId === 102);
   const afterNode = after.nodes.find((candidate) => candidate.personId === 102);
-  // Temporary diagnostic pin: selected-node drag and its undo path are
-  // untestable until the known projected-click defect is fixed.
+  // Diagnostic pin for https://github.com/bitsforthought/Wilnaatahl/issues/117.
   expect(after.selectedPersonIds).toEqual([]);
   expect(afterNode?.logicalPosition).toEqual(beforeNode?.logicalPosition);
   await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
@@ -208,7 +209,6 @@ test("warning and invalid imports use the real browser messages without replacin
   page,
 }) => {
   await page.goto("/");
-  await importFixture(page, familyFixture);
 
   await importFixture(page, warningFixture);
   const sessionBeforeInvalid = (await readObserver(page)).session;
