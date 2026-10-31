@@ -1,3 +1,4 @@
+#r "nuget: YamlDotNet, 16.3.0"
 #load "BuildFramework.fsx"
 
 open System
@@ -6,6 +7,7 @@ open System.IO
 open System.Runtime.InteropServices
 open System.Text.Json
 open System.Text.RegularExpressions
+open YamlDotNet.RepresentationModel
 open BuildFramework
 
 module E2EContainer =
@@ -15,6 +17,301 @@ module E2EContainer =
     type SnapshotMode =
         | Verify
         | Update
+
+    module internal WorkflowContract =
+        type private Node =
+            | Scalar of string
+            | Sequence of Node list
+            | Mapping of Map<string, Node>
+            | Other
+
+        let rec private fromYaml (node: YamlNode) =
+            match node with
+            | :? YamlScalarNode as scalar -> Scalar(if isNull scalar.Value then "" else scalar.Value)
+            | :? YamlSequenceNode as sequence -> sequence.Children |> Seq.map fromYaml |> Seq.toList |> Sequence
+            | :? YamlMappingNode as mapping ->
+                mapping.Children
+                |> Seq.choose (fun pair ->
+                    match pair.Key with
+                    | :? YamlScalarNode as key -> Some(key.Value, fromYaml pair.Value)
+                    | _ -> None)
+                |> Map.ofSeq
+                |> Mapping
+            | _ -> Other
+
+        let private parse text =
+            use reader = new StringReader(text)
+            let stream = YamlStream()
+            stream.Load reader
+
+            if stream.Documents.Count <> 1 then
+                failwith "The E2E workflow must contain exactly one YAML document."
+
+            fromYaml stream.Documents[0].RootNode
+
+        let private asMapping (node: Node) : Map<string, Node> option =
+            match node with
+            | Mapping mapping -> Some mapping
+            | _ -> None
+
+        let private asSequence (node: Node) : Node list option =
+            match node with
+            | Sequence items -> Some items
+            | _ -> None
+
+        let private asScalar (node: Node) : string option =
+            match node with
+            | Scalar value -> Some value
+            | _ -> None
+
+        let private field (name: string) (node: Node) : Node option =
+            node |> asMapping |> Option.bind (Map.tryFind name)
+
+        let private fieldScalar (name: string) (node: Node) =
+            node |> field name |> Option.bind asScalar
+
+        let private fieldSequence (name: string) (node: Node) =
+            node |> field name |> Option.bind asSequence |> Option.defaultValue []
+
+        let private hasOnlyExpectedTriggers triggers =
+            match triggers with
+            | Mapping events ->
+                let triggerNames = events |> Map.keys |> Set.ofSeq
+                triggerNames = Set.ofList [ "push"; "schedule"; "workflow_dispatch" ]
+            | _ -> false
+
+        let private hasTrigger (name: string) (triggers: Node) =
+            match triggers with
+            | Mapping events -> Map.containsKey name events
+            | Sequence events -> events |> List.exists (fun event -> asScalar event = Some name)
+            | Scalar event -> event = name
+            | Other -> false
+
+        let rec private containsScalar (expected: string) (node: Node) =
+            match node with
+            | Scalar value -> value = expected
+            | Sequence items -> items |> List.exists (containsScalar expected)
+            | Mapping fields -> fields |> Map.exists (fun _ value -> containsScalar expected value)
+            | Other -> false
+
+        let private hasActionRepository (expectedRepository: string) (actionReference: string) =
+            let separatorIndex = actionReference.LastIndexOf '@'
+
+            separatorIndex > 0
+            && separatorIndex < actionReference.Length - 1
+            && actionReference.Substring(0, separatorIndex) = expectedRepository
+
+        let private hasStepUsing expectedRepository steps =
+            steps
+            |> List.exists (fun step ->
+                fieldScalar "uses" step
+                |> Option.exists (hasActionRepository expectedRepository))
+
+        let private stepInput inputName expectedRepository steps =
+            steps
+            |> List.tryPick (fun step ->
+                let uses = fieldScalar "uses" step |> Option.defaultValue ""
+
+                if hasActionRepository expectedRepository uses then
+                    step |> field "with" |> Option.bind (field inputName) |> Option.bind asScalar
+                else
+                    None)
+
+        let private stepArtifactName expectedRepository steps =
+            stepInput "name" expectedRepository steps
+
+        let private hasRunEqual (expected: string) steps =
+            steps
+            |> List.exists (fun step ->
+                fieldScalar "run" step
+                |> Option.exists (fun command -> command.Trim() = expected))
+
+        let private hasRunContaining (text: string) steps =
+            steps
+            |> List.exists (fun step ->
+                fieldScalar "run" step
+                |> Option.exists (fun command -> command.Contains(text, StringComparison.Ordinal)))
+
+        let private allActionsPinned node =
+            let rec check =
+                function
+                | Mapping fields ->
+                    fields
+                    |> Map.forall (fun key value ->
+                        let currentActionIsPinned =
+                            key <> "uses"
+                            || (value
+                                |> asScalar
+                                |> Option.exists (fun action -> Regex.IsMatch(action, ".+@[0-9a-f]{40}$")))
+
+                        currentActionIsPinned && check value)
+                | Sequence items -> items |> List.forall check
+                | Scalar _
+                | Other -> true
+
+            check node
+
+        let validate (imageReference: string) (text: string) =
+            let workflow = text |> parse |> asMapping |> Option.defaultValue Map.empty
+            let triggers: Node = workflow |> Map.tryFind "on" |> Option.defaultValue Other
+
+            let pushTargetsOnlyMain =
+                match triggers with
+                | Mapping events ->
+                    match events |> Map.tryFind "push" |> Option.bind asMapping with
+                    | Some push when Map.count push = 1 ->
+                        match Map.tryFind "branches" push with
+                        | Some(Sequence [ Scalar "main" ])
+                        | Some(Scalar "main") -> true
+                        | _ -> false
+                    | _ -> false
+                | _ -> false
+
+            let schedule = triggers |> fieldSequence "schedule"
+            let jobs = workflow |> Map.tryFind "jobs" |> Option.defaultValue Other
+            let buildJob = jobs |> field "build" |> Option.defaultValue Other
+            let browserJob = jobs |> field "browser" |> Option.defaultValue Other
+
+            let permissionsAreReadOnly permissions =
+                permissions
+                |> asMapping
+                |> Option.exists (fun values ->
+                    Map.count values = 1
+                    && (Map.tryFind "contents" values |> Option.bind asScalar) = Some "read")
+
+            let jobPermissionOverridesAreReadOnly =
+                jobs
+                |> asMapping
+                |> Option.exists (fun allJobs ->
+                    allJobs
+                    |> Map.forall (fun _ job -> job |> field "permissions" |> Option.forall permissionsAreReadOnly))
+
+            let allPermissionScopesAreReadOnly =
+                (workflow |> Map.tryFind "permissions" |> Option.exists permissionsAreReadOnly)
+                && jobPermissionOverridesAreReadOnly
+
+            let hasNightlySchedule =
+                schedule = [ Mapping(Map.ofList [ ("cron", Scalar "15 3 * * *") ]) ]
+
+            let buildSteps = fieldSequence "steps" buildJob
+            let browserSteps = fieldSequence "steps" browserJob
+            let browserRuns = browserSteps |> List.choose (fieldScalar "run")
+            let buildArtifactPath = stepInput "path" "actions/upload-artifact" buildSteps
+            let browserArtifactPath = stepInput "path" "actions/download-artifact" browserSteps
+
+            let reportUpload =
+                browserSteps
+                |> List.exists (fun step ->
+                    let options = step |> field "with" |> Option.defaultValue Other
+
+                    let includesDiagnostics =
+                        fieldScalar "path" options
+                        |> Option.exists (fun path -> path.Contains(".e2e-output", StringComparison.Ordinal))
+
+                    hasStepUsing "actions/upload-artifact" [ step ]
+                    && fieldScalar "if" step = Some "always()"
+                    && includesDiagnostics
+                    && fieldScalar "include-hidden-files" options = Some "true")
+
+            let image =
+                browserJob
+                |> field "container"
+                |> Option.bind (field "image")
+                |> Option.bind asScalar
+
+            let buildArtifact = stepArtifactName "actions/upload-artifact" buildSteps
+            let browserArtifact = stepArtifactName "actions/download-artifact" browserSteps
+            let diagnosticsArtifact = stepArtifactName "actions/upload-artifact" browserSteps
+
+            let artifactNames =
+                [ buildArtifact; browserArtifact; diagnosticsArtifact ] |> List.choose id
+
+            let artifactsAreRunAttemptScoped =
+                artifactNames.Length = 3
+                && (artifactNames
+                    |> List.forall (fun name -> name.Contains("${{ github.run_attempt }}", StringComparison.Ordinal)))
+
+            let browserUsesHostBuild =
+                browserRuns
+                |> List.exists (fun command ->
+                    command.Contains("dotnet", StringComparison.Ordinal)
+                    || command.Contains("npm run fake", StringComparison.Ordinal))
+
+            [
+                if pushTargetsOnlyMain |> not then
+                    yield "E2E workflow must run on pushes to main."
+
+                if
+                    hasTrigger "workflow_dispatch" triggers
+                    && (hasOnlyExpectedTriggers triggers |> not)
+                then
+                    yield "E2E workflow must use only push, schedule, and manual-dispatch triggers."
+
+                if hasNightlySchedule |> not then
+                    yield "E2E workflow must run nightly at 03:15 UTC."
+
+                if hasTrigger "workflow_dispatch" triggers |> not then
+                    yield "E2E workflow must support manual dispatch."
+
+                if hasTrigger "pull_request" triggers || hasTrigger "pull_request_target" triggers then
+                    yield "E2E workflow must not run on pull requests."
+
+                if allPermissionScopesAreReadOnly |> not then
+                    yield "E2E workflow permissions must be limited to read-only contents access."
+
+                if buildSteps |> hasStepUsing "actions/upload-artifact" |> not then
+                    yield "E2E build job must upload the compiled application artifact."
+
+                if
+                    buildArtifactPath
+                    |> Option.exists (fun path -> path.Replace('\\', '/') = "dist-e2e/")
+                    |> not
+                then
+                    yield "E2E build job must upload dist-e2e/."
+
+                if hasRunEqual "npm run fake \"--\" --target BuildE2E --ci" buildSteps |> not then
+                    yield "E2E build job must invoke the BuildE2E target."
+
+                if browserJob |> field "needs" |> Option.exists (containsScalar "build") |> not then
+                    yield "E2E browser job must depend on the build job."
+
+                if image <> Some imageReference then
+                    yield "E2E browser job must use the pinned Playwright image."
+
+                if browserArtifact.IsNone || browserArtifact <> buildArtifact then
+                    yield "E2E browser job must download the artifact produced by the build job."
+
+                if
+                    browserArtifactPath
+                    |> Option.exists (fun path -> path.Replace('\\', '/') = "dist-e2e/")
+                    |> not
+                then
+                    yield "E2E browser job must extract the build artifact to dist-e2e/."
+
+                if artifactsAreRunAttemptScoped |> not then
+                    yield "Workflow artifact names must include the GitHub run attempt."
+
+                if hasRunContaining "npm ci" browserSteps |> not then
+                    yield "E2E browser job must install dependencies with npm ci."
+
+                if
+                    hasRunContaining "node node_modules/@playwright/test/cli.js test" browserSteps
+                    |> not
+                then
+                    yield "E2E browser job must invoke the installed Playwright test CLI."
+
+                if browserUsesHostBuild then
+                    yield "E2E browser job must not invoke .NET or the FAKE build."
+
+                if hasRunContaining "--update-snapshots=none" browserSteps |> not then
+                    yield "E2E browser job must verify snapshots without updating them."
+
+                if reportUpload |> not then
+                    yield "E2E browser job must upload diagnostics even after failure."
+
+                if allActionsPinned (Mapping workflow) |> not then
+                    yield "E2E workflow actions must be pinned to immutable commit SHAs."
+            ]
 
     let imageReference =
         "mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea"
@@ -184,6 +481,249 @@ module internal E2EContainerSelfTest =
     open E2EContainer
 
     let runSelfTest root =
+        let workflowPath = Path.Combine(root, ".github", "workflows", "e2e.yml")
+        let workflowText = File.ReadAllText workflowPath
+        let contractFailures = WorkflowContract.validate imageReference workflowText
+
+        assertEqual "E2E workflow satisfies its non-gating and artifact contract" [] contractFailures
+
+        let replaceOccurrences
+            (name: string)
+            (expectedOccurrences: int)
+            (oldValue: string)
+            (newValue: string)
+            (text: string)
+            =
+            let normalizedText = text.Replace("\r\n", "\n", StringComparison.Ordinal)
+            let occurrences = Regex.Matches(normalizedText, Regex.Escape oldValue).Count
+
+            assertEqual
+                $"workflow self-test mutation '{name}' has the expected match count"
+                expectedOccurrences
+                occurrences
+
+            normalizedText.Replace(oldValue, newValue, StringComparison.Ordinal)
+
+        let replaceExactlyOnce (name: string) (oldValue: string) (newValue: string) (text: string) =
+            replaceOccurrences name 1 oldValue newValue text
+
+        let assertMutationProducesFailure
+            (name: string)
+            (oldValue: string)
+            (newValue: string)
+            (expectedFailure: string)
+            =
+            let mutatedWorkflow = replaceExactlyOnce name oldValue newValue workflowText
+
+            assertEqual
+                $"workflow contract rejects {name}"
+                [ expectedFailure ]
+                (WorkflowContract.validate imageReference mutatedWorkflow)
+
+        let assertMutationIncludesFailure
+            (name: string)
+            (oldValue: string)
+            (newValue: string)
+            (expectedFailure: string)
+            =
+            let mutatedWorkflow = replaceExactlyOnce name oldValue newValue workflowText
+
+            assertEqual
+                $"workflow contract rejects {name}"
+                true
+                (WorkflowContract.validate imageReference mutatedWorkflow
+                 |> List.contains expectedFailure)
+
+        let workflowWithoutRunAttempt =
+            replaceOccurrences "artifact run-attempt scoping" 3 "${{ github.run_attempt }}" "0" workflowText
+
+        assertEqual
+            "workflow contract rejects artifacts shared by reruns"
+            [ "Workflow artifact names must include the GitHub run attempt." ]
+            (WorkflowContract.validate imageReference workflowWithoutRunAttempt)
+
+        assertMutationProducesFailure
+            "an incorrect build artifact path"
+            "path: dist-e2e/\n          if-no-files-found: error"
+            "path: wrong-output/\n          if-no-files-found: error"
+            "E2E build job must upload dist-e2e/."
+
+        assertMutationIncludesFailure
+            "a near-prefix build upload action"
+            "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4\n        with:\n          name: dist-e2e"
+            "actions/upload-artifact@invalid@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4\n        with:\n          name: dist-e2e"
+            "E2E build job must upload the compiled application artifact."
+
+        assertMutationProducesFailure
+            "a missing BuildE2E invocation"
+            "--target BuildE2E"
+            "--target Build"
+            "E2E build job must invoke the BuildE2E target."
+
+        assertMutationProducesFailure
+            "a prefix-sharing but invalid build target"
+            "npm run fake \"--\" --target BuildE2E --ci"
+            "npm run fake \"--\" --target BuildE2EBackup --ci"
+            "E2E build job must invoke the BuildE2E target."
+
+        assertMutationProducesFailure
+            "an extra build command argument"
+            "npm run fake \"--\" --target BuildE2E --ci"
+            "npm run fake \"--\" --target BuildE2E --ci --help"
+            "E2E build job must invoke the BuildE2E target."
+
+        assertMutationProducesFailure
+            "an incorrect browser artifact path"
+            "path: dist-e2e/\n      - run: npm ci"
+            "path: wrong-output/\n      - run: npm ci"
+            "E2E browser job must extract the build artifact to dist-e2e/."
+
+        assertMutationIncludesFailure
+            "a near-prefix browser download action"
+            "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4\n        with:\n          name: dist-e2e"
+            "actions/download-artifact@invalid@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4\n        with:\n          name: dist-e2e"
+            "E2E browser job must download the artifact produced by the build job."
+
+        assertMutationProducesFailure
+            "a missing Playwright test invocation"
+            "node node_modules/@playwright/test/cli.js test"
+            "node node_modules/vite/bin/vite.js"
+            "E2E browser job must invoke the installed Playwright test CLI."
+
+        assertMutationProducesFailure
+            "an artifact name mismatch"
+            "name: dist-e2e-${{ github.run_id }}-${{ github.run_attempt }}\n          path: dist-e2e/\n      - run: npm ci"
+            "name: mismatched-bundle-${{ github.run_attempt }}\n          path: dist-e2e/\n      - run: npm ci"
+            "E2E browser job must download the artifact produced by the build job."
+
+        assertMutationProducesFailure
+            "a missing npm ci installation"
+            "npm ci"
+            "npm install"
+            "E2E browser job must install dependencies with npm ci."
+
+        assertMutationProducesFailure
+            "a browser job that invokes the host build"
+            "node node_modules/@playwright/test/cli.js test"
+            "dotnet node node_modules/@playwright/test/cli.js test"
+            "E2E browser job must not invoke .NET or the FAKE build."
+
+        assertMutationProducesFailure
+            "snapshot update mode in CI"
+            "--update-snapshots=none"
+            "--update-snapshots=all"
+            "E2E browser job must verify snapshots without updating them."
+
+        assertMutationProducesFailure
+            "diagnostics that are not uploaded after failures"
+            "if: always()"
+            "if: failure()"
+            "E2E browser job must upload diagnostics even after failure."
+
+        assertMutationProducesFailure
+            "diagnostics that omit hidden output"
+            "include-hidden-files: true"
+            "include-hidden-files: false"
+            "E2E browser job must upload diagnostics even after failure."
+
+        assertMutationProducesFailure
+            "a browser job without its build dependency"
+            "needs: build"
+            "needs: publish"
+            "E2E browser job must depend on the build job."
+
+        assertMutationProducesFailure
+            "a browser image that does not match the pin"
+            "playwright:v1.64.1-noble"
+            "playwright:v1.64.2-noble"
+            "E2E browser job must use the pinned Playwright image."
+
+        assertMutationProducesFailure
+            "a write permission"
+            "contents: read"
+            "contents: write"
+            "E2E workflow permissions must be limited to read-only contents access."
+
+        assertMutationProducesFailure
+            "a job-level write permission override"
+            "    needs: build\n    runs-on: ubuntu-latest"
+            "    needs: build\n    permissions:\n      contents: write\n    runs-on: ubuntu-latest"
+            "E2E workflow permissions must be limited to read-only contents access."
+
+        assertMutationProducesFailure
+            "an unpinned action"
+            "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1"
+            "actions/setup-node@v7.1.0"
+            "E2E workflow actions must be pinned to immutable commit SHAs."
+
+        assertMutationProducesFailure
+            "a missing manual-dispatch trigger"
+            "workflow_dispatch:"
+            "workflow_call:"
+            "E2E workflow must support manual dispatch."
+
+        assertMutationProducesFailure
+            "a missing scheduled trigger"
+            "- cron: \"15 3 * * *\""
+            "- name: \"15 3 * * *\""
+            "E2E workflow must run nightly at 03:15 UTC."
+
+        assertMutationProducesFailure
+            "a different scheduled cadence"
+            "- cron: \"15 3 * * *\""
+            "- cron: \"*/5 * * * *\""
+            "E2E workflow must run nightly at 03:15 UTC."
+
+        assertMutationProducesFailure
+            "a push trigger that excludes main"
+            "branches: [main]"
+            "branches: [release]"
+            "E2E workflow must run on pushes to main."
+
+        assertMutationProducesFailure
+            "an additional push branch"
+            "branches: [main]"
+            "branches: [main, release]"
+            "E2E workflow must run on pushes to main."
+
+        assertMutationProducesFailure
+            "an additional push filter"
+            "branches: [main]"
+            "branches: [main]\n    tags: [\"v*\"]"
+            "E2E workflow must run on pushes to main."
+
+        assertMutationProducesFailure
+            "an additional workflow event"
+            "  workflow_dispatch:\n"
+            "  workflow_call:\n  workflow_dispatch:\n"
+            "E2E workflow must use only push, schedule, and manual-dispatch triggers."
+
+        let workflowWithWritableAdditionalJob =
+            replaceExactlyOnce
+                "an additional job permission override"
+                "jobs:\n  build:"
+                "jobs:\n  audit:\n    permissions:\n      contents: write\n    steps: []\n  build:"
+                workflowText
+
+        assertEqual
+            "workflow contract rejects write permission on any job"
+            [ "E2E workflow permissions must be limited to read-only contents access." ]
+            (WorkflowContract.validate imageReference workflowWithWritableAdditionalJob)
+
+        let rejectedPullRequestTriggers =
+            [
+                "on:\n  pull_request:\n    {}\n"
+                "on:\n  pull_request_target:\n    {}\n"
+                "on: [pull_request]\n"
+                "on: [pull_request_target]\n"
+                "on: pull_request\n"
+                "on: pull_request_target\n"
+            ]
+            |> List.map (WorkflowContract.validate imageReference)
+            |> List.forall (List.contains "E2E workflow must not run on pull requests.")
+
+        assertEqual "workflow contract rejects all pull-request trigger forms" true rejectedPullRequestTriggers
+
         let buildArguments = (buildCommand root).Arguments
         let outputDirectoryIndex = buildArguments |> List.tryFindIndex ((=) "--outDir")
 
