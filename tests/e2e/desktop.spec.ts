@@ -1,21 +1,10 @@
-import { expect, test, type Page } from "@playwright/test";
-import {
-  clickNode,
-  readObserver,
-  waitForFrameAfter,
-  waitForNewObserverSession,
-  waitForStableObserver,
-} from "./observer";
+import { expect, test } from "@playwright/test";
+import { clickNode, readObserver, waitForFrameAfter, waitForStableObserver } from "./observer";
+import { importFixture } from "./test-utils";
 
 const familyFixture = "tests/e2e/fixtures/desktop-family.json";
 const warningFixture = "tests/e2e/fixtures/desktop-warning.json";
 const invalidFixture = "tests/e2e/fixtures/desktop-invalid.json";
-
-async function importFixture(page: Page, fixture: string) {
-  const previousSession = (await waitForStableObserver(page)).session;
-  await page.locator('input[type="file"]').setInputFiles(fixture);
-  await waitForNewObserverSession(page, previousSession);
-}
 
 test("[known defect pin] initial import omits the first rendered node label", async ({ page }) => {
   await page.goto("/");
