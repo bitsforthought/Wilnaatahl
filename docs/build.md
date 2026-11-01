@@ -135,9 +135,6 @@ changes. The update target is rejected in CI mode; verification never writes
 missing or changed references. Neither Docker nor browser execution is part of
 `npm run validate`.
 
-The rationale for the baselined states and exclusions is recorded in the
-[screenshot baseline decision record](decision-records/2026-11-01-e2e-screenshot-baseline-decisions.md).
-
 ## Continuous Integration
 
 `.github/workflows/validate.yml` runs the CI-mode commands above on Ubuntu and
