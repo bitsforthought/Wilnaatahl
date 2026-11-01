@@ -37,6 +37,7 @@ test("view-mode projected node input opens and dismisses the matching detail car
   await page.goto("/");
   await importFixture(page, familyFixture);
 
+  // This fixture does not exercise detail placement at viewport edges.
   await clickNode(page, 101);
   await expect(page.getByRole("dialog")).toContainText("Ada North");
   await expect(page.getByRole("dialog")).toBeVisible();
@@ -131,7 +132,8 @@ test("[known defect pin] selected-node drag and undo remain blocked by empty pro
   const node = before.nodes.find((candidate) => candidate.personId === 102);
   if (!node) throw new Error("Projected fixture node was not rendered.");
   await clickNode(page, 102);
-  // Diagnostic pin for https://github.com/bitsforthought/Wilnaatahl/issues/117.
+  // Until https://github.com/bitsforthought/Wilnaatahl/issues/117 is fixed,
+  // successful dragging and redo invalidation remain untested.
   expect((await readObserver(page)).selectedPersonIds).toEqual([]);
   await page.mouse.move(node.cssPosition.x, node.cssPosition.y);
   await page.mouse.down();

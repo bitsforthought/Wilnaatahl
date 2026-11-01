@@ -39,6 +39,7 @@ export default defineConfig({
       name: "mobile",
       testMatch: "**/touch.spec.ts",
       use: {
+        // Chromium device emulation does not cover physical devices.
         ...devices["Pixel 7"],
         viewport: { width: 390, height: 844 },
         deviceScaleFactor: 1,
