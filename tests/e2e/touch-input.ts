@@ -6,6 +6,11 @@ export interface TouchContact {
   y: number;
 }
 
+/**
+ * Chrome DevTools Protocol (CDP) requires empty touch points on end/cancel.
+ * This helper ends the whole gesture and does not model partial release.
+ * @see https://chromedevtools.github.io/devtools-protocol/tot/Input/#method-dispatchTouchEvent
+ */
 export interface TouchInput {
   startContact(contact: TouchContact): Promise<void>;
   moveContacts(contacts: readonly TouchContact[]): Promise<void>;
@@ -22,12 +27,16 @@ export interface PointerEventRecord {
   targetTag: string;
 }
 
+declare global {
+  var __WILNAATAHL_E2E_POINTER_EVENTS__: PointerEventRecord[] | undefined;
+}
+
 type TouchEventType = "touchStart" | "touchMove" | "touchEnd" | "touchCancel";
 
 export async function installPointerEventProbe(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const root = document.documentElement;
-    root.dataset.e2ePointerEvents = "[]";
+    const records: PointerEventRecord[] = [];
+    globalThis.__WILNAATAHL_E2E_POINTER_EVENTS__ = records;
     for (const type of ["pointerdown", "pointermove", "pointerup", "pointercancel"]) {
       document.addEventListener(
         type,
@@ -41,9 +50,7 @@ export async function installPointerEventProbe(page: Page): Promise<void> {
             isTrusted: event.isTrusted,
             targetTag,
           };
-          const records = JSON.parse(root.dataset.e2ePointerEvents ?? "[]") as PointerEventRecord[];
           records.push(record);
-          root.dataset.e2ePointerEvents = JSON.stringify(records);
         },
         true
       );
@@ -53,9 +60,9 @@ export async function installPointerEventProbe(page: Page): Promise<void> {
 
 export async function readPointerEvents(page: Page): Promise<PointerEventRecord[]> {
   return page.evaluate(() => {
-    const serialized = document.documentElement.dataset.e2ePointerEvents;
-    if (serialized === undefined) throw new Error("Pointer event probe is not installed.");
-    return JSON.parse(serialized) as PointerEventRecord[];
+    const records = globalThis.__WILNAATAHL_E2E_POINTER_EVENTS__;
+    if (records === undefined) throw new Error("Pointer event probe is not installed.");
+    return records;
   });
 }
 

@@ -20,27 +20,34 @@ async function importFamily(page: Page) {
 }
 
 function backgroundPoints(snapshot: ObserverSnapshot): TouchContact[] {
-  const xRatios = [0.12, 0.88, 0.5, 0.25, 0.75];
-  const yRatios = [0.88, 0.12, 0.5, 0.65, 0.35];
-  const candidates = yRatios.flatMap((yRatio) =>
-    xRatios.map((xRatio) => ({
+  // Hand-picked inset fractions provide fallback starts across the canvas; the
+  // clearance is a heuristic around projected centres, not measured node bounds.
+  const horizontalCanvasFractions = [0.12, 0.88, 0.5, 0.25, 0.75];
+  const verticalCanvasFractions = [0.88, 0.12, 0.5, 0.65, 0.35];
+  const minimumNodeClearanceCssPixels = 55;
+  const candidates = verticalCanvasFractions.flatMap((yFraction) =>
+    horizontalCanvasFractions.map((xFraction) => ({
       id: 0,
-      x: snapshot.canvas.left + snapshot.canvas.width * xRatio,
-      y: snapshot.canvas.top + snapshot.canvas.height * yRatio,
+      x: snapshot.canvas.left + snapshot.canvas.width * xFraction,
+      y: snapshot.canvas.top + snapshot.canvas.height * yFraction,
     }))
   );
   return candidates.filter((point) =>
     snapshot.nodes.every(
-      (node) => Math.hypot(node.cssPosition.x - point.x, node.cssPosition.y - point.y) > 55
+      (node) =>
+        Math.hypot(node.cssPosition.x - point.x, node.cssPosition.y - point.y) >
+        minimumNodeClearanceCssPixels
     )
   );
 }
 
 function findBackgroundPair(snapshot: ObserverSnapshot) {
+  const minimumContactSeparationCssPixels = 100;
   const candidates = backgroundPoints(snapshot);
   for (const first of candidates) {
     const second = candidates.find(
-      (candidate) => Math.hypot(candidate.x - first.x, candidate.y - first.y) > 100
+      (candidate) =>
+        Math.hypot(candidate.x - first.x, candidate.y - first.y) > minimumContactSeparationCssPixels
     );
     if (second) {
       return [
@@ -69,6 +76,24 @@ async function readTouchTarget(page: Page, point: CssPoint) {
       pointerEvents: element ? getComputedStyle(element).pointerEvents : "none",
     };
   }, point);
+}
+
+async function tapVisibleNodeWithProbe(page: Page, personId: number) {
+  const snapshot = await waitForStableObserver(page);
+  const node = snapshot.nodes.find(
+    (candidate) =>
+      candidate.personId === personId &&
+      candidate.cssPosition.x >= snapshot.canvas.left &&
+      candidate.cssPosition.x <= snapshot.canvas.left + snapshot.canvas.width &&
+      candidate.cssPosition.y >= snapshot.canvas.top &&
+      candidate.cssPosition.y <= snapshot.canvas.top + snapshot.canvas.height
+  );
+  if (!node) throw new Error("Touch target person was not rendered.");
+
+  const hitTarget = await readTouchTarget(page, node.cssPosition);
+  await installPointerEventProbe(page);
+  await page.touchscreen.tap(node.cssPosition.x, node.cssPosition.y);
+  return { hitTarget, events: await readPointerEvents(page) };
 }
 
 function pointerEventsOfType(events: PointerEventRecord[], type: string) {
@@ -159,23 +184,8 @@ test("[known defect pin] narrow-screen View-mode touch is intercepted by a node 
   page,
 }) => {
   await importFamily(page);
-  const snapshot = await waitForStableObserver(page);
-  const node = snapshot.nodes.find(
-    (candidate) =>
-      candidate.personId === 103 &&
-      candidate.cssPosition.x >= snapshot.canvas.left &&
-      candidate.cssPosition.x <= snapshot.canvas.left + snapshot.canvas.width &&
-      candidate.cssPosition.y >= snapshot.canvas.top &&
-      candidate.cssPosition.y <= snapshot.canvas.top + snapshot.canvas.height
-  );
-  if (!node) throw new Error("Touch target person was not rendered.");
-
-  const hitTarget = await readTouchTarget(page, node.cssPosition);
-  await installPointerEventProbe(page);
-  await page.touchscreen.tap(node.cssPosition.x, node.cssPosition.y);
-
-  const touchEvents = await readPointerEvents(page);
-  // The label's HTML wrapper wins hit-testing over the Three.js canvas at this viewport.
+  const { hitTarget, events: touchEvents } = await tapVisibleNodeWithProbe(page, 103);
+  // The label wrapper intercepts the touch: https://github.com/bitsforthought/Wilnaatahl/issues/118.
   expect(hitTarget.tagName).toBe("DIV");
   expect(hitTarget.text).toContain("Cora East");
   expect(hitTarget.pointerEvents).not.toBe("none");
@@ -207,23 +217,8 @@ test("[known defect pin] Move-mode touch on a projected node leaves it unselecte
   await page.getByRole("button", { name: "Move" }).tap();
   await expect(page.getByRole("button", { name: "View" })).toBeVisible();
 
-  const snapshot = await waitForStableObserver(page);
-  const node = snapshot.nodes.find(
-    (candidate) =>
-      candidate.personId === 103 &&
-      candidate.cssPosition.x >= snapshot.canvas.left &&
-      candidate.cssPosition.x <= snapshot.canvas.left + snapshot.canvas.width &&
-      candidate.cssPosition.y >= snapshot.canvas.top &&
-      candidate.cssPosition.y <= snapshot.canvas.top + snapshot.canvas.height
-  );
-  if (!node) throw new Error("Touch target person was not rendered.");
-
-  const hitTarget = await readTouchTarget(page, node.cssPosition);
-  await installPointerEventProbe(page);
-  await page.touchscreen.tap(node.cssPosition.x, node.cssPosition.y);
-
-  // Diagnostic pin for the existing projected-click interception defect.
-  const events = await readPointerEvents(page);
+  const { hitTarget, events } = await tapVisibleNodeWithProbe(page, 103);
+  // Diagnostic pin for https://github.com/bitsforthought/Wilnaatahl/issues/117.
   expect(hitTarget.tagName).toBe("DIV");
   expect(hitTarget.text).toContain("Cora East");
   expect(events).toContainEqual(
@@ -344,6 +339,7 @@ test("two-finger pan and contact cancellation leave later touch input usable", a
   const panTouch = await createTouchInput(page);
 
   try {
+    // Both contacts start before movement; mid-gesture arrival is not exercised.
     await panTouch.startContact(first);
     await panTouch.startContact(second);
     const moved = [
