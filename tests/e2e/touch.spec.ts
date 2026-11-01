@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { CssPoint, ObserverSnapshot } from "../../src/testing/observer";
-import { readObserver, waitForStableObserver, waitForNewObserverSession } from "./observer";
+import { readObserver, waitForStableObserver } from "./observer";
+import { importFixture } from "./test-utils";
 import {
   createTouchInput,
   installPointerEventProbe,
@@ -14,9 +15,7 @@ const familyFixture = "tests/e2e/fixtures/desktop-family.json";
 
 async function importFamily(page: Page) {
   await page.goto("/");
-  const previousSession = (await waitForStableObserver(page)).session;
-  await page.locator('input[type="file"]').setInputFiles(familyFixture);
-  await waitForNewObserverSession(page, previousSession);
+  await importFixture(page, familyFixture);
 }
 
 function backgroundPoints(snapshot: ObserverSnapshot): TouchContact[] {

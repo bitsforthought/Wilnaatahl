@@ -1,14 +1,9 @@
-import { expect, test, type Page } from "@playwright/test";
-import { clickNode, waitForNewObserverSession, waitForStableObserver } from "./observer";
+import { expect, test } from "@playwright/test";
+import { clickNode, waitForStableObserver } from "./observer";
+import { importFixture } from "./test-utils";
 
 const familyFixture = "tests/e2e/fixtures/desktop-family.json";
 const warningFixture = "tests/e2e/fixtures/desktop-warning.json";
-
-async function importFixture(page: Page, fixture: string) {
-  const previousSession = (await waitForStableObserver(page)).session;
-  await page.locator('input[type="file"]').setInputFiles(fixture);
-  await waitForNewObserverSession(page, previousSession);
-}
 
 test("selected person detail card", async ({ page }) => {
   await page.goto("/");

@@ -1,12 +1,13 @@
 import { expect, test } from "@playwright/test";
 import { waitForStableObserver } from "./observer";
+import { uploadFixture } from "./test-utils";
 
 const warningFixture = "tests/e2e/fixtures/desktop-warning.json";
 
 test("import warning banner", async ({ page }) => {
   await page.goto("/");
   await waitForStableObserver(page);
-  await page.locator('input[type="file"]').setInputFiles(warningFixture);
+  await uploadFixture(page, warningFixture);
   const warning = page.getByRole("status");
   await expect(warning).toContainText("Imported with warnings");
   await expect(warning).toHaveScreenshot("mobile-import-warning.png", {
