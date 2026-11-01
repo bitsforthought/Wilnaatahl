@@ -153,8 +153,8 @@ the comment.
 ### Browser E2E workflow
 
 `.github/workflows/e2e.yml` is deliberately separate from required pull-request
-validation. It runs on pushes to `main`, nightly at 03:15 UTC, and on
-`workflow_dispatch`; it has no `pull_request` trigger and is not a merge gate.
+validation. It runs on pushes to `main`, nightly at 03:15 UTC-7 (10:15 UTC), and
+on `workflow_dispatch`; it has no `pull_request` trigger and is not a merge gate.
 GitHub may delay scheduled runs during high load. All actions are pinned to full
 commit SHAs, and the workflow has read-only repository permissions.
 
@@ -193,9 +193,9 @@ node node_modules/@playwright/test/cli.js show-report .e2e-output/playwright-rep
 The report links to failed tests and their traces. Inspect the corresponding
 entries in `.e2e-output/test-results/` for actual/expected/diff screenshots and
 other attachments. The build artifact is retained separately for seven days.
-The workflow never updates or commits screenshot references; update them
-locally with `UpdateE2ESnapshots`, inspect the image changes, and submit them in
-a normal PR.
+The workflow never updates or commits screenshot references. To update them
+locally, run the FAKE target `UpdateE2ESnapshots` shown above. Inspect the image
+changes and submit them in a normal PR.
 
 ## Parallelism
 
