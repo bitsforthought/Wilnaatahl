@@ -6,18 +6,24 @@ const familyFixture = "tests/e2e/fixtures/desktop-family.json";
 const warningFixture = "tests/e2e/fixtures/desktop-warning.json";
 const invalidFixture = "tests/e2e/fixtures/desktop-invalid.json";
 
-test("[known defect pin] initial import omits the first rendered node label", async ({ page }) => {
+test("initial import renders every visible node label before interaction", async ({ page }) => {
   await page.goto("/");
   await waitForStableObserver(page);
   await importFixture(page, familyFixture);
 
   const snapshot = await readObserver(page);
   expect(snapshot.nodes.map((node) => node.personId).sort()).toEqual([101, 102, 103]);
+  await expect(page.getByText("Ada's title")).toBeVisible();
   await expect(page.getByText("Ben's title")).toBeVisible();
   await expect(page.getByText("Cora's title")).toBeVisible();
-  // Diagnostic pin for https://github.com/bitsforthought/Wilnaatahl/issues/116;
-  // it records observed behaviour, not the intended UI contract.
-  await expect(page.getByText("Ada's title")).toHaveCount(0);
+
+  await clickNode(page, 101);
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("button", { name: "Dismiss detail" }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(page.getByText("Ada's title")).toBeVisible();
+  await expect(page.getByText("Ben's title")).toBeVisible();
+  await expect(page.getByText("Cora's title")).toBeVisible();
 });
 
 test("view-mode projected node input opens and dismisses the matching detail card", async ({
