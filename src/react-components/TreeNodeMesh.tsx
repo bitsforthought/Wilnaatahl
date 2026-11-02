@@ -1,5 +1,6 @@
 import React from "react";
 import { Html } from "@react-three/drei";
+import { useThree } from "@react-three/fiber";
 import { Entity } from "koota";
 import { useActions, useTrait } from "koota/react";
 import { eventActions, NodeLabel, Size, PersonRef, useMeshRef } from "../ecs";
@@ -23,6 +24,7 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
   const labelView = useTrait(entity, NodeLabel);
   const locale = useLocale();
   const label = nodeLabelText(labelView, locale);
+  const hasConnectedEventTarget = useThree((state) => state.events.connected != null);
   const ref = useMeshRef(entity);
 
   const { handleMeshClick } = useActions(eventActions);
@@ -40,7 +42,12 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
           metalness={0.3} // Slight metallic effect
           roughness={0.3} // Moderate roughness for better light scattering
         />
-        {label && (
+        {/*
+          R3F connects its event target after the first scene render. Drei's
+          Html captures that target during its layout effect, so wait for the
+          stable target before creating the portal.
+        */}
+        {label && hasConnectedEventTarget && (
           <Html position={[0, -0.5, 0]} center distanceFactor={labelDistanceFactor}>
             <div
               style={{

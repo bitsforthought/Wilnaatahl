@@ -116,6 +116,10 @@ export async function clickNode(page: Page, personId: number) {
   const snapshot = await waitForStableObserver(page);
   const node = snapshot.nodes.find((candidate) => candidate.personId === personId);
   if (!node) throw new Error(`Observer could not find person ${personId}.`);
-  await page.mouse.click(node.cssPosition.x, node.cssPosition.y);
+  // In View mode, the label portal overlaps the node's projected centre; click
+  // the mesh's upper edge so the browser test exercises the node input rather
+  // than the label's known pointer interception.
+  const viewModeClickOffsetY = snapshot.mode === "view" ? -30 : 0;
+  await page.mouse.click(node.cssPosition.x, node.cssPosition.y + viewModeClickOffsetY);
   await waitForStableObserver(page);
 }
