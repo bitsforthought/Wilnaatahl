@@ -48,12 +48,16 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
           stable target before creating the portal.
         */}
         {label && hasConnectedEventTarget && (
-          <Html position={[0, -0.5, 0]} center distanceFactor={labelDistanceFactor}>
+          <Html
+            position={[0, -0.5, 0]}
+            center
+            distanceFactor={labelDistanceFactor}
+            style={{ pointerEvents: "none" }}
+          >
             <div
               style={{
                 color: "white",
                 textAlign: "center",
-                pointerEvents: "none",
                 whiteSpace: "pre-line",
                 width: "160%",
                 marginLeft: "-30%",
