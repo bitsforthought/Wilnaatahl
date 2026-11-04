@@ -54,17 +54,7 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
             distanceFactor={labelDistanceFactor}
             style={{ pointerEvents: "none" }}
           >
-            <div
-              style={{
-                color: "white",
-                textAlign: "center",
-                whiteSpace: "pre-line",
-                width: "160%",
-                marginLeft: "-30%",
-              }}
-            >
-              {label}
-            </div>
+            <div className="node-label">{label}</div>
           </Html>
         )}
       </mesh>
