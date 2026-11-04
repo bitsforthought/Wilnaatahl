@@ -179,21 +179,19 @@ async function dragBackgroundWithTouch(
   }
 }
 
-test("[known defect pin] narrow-screen View-mode touch is intercepted by a node label", async ({
+test("narrow-screen View-mode touch selects the node and opens its detail card", async ({
   page,
 }) => {
   await importFamily(page);
   const { hitTarget, events: touchEvents } = await tapVisibleNodeWithProbe(page, 103);
-  // The label wrapper intercepts the touch: https://github.com/bitsforthought/Wilnaatahl/issues/118.
-  expect(hitTarget.tagName).toBe("DIV");
-  expect(hitTarget.text).toContain("Cora East");
-  expect(hitTarget.pointerEvents).not.toBe("none");
+  expect(hitTarget.tagName).toBe("CANVAS");
+  expect(hitTarget.pointerEvents).toBe("auto");
   expect(touchEvents).toContainEqual(
     expect.objectContaining({
       type: "pointerdown",
       pointerType: "touch",
       isTrusted: true,
-      targetTag: "DIV",
+      targetTag: "CANVAS",
     })
   );
   expect(touchEvents).toContainEqual(
@@ -201,35 +199,32 @@ test("[known defect pin] narrow-screen View-mode touch is intercepted by a node 
       type: "pointerup",
       pointerType: "touch",
       isTrusted: true,
-      targetTag: "DIV",
+      targetTag: "CANVAS",
     })
   );
   const afterTap = await waitForStableObserver(page);
-  expect(afterTap.selectedPersonIds).toEqual([]);
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(afterTap.selectedPersonIds).toEqual([103]);
+  await expect(page.getByRole("dialog")).toContainText("Cora East");
 });
 
-test("[known defect pin] Move-mode touch on a projected node leaves it unselected", async ({
-  page,
-}) => {
+test("Move-mode touch on a projected node selects it through its label", async ({ page }) => {
   await importFamily(page);
   await page.getByRole("button", { name: "Move" }).tap();
   await expect(page.getByRole("button", { name: "View" })).toBeVisible();
 
   const { hitTarget, events } = await tapVisibleNodeWithProbe(page, 103);
-  // Diagnostic pin for https://github.com/bitsforthought/Wilnaatahl/issues/117.
-  expect(hitTarget.tagName).toBe("DIV");
-  expect(hitTarget.text).toContain("Cora East");
+  expect(hitTarget.tagName).toBe("CANVAS");
+  expect(hitTarget.pointerEvents).toBe("auto");
   expect(events).toContainEqual(
     expect.objectContaining({
       type: "pointerdown",
       pointerType: "touch",
       isTrusted: true,
-      targetTag: "DIV",
+      targetTag: "CANVAS",
     })
   );
   const afterTap = await waitForStableObserver(page);
-  expect(afterTap.selectedPersonIds).toEqual([]);
+  expect(afterTap.selectedPersonIds).toEqual([103]);
 });
 
 test("one-finger background drag rotates the camera without moving nodes", async ({ page }) => {

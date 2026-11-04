@@ -82,9 +82,7 @@ test("View and Move controls clear selection and expose mode-specific history co
   expect((await waitForStableObserver(page)).selectedPersonIds).toEqual([]);
 });
 
-test("[known defect pin] Move-mode projected clicks are intercepted and leave multi-selection empty", async ({
-  page,
-}) => {
+test("Move-mode projected clicks select multiple nodes through their labels", async ({ page }) => {
   await page.goto("/");
   await importFixture(page, familyFixture);
   await clickNode(page, 101);
@@ -104,18 +102,13 @@ test("[known defect pin] Move-mode projected clicks are intercepted and leave mu
     const element = document.elementFromPoint(x, y);
     return element?.tagName;
   }, projectedNode.cssPosition);
-  // Diagnostic pin for https://github.com/bitsforthought/Wilnaatahl/issues/117.
-  expect(hitTarget).not.toBe("CANVAS");
+  expect(hitTarget).toBe("CANVAS");
   await clickNode(page, 102);
   await clickNode(page, 103);
-  // Diagnostic pin for https://github.com/bitsforthought/Wilnaatahl/issues/117;
-  // it records observed behaviour, not the intended UI contract.
-  expect((await waitForStableObserver(page)).selectedPersonIds).toEqual([]);
+  expect((await waitForStableObserver(page)).selectedPersonIds).toEqual([102, 103]);
 });
 
-test("[known defect pin] selected-node drag and undo remain blocked by empty projected selection", async ({
-  page,
-}) => {
+test("selected-node drag changes logical position and undo restores it", async ({ page }) => {
   await page.goto("/");
   await importFixture(page, familyFixture);
   await page.getByRole("button", { name: "Move" }).click();
@@ -127,9 +120,7 @@ test("[known defect pin] selected-node drag and undo remain blocked by empty pro
   const node = before.nodes.find((candidate) => candidate.personId === 102);
   if (!node) throw new Error("Projected fixture node was not rendered.");
   await clickNode(page, 102);
-  // Until https://github.com/bitsforthought/Wilnaatahl/issues/117 is fixed,
-  // successful dragging and redo invalidation remain untested.
-  expect((await readObserver(page)).selectedPersonIds).toEqual([]);
+  expect((await readObserver(page)).selectedPersonIds).toEqual([102]);
   await page.mouse.move(node.cssPosition.x, node.cssPosition.y);
   await page.mouse.down();
   await page.mouse.move(node.cssPosition.x + 40, node.cssPosition.y, { steps: 4 });
@@ -138,10 +129,20 @@ test("[known defect pin] selected-node drag and undo remain blocked by empty pro
   const after = await waitForFrameAfter(page, before);
   const beforeNode = before.nodes.find((candidate) => candidate.personId === 102);
   const afterNode = after.nodes.find((candidate) => candidate.personId === 102);
-  // Diagnostic pin for https://github.com/bitsforthought/Wilnaatahl/issues/117.
-  expect(after.selectedPersonIds).toEqual([]);
-  expect(afterNode?.logicalPosition).toEqual(beforeNode?.logicalPosition);
-  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+  if (!beforeNode || !afterNode) throw new Error("Dragged fixture node was not observed.");
+  expect(after.selectedPersonIds).toEqual([102]);
+  expect(afterNode.logicalPosition).not.toEqual(beforeNode.logicalPosition);
+  await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();
+
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect
+    .poll(
+      async () =>
+        (await readObserver(page)).nodes.find((candidate) => candidate.personId === 102)
+          ?.logicalPosition,
+      { timeout: 10_000, intervals: [100, 200, 500] }
+    )
+    .toEqual(beforeNode.logicalPosition);
 });
 
 test("background drag orbits the camera without changing logical node positions", async ({
