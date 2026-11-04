@@ -26,6 +26,66 @@ test("initial import renders every visible node label before interaction", async
   await expect(page.getByText("Cora's title")).toBeVisible();
 });
 
+test("node labels declare non-selectability and stay unselectable during gestures", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await importFixture(page, familyFixture);
+
+  const label = page.getByText("Ada's title");
+  await expect(label).toBeVisible();
+  // Pointer-transparent labels cannot produce DOM selection by gesture alone, so the computed
+  // style assertion distinguishes missing user-select from the existing pointer passthrough.
+  const labelStyles = await label.evaluate((element) => {
+    const styles = getComputedStyle(element);
+    return {
+      color: styles.color,
+      textAlign: styles.textAlign,
+      whiteSpace: styles.whiteSpace,
+      pointerEvents: styles.pointerEvents,
+      userSelect: styles.userSelect,
+      webkitUserSelect: styles.webkitUserSelect,
+    };
+  });
+  expect(labelStyles).toEqual({
+    color: "rgb(255, 255, 255)",
+    textAlign: "center",
+    whiteSpace: "pre-line",
+    pointerEvents: "none",
+    userSelect: "none",
+    webkitUserSelect: "none",
+  });
+  const labelLayout = await label.evaluate((element) => {
+    const parent = element.parentElement;
+    if (!parent) throw new Error("Node label did not have a containing block.");
+    const styles = getComputedStyle(element);
+    const parentStyles = getComputedStyle(parent);
+    return {
+      width: Number.parseFloat(styles.width),
+      marginLeft: Number.parseFloat(styles.marginLeft),
+      parentWidth: Number.parseFloat(parentStyles.width),
+    };
+  });
+  expect(labelLayout.width / labelLayout.parentWidth).toBeCloseTo(1.6, 2);
+  expect(labelLayout.marginLeft / labelLayout.parentWidth).toBeCloseTo(-0.3, 2);
+
+  const labelBox = await label.boundingBox();
+  if (!labelBox) throw new Error("Node label did not have a layout box.");
+  const labelPoint = {
+    x: labelBox.x + labelBox.width / 2,
+    y: labelBox.y + labelBox.height / 2,
+  };
+
+  await page.mouse.click(labelPoint.x, labelPoint.y, { clickCount: 3 });
+  expect(await page.evaluate(() => window.getSelection()?.toString() ?? "")).toBe("");
+
+  await page.mouse.move(labelBox.x + 2, labelPoint.y);
+  await page.mouse.down();
+  await page.mouse.move(labelBox.x + labelBox.width - 2, labelPoint.y, { steps: 4 });
+  await page.mouse.up();
+  expect(await page.evaluate(() => window.getSelection()?.toString() ?? "")).toBe("");
+});
+
 test("view-mode projected node input opens and dismisses the matching detail card", async ({
   page,
 }) => {
