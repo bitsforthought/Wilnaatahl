@@ -211,4 +211,29 @@ describe("calculateLabelPosition", () => {
     expect(zoomedPlacement[1]).toBeCloseTo(458);
     expect(readScale(labelElement)).toBeCloseTo(1.5);
   });
+
+  it("uses the same-frame cached placement when the occlusion pass has projected the node", () => {
+    const mesh = new Mesh(new BoxGeometry(2, 2, 2), new MeshBasicMaterial());
+    const camera = new PerspectiveCamera(
+      verticalFieldOfViewDegrees,
+      aspectRatio,
+      cameraNear,
+      cameraFar
+    );
+    const labelElement = { style: { transform: "", visibility: "hidden" } } as HTMLElement;
+
+    const position = calculateLabelPosition(
+      mesh,
+      camera,
+      { width: canvasWidth, height: canvasHeight },
+      labelElement,
+      {
+        readPlacement: () => ({ x: 123, y: 456, scale: 0.25 }),
+      }
+    );
+
+    expect(position).toEqual([123, 456]);
+    expect(labelElement.style.transform).toBe("translateX(-50%) scale(0.25)");
+    expect(labelElement.style.visibility).toBe("hidden");
+  });
 });

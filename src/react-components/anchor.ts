@@ -99,6 +99,37 @@ export function projectNodeBounds(
   return readProjectedNodeBounds(object, camera, canvasWidth, canvasHeight);
 }
 
+function readRawViewSpaceDepth(object: Object3D, camera: Camera): number {
+  const viewSpaceCenter = new Vector3();
+  object.getWorldPosition(viewSpaceCenter);
+  viewSpaceCenter.applyMatrix4(camera.matrixWorldInverse);
+  // Front-facing points have negative camera-space z; positive z is behind the camera.
+  return -viewSpaceCenter.z;
+}
+
+export function readViewSpaceDepth(object: Object3D, camera: Camera): number {
+  const viewSpaceDepth = readRawViewSpaceDepth(object, camera);
+  return viewSpaceDepth > 0 ? viewSpaceDepth : Number.POSITIVE_INFINITY;
+}
+
+export function readPixelsPerWorldUnit(
+  object: Object3D,
+  camera: Camera,
+  canvasHeight: number
+): number {
+  const signedViewDepth = readRawViewSpaceDepth(object, camera);
+  // Clamp at or behind the camera plane to a positive epsilon.
+  const viewSpaceDepth = Math.max(signedViewDepth, Number.EPSILON);
+  // The projection maps normalized device coordinates (NDC) across a full span.
+  // Three.js stores Matrix4 elements in column-major order; zero-based index 5
+  // is the row 1/column 1 vertical perspective scale (zoom / tan(fov / 2)).
+  // See https://threejs.org/docs/#api/en/cameras/PerspectiveCamera.
+  const verticalPerspectiveScaleIndex = 5;
+  const verticalPerspectiveScale = camera.projectionMatrix.elements[verticalPerspectiveScaleIndex];
+  const fullNdcSpan = 2;
+  return (canvasHeight * verticalPerspectiveScale) / (fullNdcSpan * viewSpaceDepth);
+}
+
 /**
  * Projects every corner of an object's world-space bounding box into canvas
  * pixels. Taking extrema after projection keeps the screen-space bounds correct

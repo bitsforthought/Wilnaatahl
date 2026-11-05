@@ -71,7 +71,11 @@ export async function waitForStableObserver(
           latest.nodes.length > 0 &&
           (!requireGeometry ||
             latest.nodes.every(
-              (node) => node.projectedBounds !== null && node.labelGeometry !== null
+              (node) =>
+                node.projectedBounds !== null &&
+                (node.labelState === "visible" ||
+                  node.labelState === "occluded" ||
+                  node.labelState === "unlabeled")
             )) &&
           (!requireRenderedState || sameRenderedState)
             ? stableSamples + 1

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { Html } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import { Entity } from "koota";
@@ -8,6 +8,7 @@ import { eventActions, NodeLabel, Size, PersonRef, useMeshRef } from "../ecs";
 import { nodeLabelText } from "../i18n/format";
 import { useLocale } from "../i18n/hooks";
 import { calculateLabelPosition, type HtmlSize } from "./labelPlacement";
+import { renderedLabelRegistry, replaceLabelRegistration } from "./labelOcclusion";
 
 type HtmlCalculatePosition = (object: Object3D, camera: Camera, htmlSize: HtmlSize) => number[];
 
@@ -24,6 +25,7 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
   const hasConnectedEventTarget = useThree((state) => state.events.connected != null);
   const ref = useMeshRef(entity);
   const labelRef = useRef<HTMLDivElement>(null);
+  const unregisterLabel = useRef<(() => void) | undefined>(undefined);
 
   const { handleMeshClick } = useActions(eventActions);
   const calculatePosition = useCallback<HtmlCalculatePosition>(function calculatePosition(
@@ -31,7 +33,34 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
     camera,
     htmlSize
   ) {
-    return calculateLabelPosition(ref.current, camera, htmlSize, labelRef.current);
+    return calculateLabelPosition(
+      ref.current,
+      camera,
+      htmlSize,
+      labelRef.current,
+      renderedLabelRegistry
+    );
+  }, []);
+
+  const setLabelRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      labelRef.current = element;
+      unregisterLabel.current = replaceLabelRegistration(
+        unregisterLabel.current,
+        renderedLabelRegistry,
+        entity.id(),
+        ref.current,
+        element
+      );
+    },
+    [entity, ref]
+  );
+
+  useEffect(function disposeRenderedLabel() {
+    return () => {
+      unregisterLabel.current?.();
+      unregisterLabel.current = undefined;
+    };
   }, []);
 
   return (
@@ -58,7 +87,7 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
               className="node-label"
               data-person-id={person.Id}
               data-node-entity-id={entity.id()}
-              ref={labelRef}
+              ref={setLabelRef}
             >
               {label}
             </div>

@@ -15,11 +15,13 @@ import {
   type AppMode_$union,
 } from "../../../src/generated/Traits/ViewTraits";
 import { Person_get_Empty } from "../../../src/generated/Model";
+import { NodeLabelView } from "../../../src/generated/ViewModel/NodeContent";
 import {
   CurrentMode,
   DragInFlight,
   Hidden,
   MeshRef,
+  NodeLabel,
   PersonRef,
   Position,
   Selected,
@@ -31,6 +33,7 @@ const testCanvas = { left: 0, top: 0, width: 100, height: 100 };
 
 afterEach(() => {
   delete (globalThis as { document?: unknown }).document;
+  delete (globalThis as { getComputedStyle?: unknown }).getComputedStyle;
 });
 
 function createTestCamera(aspectRatio = 1): PerspectiveCamera {
@@ -88,9 +91,11 @@ function snapshotFor(frame: number, session: number): ObserverSnapshot {
         renderedPosition: { x: 1, y: 2, z: 3 },
         renderedQuaternion: { x: 0, y: 0, z: 0, w: 1 },
         renderedScale: { x: 1, y: 1, z: 1 },
+        viewSpaceDepth: 8,
         cssPosition: { x: 100, y: 80 },
         projectedBounds: null,
         labelGeometry: null,
+        labelState: "unlabeled",
       },
     ],
     camera: {
@@ -205,6 +210,7 @@ describe("E2E observer", () => {
         width: 40,
         height: 10,
       });
+      expect(snapshot.nodes[0]?.labelState).toBe("visible");
       const projectedBounds = snapshot.nodes[0]?.projectedBounds;
       expect(projectedBounds).not.toBeNull();
       expect(projectedBounds!.left).toBeLessThan(projectedBounds!.right);
@@ -235,6 +241,7 @@ describe("E2E observer", () => {
       });
       world.spawn(
         PersonRef(Person_get_Empty()),
+        NodeLabel(new NodeLabelView("Tinker", undefined, undefined, undefined, undefined)),
         Position({ x: 0, y: 0, z: 0 }),
         MeshRef(new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial()))
       );
@@ -247,6 +254,53 @@ describe("E2E observer", () => {
 
       expect(snapshot.nodes[0]?.projectedBounds).not.toBeNull();
       expect(snapshot.nodes[0]?.labelGeometry).toBeNull();
+      expect(snapshot.nodes[0]?.labelState).toBe("unmounted");
+    });
+  });
+
+  test("reports an unmeasured rendered label before its cached size is ready", () => {
+    withTestWorld((world, registerObserver) => {
+      const labelElement = {
+        dataset: { labelMeasured: "false" },
+        getBoundingClientRect: () => ({ left: 20, top: 30, width: 40, height: 10 }),
+      };
+      Object.defineProperty(globalThis, "document", {
+        configurable: true,
+        value: { querySelector: () => labelElement },
+      });
+      world.spawn(
+        PersonRef(Person_get_Empty()),
+        NodeLabel(new NodeLabelView("Tinker", undefined, undefined, undefined, undefined)),
+        Position({ x: 0, y: 0, z: 0 }),
+        MeshRef(new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial()))
+      );
+
+      expect(registerObserver().snapshot().nodes[0]?.labelState).toBe("unmeasured");
+    });
+  });
+
+  test("reports a measured label hidden by nearer geometry as occluded", () => {
+    withTestWorld((world, registerObserver) => {
+      const labelElement = {
+        dataset: { labelMeasured: "true" },
+        getBoundingClientRect: () => ({ left: 20, top: 30, width: 40, height: 10 }),
+      };
+      Object.defineProperty(globalThis, "document", {
+        configurable: true,
+        value: { querySelector: () => labelElement },
+      });
+      Object.defineProperty(globalThis, "getComputedStyle", {
+        configurable: true,
+        value: () => ({ visibility: "hidden" }),
+      });
+      world.spawn(
+        PersonRef(Person_get_Empty()),
+        NodeLabel(new NodeLabelView("Tinker", undefined, undefined, undefined, undefined)),
+        Position({ x: 0, y: 0, z: 0 }),
+        MeshRef(new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial()))
+      );
+
+      expect(registerObserver().snapshot().nodes[0]?.labelState).toBe("occluded");
     });
   });
 
