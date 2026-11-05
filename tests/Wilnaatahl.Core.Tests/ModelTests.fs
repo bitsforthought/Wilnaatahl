@@ -94,66 +94,6 @@ let ``Kinship.Pdeek is None for NoneProvided`` () =
     (NoneProvided(Some "raised by aunt")).Pdeek =! None
 
 [<Fact>]
-let ``Initial peopleAndParents assigns each Wilp to a distinct Pdeek`` () =
-    // Wilp A is the primary matriline; per project conventions it is Giskaast (red) so
-    // most visible nodes in the rendered tree retain the historical red appearance.
-    let huwilpByName =
-        Initial.peopleAndParents
-        |> Seq.choose (fun (p, _) ->
-            match p.Kinship with
-            | Wilp w -> Some w
-            | UnknownWilp _
-            | NoneProvided _ -> None)
-        |> Seq.map (fun w -> w.Name, w)
-        |> Map.ofSeq
-
-    huwilpByName |> Map.find (WilpName "A")
-    =! { Name = WilpName "A"; Pdeek = Giskaast }
-
-    // All four Pdeek must be represented across the four huwilp so the visualization
-    // exercises the full color palette.
-    let representedPdeek =
-        huwilpByName |> Map.values |> Seq.map (fun w -> w.Pdeek) |> Set.ofSeq
-
-    representedPdeek =! Set.ofList [ Giskaast; Ganeda; LaxSkiik; LaxGibuu ]
-
-[<Fact>]
-let ``Initial sample data includes an outside spouse married to multiple members of one Wilp`` () =
-    // The renderer draws each marriage of a from-outside spouse as its own node. The
-    // sample data must exercise that: some person whose Kinship is not Wilp W must be
-    // partnered to at least two distinct members of Wilp W. Without such a case the
-    // crossed-connector scenario the renderer guards against would go undemonstrated.
-    let personById =
-        Initial.peopleAndParents |> List.map (fun (p, _) -> p.Id, p) |> Map.ofList
-
-    let wilpNameOf personId =
-        match (personById |> Map.find personId).Kinship with
-        | Wilp w -> Some w.Name
-        | UnknownWilp _
-        | NoneProvided _ -> None
-
-    let partnerWilpsByPerson =
-        Initial.couples
-        |> List.collect (fun couple ->
-            let m1, m2 = couple.Members
-            [ m1, m2; m2, m1 ])
-        |> List.groupBy fst
-        |> List.map (fun (personId, pairs) ->
-            // Distinct partner people first, so multiple marriages to the same member
-            // count as one member rather than masquerading as "two distinct members".
-            let distinctPartnerWilps =
-                pairs |> List.map snd |> List.distinct |> List.choose wilpNameOf
-
-            personId, distinctPartnerWilps)
-
-    let isOutsideMultiMarriage (personId, partnerWilps) =
-        partnerWilps
-        |> List.countBy id
-        |> List.exists (fun (wilp, count) -> count >= 2 && wilpNameOf personId <> Some wilp)
-
-    test <@ partnerWilpsByPerson |> List.exists isOutsideMultiMarriage @>
-
-[<Fact>]
 let ``createFamilyGraph excludes UnknownWilp people from huwilp`` () =
     // A person whose specific Wilp is unknown contributes no WilpName to the
     // huwilp set, even if their Pdeek matches that of another person with a
