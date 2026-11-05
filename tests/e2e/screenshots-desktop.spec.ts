@@ -5,6 +5,16 @@ import { importFixture } from "./test-utils";
 const familyFixture = "tests/e2e/fixtures/desktop-family.json";
 const warningFixture = "tests/e2e/fixtures/desktop-warning.json";
 
+test("startup family tree", async ({ page }) => {
+  await page.goto("/");
+  await waitForStableObserver(page);
+
+  await expect(page).toHaveScreenshot("desktop-startup-family.png", {
+    animations: "disabled",
+    caret: "hide",
+  });
+});
+
 test("selected person detail card", async ({ page }) => {
   await page.goto("/");
   await importFixture(page, familyFixture);
