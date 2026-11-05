@@ -1,6 +1,6 @@
 import { createWorld, type World } from "koota";
-import { Group, Mesh, PerspectiveCamera, Vector3 } from "three";
-import { describe, expect, test } from "vitest";
+import { BoxGeometry, Group, Mesh, MeshBasicMaterial, PerspectiveCamera, Vector3 } from "three";
+import { afterEach, describe, expect, test } from "vitest";
 import {
   createObserverSession,
   projectWorldToCss,
@@ -28,6 +28,10 @@ import {
 type TestObserverOverrides = Partial<Omit<E2EObserverOptions, "world">>;
 
 const testCanvas = { left: 0, top: 0, width: 100, height: 100 };
+
+afterEach(() => {
+  delete (globalThis as { document?: unknown }).document;
+});
 
 function createTestCamera(aspectRatio = 1): PerspectiveCamera {
   const verticalFieldOfViewDegrees = 50;
@@ -85,6 +89,8 @@ function snapshotFor(frame: number, session: number): ObserverSnapshot {
         renderedQuaternion: { x: 0, y: 0, z: 0, w: 1 },
         renderedScale: { x: 1, y: 1, z: 1 },
         cssPosition: { x: 100, y: 80 },
+        projectedBounds: null,
+        labelGeometry: null,
       },
     ],
     camera: {
@@ -156,12 +162,25 @@ describe("E2E observer", () => {
 
   test("registers only serializable current-world data and removes the public observer on dispose", () => {
     withTestWorld((world, registerObserver) => {
+      const labelElement = {
+        getBoundingClientRect: () => ({ left: 20, top: 30, width: 40, height: 10 }),
+      };
+      let queriedSelector = "";
+      Object.defineProperty(globalThis, "document", {
+        configurable: true,
+        value: {
+          querySelector: (selector: string) => {
+            queriedSelector = selector;
+            return labelElement;
+          },
+        },
+      });
       const camera = createTestCamera();
       camera.position.set(0, 0, 8);
       world.add(CurrentMode);
       world.set(CurrentMode, AppMode_Viewing() as AppMode_$union);
-      const mesh = new Mesh();
-      world.spawn(
+      const mesh = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial());
+      const entity = world.spawn(
         PersonRef(Person_get_Empty()),
         Position({ x: 1, y: 2, z: 3 }),
         MeshRef(mesh),
@@ -180,6 +199,17 @@ describe("E2E observer", () => {
       expect(snapshot.nodes[0]?.renderedQuaternion).toEqual({ x: 0, y: 0, z: 0, w: 1 });
       expect(snapshot.nodes[0]?.cssPosition.x).toBeGreaterThan(4);
       expect(snapshot.nodes[0]?.cssPosition.y).toBeGreaterThan(5);
+      expect(snapshot.nodes[0]?.labelGeometry).toEqual({
+        left: 20,
+        top: 30,
+        width: 40,
+        height: 10,
+      });
+      const projectedBounds = snapshot.nodes[0]?.projectedBounds;
+      expect(projectedBounds).not.toBeNull();
+      expect(projectedBounds!.left).toBeLessThan(projectedBounds!.right);
+      expect(projectedBounds!.top).toBeLessThan(projectedBounds!.bottom);
+      expect(queriedSelector).toBe(`.node-label[data-node-entity-id="${entity.id()}"]`);
       expect(snapshot.camera.target).toEqual({ x: 1, y: 2, z: 3 });
       expect(snapshot.canvas).toEqual({ left: 4, top: 5, width: 200, height: 100 });
       expect(JSON.parse(JSON.stringify(snapshot))).toEqual(snapshot);
@@ -197,9 +227,82 @@ describe("E2E observer", () => {
     });
   });
 
+  test("omits label geometry when no matching label is rendered", () => {
+    withTestWorld((world, registerObserver) => {
+      Object.defineProperty(globalThis, "document", {
+        configurable: true,
+        value: { querySelector: () => null },
+      });
+      world.spawn(
+        PersonRef(Person_get_Empty()),
+        Position({ x: 0, y: 0, z: 0 }),
+        MeshRef(new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial()))
+      );
+      const camera = createTestCamera();
+      camera.position.z = 8;
+      camera.updateProjectionMatrix();
+      camera.updateMatrixWorld();
+
+      const snapshot = registerObserver({ camera }).snapshot();
+
+      expect(snapshot.nodes[0]?.projectedBounds).not.toBeNull();
+      expect(snapshot.nodes[0]?.labelGeometry).toBeNull();
+    });
+  });
+
+  test("reads distinct label rectangles for entities sharing a person id", () => {
+    withTestWorld((world, registerObserver) => {
+      const firstEntity = world.spawn(
+        PersonRef(Person_get_Empty()),
+        Position({ x: -1, y: 0, z: 0 }),
+        MeshRef(new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial()))
+      );
+      const secondEntity = world.spawn(
+        PersonRef(Person_get_Empty()),
+        Position({ x: 1, y: 0, z: 0 }),
+        MeshRef(new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial()))
+      );
+      const labelRects = new Map([
+        [
+          `.node-label[data-node-entity-id="${firstEntity.id()}"]`,
+          { getBoundingClientRect: () => ({ left: 10, top: 20, width: 30, height: 8 }) },
+        ],
+        [
+          `.node-label[data-node-entity-id="${secondEntity.id()}"]`,
+          { getBoundingClientRect: () => ({ left: 40, top: 50, width: 50, height: 12 }) },
+        ],
+      ]);
+      const queriedSelectors: string[] = [];
+      Object.defineProperty(globalThis, "document", {
+        configurable: true,
+        value: {
+          querySelector: (selector: string) => {
+            queriedSelectors.push(selector);
+            return labelRects.get(selector) ?? null;
+          },
+        },
+      });
+
+      const snapshot = registerObserver().snapshot();
+
+      expect(queriedSelectors).toEqual([
+        `.node-label[data-node-entity-id="${firstEntity.id()}"]`,
+        `.node-label[data-node-entity-id="${secondEntity.id()}"]`,
+      ]);
+      expect(snapshot.nodes.map((node) => node.labelGeometry)).toEqual([
+        { left: 10, top: 20, width: 30, height: 8 },
+        { left: 40, top: 50, width: 50, height: 12 },
+      ]);
+    });
+  });
+
   test("omits people whose render data is incomplete", () => {
     withTestWorld((world, registerObserver) => {
-      world.spawn(PersonRef(Person_get_Empty()));
+      world.spawn(PersonRef(Person_get_Empty()), Position({ x: 0, y: 0, z: 0 }));
+      world.spawn(
+        PersonRef(Person_get_Empty()),
+        MeshRef(new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial()))
+      );
       const session = registerObserver();
 
       expect(session.snapshot().nodes).toEqual([]);
@@ -223,7 +326,7 @@ describe("E2E observer", () => {
       world.spawn(
         PersonRef(Person_get_Empty()),
         Position({ x: 0, y: 0, z: 0 }),
-        MeshRef(new Mesh()),
+        MeshRef(new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial())),
         Hidden
       );
 
@@ -235,6 +338,7 @@ describe("E2E observer", () => {
       expect(snapshot.nodes).toHaveLength(1);
       expect(snapshot.nodes[0]?.renderedPosition).toEqual({ x: 3, y: 2, z: 3 });
       expect(snapshot.nodes[0]?.renderedScale).toEqual({ x: 2, y: 2, z: 2 });
+      expect(snapshot.nodes[0]?.projectedBounds).toBeNull();
     });
   });
 

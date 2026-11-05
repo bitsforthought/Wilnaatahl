@@ -3,7 +3,6 @@ import type { ObserverSnapshot } from "../../src/testing/observer";
 
 const observerWaitTimeoutMs = 5_000;
 const observerPollIntervalsMs = [50, 100, 200];
-
 export async function readObserver(page: Page): Promise<ObserverSnapshot> {
   return page.evaluate(() => {
     const observer = globalThis.__WILNAATAHL_E2E_OBSERVER__;
@@ -12,7 +11,12 @@ export async function readObserver(page: Page): Promise<ObserverSnapshot> {
   });
 }
 
-export async function waitForStableObserver(page: Page): Promise<ObserverSnapshot> {
+export async function waitForStableObserver(
+  page: Page,
+  options: { requireRenderedState?: boolean; requireGeometry?: boolean } = {}
+): Promise<ObserverSnapshot> {
+  const requireRenderedState = options.requireRenderedState ?? true;
+  const requireGeometry = options.requireGeometry ?? false;
   await expect
     .poll(() => page.evaluate(() => globalThis.__WILNAATAHL_E2E_OBSERVER__ !== undefined), {
       timeout: observerWaitTimeoutMs,
@@ -55,13 +59,21 @@ export async function waitForStableObserver(page: Page): Promise<ObserverSnapsho
         if (latest.frame === previous.frame) return stableSamples;
         const sameRenderedState =
           JSON.stringify(latest.nodes) === JSON.stringify(previous.nodes) &&
-          JSON.stringify(latest.camera) === JSON.stringify(previous.camera);
+          JSON.stringify(latest.camera) === JSON.stringify(previous.camera) &&
+          latest.mode === previous.mode &&
+          latest.dragging === previous.dragging &&
+          JSON.stringify(latest.selectedPersonIds) === JSON.stringify(previous.selectedPersonIds) &&
+          JSON.stringify(latest.canvas) === JSON.stringify(previous.canvas);
         stableSamples =
           latest.frame > previous.frame &&
           !latest.dragging &&
           latest.mode !== "unknown" &&
           latest.nodes.length > 0 &&
-          sameRenderedState
+          (!requireGeometry ||
+            latest.nodes.every(
+              (node) => node.projectedBounds !== null && node.labelGeometry !== null
+            )) &&
+          (!requireRenderedState || sameRenderedState)
             ? stableSamples + 1
             : 0;
         previous = latest;

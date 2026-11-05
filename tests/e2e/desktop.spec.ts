@@ -1,18 +1,134 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { clickNode, readObserver, waitForFrameAfter, waitForStableObserver } from "./observer";
 import { importFixture } from "./test-utils";
+import type { ObserverSnapshot } from "../../src/testing/observer";
 
 const familyFixture = "tests/e2e/fixtures/desktop-family.json";
 const warningFixture = "tests/e2e/fixtures/desktop-warning.json";
 const invalidFixture = "tests/e2e/fixtures/desktop-invalid.json";
+
+declare global {
+  var __WILNAATAHL_LABEL_LIFECYCLE_PROBE__:
+    | {
+        stop(): {
+          remounted: boolean;
+          mountedVisibility: string | null;
+          firstVisible: LabelRect | null;
+          settled: LabelRect | null;
+        };
+      }
+    | undefined;
+}
+
+function expectLabelsBelowNodes(snapshot: ObserverSnapshot) {
+  const labelGapPixels = 8;
+  const geometryRoundingTolerancePixels = 1;
+  for (const node of snapshot.nodes) {
+    const bounds = node.projectedBounds;
+    const label = node.labelGeometry;
+    expect(bounds).not.toBeNull();
+    expect(label).not.toBeNull();
+    if (!bounds || !label) continue;
+
+    const canvas = snapshot.canvas;
+    const nodeBottom = canvas.top + bounds.bottom;
+    const nodeCenter = canvas.left + (bounds.left + bounds.right) / 2;
+    const labelCenter = label.left + label.width / 2;
+    const geometry = JSON.stringify({ personId: node.personId, bounds, label, nodeBottom });
+    expect(label.width, geometry).toBeGreaterThan(0);
+    expect(label.height, geometry).toBeGreaterThan(0);
+    expect(label.top - nodeBottom, geometry).toBeCloseTo(labelGapPixels, 0);
+    expect(Math.abs(labelCenter - nodeCenter), geometry).toBeLessThanOrEqual(
+      geometryRoundingTolerancePixels
+    );
+  }
+}
+
+type LabelRect = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
+function expectLabelRectsToMatch(actual: LabelRect, expected: LabelRect, description: string) {
+  const tolerancePixels = 1;
+  expect(Math.abs(actual.width - expected.width), description).toBeLessThanOrEqual(tolerancePixels);
+  expect(Math.abs(actual.height - expected.height), description).toBeLessThanOrEqual(
+    tolerancePixels
+  );
+  expect(Math.abs(actual.left - expected.left), description).toBeLessThanOrEqual(tolerancePixels);
+  expect(Math.abs(actual.top - expected.top), description).toBeLessThanOrEqual(tolerancePixels);
+}
+
+async function startLabelLifecycleProbe(page: Page, personId: number) {
+  await page.evaluate((id) => {
+    const selector = `.node-label[data-person-id="${id}"]`;
+    const initial = document.querySelector<HTMLElement>(selector);
+    if (!initial) throw new Error(`Could not find label for person ${id}.`);
+
+    const readRect = (element: HTMLElement): LabelRect => {
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+    };
+    let firstVisible: LabelRect | null = null;
+    let mountedVisibility: string | null = null;
+    let remounted = false;
+    let frame = 0;
+    const mutationObserver = new MutationObserver(() => {
+      const current = document.querySelector<HTMLElement>(selector);
+      if (current && current !== initial && mountedVisibility === null) {
+        mountedVisibility = getComputedStyle(current).visibility;
+      }
+    });
+    mutationObserver.observe(document.body, { childList: true, subtree: true });
+
+    const sample = () => {
+      const current = document.querySelector<HTMLElement>(selector);
+      if (current && current !== initial) {
+        remounted = true;
+        if (!firstVisible && getComputedStyle(current).visibility !== "hidden") {
+          firstVisible = readRect(current);
+        }
+      }
+      frame = requestAnimationFrame(sample);
+    };
+
+    frame = requestAnimationFrame(sample);
+    globalThis.__WILNAATAHL_LABEL_LIFECYCLE_PROBE__ = {
+      stop() {
+        cancelAnimationFrame(frame);
+        mutationObserver.disconnect();
+        const current = document.querySelector<HTMLElement>(selector);
+        return {
+          remounted,
+          mountedVisibility,
+          firstVisible,
+          settled: current ? readRect(current) : null,
+        };
+      },
+    };
+  }, personId);
+}
+
+async function readLabelLifecycleProbe(page: Page) {
+  return page.evaluate(() => {
+    const probe = globalThis.__WILNAATAHL_LABEL_LIFECYCLE_PROBE__;
+    if (!probe) throw new Error("Label lifecycle probe is not installed.");
+    const result = probe.stop();
+    delete globalThis.__WILNAATAHL_LABEL_LIFECYCLE_PROBE__;
+    return result;
+  });
+}
 
 test("initial import renders every visible node label before interaction", async ({ page }) => {
   await page.goto("/");
   await waitForStableObserver(page);
   await importFixture(page, familyFixture);
 
-  const snapshot = await readObserver(page);
+  const snapshot = await waitForStableObserver(page, { requireGeometry: true });
   expect(snapshot.nodes.map((node) => node.personId).sort()).toEqual([101, 102, 103]);
+  expectLabelsBelowNodes(snapshot);
   await expect(page.getByText("Ada's title")).toBeVisible();
   await expect(page.getByText("Ben's title")).toBeVisible();
   await expect(page.getByText("Cora's title")).toBeVisible();
@@ -24,6 +140,32 @@ test("initial import renders every visible node label before interaction", async
   await expect(page.getByText("Ada's title")).toBeVisible();
   await expect(page.getByText("Ben's title")).toBeVisible();
   await expect(page.getByText("Cora's title")).toBeVisible();
+  const afterDismiss = await waitForStableObserver(page, { requireGeometry: true });
+  expect(afterDismiss.camera).toEqual(snapshot.camera);
+  expect(afterDismiss.nodes).toEqual(snapshot.nodes);
+});
+
+test("orbited labels remain below their projected node bounds", async ({ page }) => {
+  await page.goto("/");
+  await importFixture(page, familyFixture);
+
+  const before = await waitForStableObserver(page);
+  const orbitStart = {
+    x: before.canvas.left + before.canvas.width / 2,
+    y: before.canvas.top + before.canvas.height / 2,
+  };
+  await page.mouse.move(orbitStart.x, orbitStart.y);
+  await page.mouse.down();
+  await page.mouse.move(orbitStart.x + 120, orbitStart.y + 35, { steps: 6 });
+  await page.mouse.up();
+
+  const stable = await waitForStableObserver(page, {
+    requireRenderedState: false,
+    requireGeometry: true,
+  });
+  const after = await waitForFrameAfter(page, stable);
+  expect(after.camera.position).not.toEqual(before.camera.position);
+  expectLabelsBelowNodes(after);
 });
 
 test("node labels declare non-selectability and stay unselectable during gestures", async ({
@@ -55,19 +197,6 @@ test("node labels declare non-selectability and stay unselectable during gesture
     userSelect: "none",
     webkitUserSelect: "none",
   });
-  const labelLayout = await label.evaluate((element) => {
-    const parent = element.parentElement;
-    if (!parent) throw new Error("Node label did not have a containing block.");
-    const styles = getComputedStyle(element);
-    const parentStyles = getComputedStyle(parent);
-    return {
-      width: Number.parseFloat(styles.width),
-      marginLeft: Number.parseFloat(styles.marginLeft),
-      parentWidth: Number.parseFloat(parentStyles.width),
-    };
-  });
-  expect(labelLayout.width / labelLayout.parentWidth).toBeCloseTo(1.6, 2);
-  expect(labelLayout.marginLeft / labelLayout.parentWidth).toBeCloseTo(-0.3, 2);
 
   const labelBox = await label.boundingBox();
   if (!labelBox) throw new Error("Node label did not have a layout box.");
@@ -166,6 +295,64 @@ test("Move-mode projected clicks select multiple nodes through their labels", as
   await clickNode(page, 102);
   await clickNode(page, 103);
   expect((await waitForStableObserver(page)).selectedPersonIds).toEqual([102, 103]);
+});
+
+test("Move-mode label remounts preserve first-visible and settled geometry", async ({ page }) => {
+  await page.goto("/");
+  await importFixture(page, familyFixture);
+  await page.getByRole("button", { name: "Move" }).click();
+  await expect(page.getByRole("button", { name: "View" })).toBeVisible();
+
+  const before = await waitForStableObserver(page, { requireGeometry: true });
+  const beforeNode = before.nodes.find((node) => node.personId === 102);
+  if (!beforeNode?.labelGeometry)
+    throw new Error("Projected label was not rendered before selection.");
+
+  await startLabelLifecycleProbe(page, 102);
+  await clickNode(page, 102);
+  const afterSelect = await waitForStableObserver(page, { requireGeometry: true });
+  const selectedNode = afterSelect.nodes.find((node) => node.personId === 102);
+  const selectedProbe = await readLabelLifecycleProbe(page);
+  if (!selectedNode?.labelGeometry || !selectedProbe.firstVisible || !selectedProbe.settled) {
+    throw new Error("Selection did not produce complete label lifecycle evidence.");
+  }
+  expect(afterSelect.selectedPersonIds).toEqual([102]);
+  expect(selectedProbe.remounted).toBe(true);
+  expect(selectedProbe.mountedVisibility).toBe("hidden");
+  expectLabelRectsToMatch(selectedProbe.firstVisible, beforeNode.labelGeometry, "first selection");
+  expectLabelRectsToMatch(selectedProbe.settled, beforeNode.labelGeometry, "settled selection");
+  expect(afterSelect.camera).toEqual(before.camera);
+  expect(selectedNode.logicalPosition).toEqual(beforeNode.logicalPosition);
+  expectLabelRectsToMatch(
+    selectedNode.labelGeometry,
+    beforeNode.labelGeometry,
+    "observer selection"
+  );
+
+  await startLabelLifecycleProbe(page, 102);
+  await clickNode(page, 102);
+  const afterDeselect = await waitForStableObserver(page, { requireGeometry: true });
+  const deselectedNode = afterDeselect.nodes.find((node) => node.personId === 102);
+  const deselectedProbe = await readLabelLifecycleProbe(page);
+  if (!deselectedNode?.labelGeometry || !deselectedProbe.firstVisible || !deselectedProbe.settled) {
+    throw new Error("Deselection did not produce complete label lifecycle evidence.");
+  }
+  expect(afterDeselect.selectedPersonIds).toEqual([]);
+  expect(deselectedProbe.remounted).toBe(true);
+  expect(deselectedProbe.mountedVisibility).toBe("hidden");
+  expectLabelRectsToMatch(
+    deselectedProbe.firstVisible,
+    beforeNode.labelGeometry,
+    "first deselection"
+  );
+  expectLabelRectsToMatch(deselectedProbe.settled, beforeNode.labelGeometry, "settled deselection");
+  expect(afterDeselect.camera).toEqual(before.camera);
+  expect(deselectedNode.logicalPosition).toEqual(beforeNode.logicalPosition);
+  expectLabelRectsToMatch(
+    deselectedNode.labelGeometry,
+    beforeNode.labelGeometry,
+    "observer deselection"
+  );
 });
 
 test("selected-node drag changes logical position and undo restores it", async ({ page }) => {

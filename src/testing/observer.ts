@@ -10,6 +10,7 @@ import {
   Position,
   Selected,
 } from "../ecs/traits";
+import { projectNodeBounds } from "../react-components/anchor";
 
 export interface CssPoint {
   x: number;
@@ -29,6 +30,18 @@ export interface ObserverSnapshot {
     renderedQuaternion: { x: number; y: number; z: number; w: number };
     renderedScale: { x: number; y: number; z: number };
     cssPosition: CssPoint;
+    projectedBounds: {
+      left: number;
+      right: number;
+      top: number;
+      bottom: number;
+    } | null;
+    labelGeometry: {
+      left: number;
+      top: number;
+      width: number;
+      height: number;
+    } | null;
   }>;
   camera: {
     position: { x: number; y: number; z: number };
@@ -131,6 +144,15 @@ function readNode(
   const renderedPosition = mesh.getWorldPosition(new Vector3());
   const renderedQuaternion = mesh.getWorldQuaternion(new Quaternion());
   const renderedScale = mesh.getWorldScale(new Vector3());
+  const rawProjectedBounds = projectNodeBounds(mesh, camera, canvas.width, canvas.height);
+  const projectedBounds = Object.values(rawProjectedBounds).every(Number.isFinite)
+    ? rawProjectedBounds
+    : null;
+  const labelElement =
+    typeof document === "undefined"
+      ? undefined
+      : document.querySelector<HTMLElement>(`.node-label[data-node-entity-id="${entity.id()}"]`);
+  const labelRect = labelElement?.getBoundingClientRect();
 
   return {
     personId,
@@ -144,6 +166,15 @@ function readNode(
     },
     renderedScale: copyVector(renderedScale),
     cssPosition: projectWorldToCss(renderedPosition, camera, canvas),
+    projectedBounds,
+    labelGeometry: labelRect
+      ? {
+          left: labelRect.left,
+          top: labelRect.top,
+          width: labelRect.width,
+          height: labelRect.height,
+        }
+      : null,
   };
 }
 
