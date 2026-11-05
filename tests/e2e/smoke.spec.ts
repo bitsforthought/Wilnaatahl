@@ -5,7 +5,7 @@ test("boots the sample visualization with WebGL and rendered labels", async ({ p
 
   const canvas = page.locator("canvas");
   await expect(canvas).toBeVisible();
-  await expect(page.getByText("The Mayor")).toBeVisible();
+  await expect(page.getByText("Ts'iits'", { exact: true })).toBeVisible();
 
   const rendering = await canvas.evaluate((element) => {
     if (!(element instanceof HTMLCanvasElement)) return null;
