@@ -5,9 +5,9 @@ import {
 } from "../generated/ViewModel/LabelPlacement";
 import { projectNodeBounds } from "./anchor";
 
-type HtmlSize = { width: number; height: number };
+export type HtmlSize = { width: number; height: number };
 
-export function projectLabelPlacement(
+function projectLabelPlacement(
   object: Object3D,
   camera: Camera,
   canvasWidth: number,
@@ -31,23 +31,37 @@ export function calculateLabelPosition(
 
   const placement = projectLabelPlacement(mesh, camera, size.width, size.height);
   if (labelElement) {
+    // Translate by half the label width to centre it on the anchor; the top-centre
+    // origin keeps that anchor fixed while the label scales.
     labelElement.style.transform = `translateX(-50%) scale(${placement.Scale})`;
     labelElement.style.visibility = "visible";
   }
   return [placement.X, placement.Y];
 }
 
-const viewSpaceCenter = new Vector3();
 function readPixelsPerWorldUnit(object: Object3D, camera: Camera, canvasHeight: number): number {
   if (camera instanceof OrthographicCamera) {
     return (canvasHeight * camera.zoom) / (camera.top - camera.bottom);
   }
 
   if (camera instanceof PerspectiveCamera) {
+    const viewSpaceCenter = new Vector3();
     object.getWorldPosition(viewSpaceCenter);
     viewSpaceCenter.applyMatrix4(camera.matrixWorldInverse);
-    const viewSpaceDepth = Math.max(-viewSpaceCenter.z, Number.EPSILON);
-    return (canvasHeight * camera.projectionMatrix.elements[5]) / (2 * viewSpaceDepth);
+    // Perspective scale is measured at signed view-space depth; clamp non-positive
+    // depth to epsilon to avoid division by zero while keeping behind-camera
+    // labels finite.
+    const signedViewDepth = -viewSpaceCenter.z;
+    const viewSpaceDepth = Math.max(signedViewDepth, Number.EPSILON);
+    // The projection maps normalized device coordinates (NDC) across a full span.
+    // Three.js stores Matrix4 elements in column-major order; zero-based index 5
+    // is the row 1/column 1 vertical perspective scale (zoom / tan(fov / 2)).
+    // See https://threejs.org/docs/#api/en/cameras/PerspectiveCamera.
+    const verticalPerspectiveScaleIndex = 5;
+    const verticalPerspectiveScale =
+      camera.projectionMatrix.elements[verticalPerspectiveScaleIndex];
+    const fullNdcSpan = 2;
+    return (canvasHeight * verticalPerspectiveScale) / (fullNdcSpan * viewSpaceDepth);
   }
 
   return 1;

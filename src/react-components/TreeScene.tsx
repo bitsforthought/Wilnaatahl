@@ -7,7 +7,7 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { DragInFlight, MeshRef, Selected, runSystems, useOverlayVisible } from "../ecs";
 import type { ObserverSession } from "../testing/observer";
 import { HuwilpGroup } from "./HuwilpGroup";
-import { projectAnchor, OverlayAnchor } from "./anchor";
+import { projectAnchor, type OverlayAnchor } from "./anchor";
 
 /**
  * Lives inside the Canvas so it can read the R3F camera and canvas size. When

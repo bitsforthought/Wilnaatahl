@@ -7,13 +7,9 @@ import type { Camera, Object3D } from "three";
 import { eventActions, NodeLabel, Size, PersonRef, useMeshRef } from "../ecs";
 import { nodeLabelText } from "../i18n/format";
 import { useLocale } from "../i18n/hooks";
-import { calculateLabelPosition } from "./labelPlacement";
+import { calculateLabelPosition, type HtmlSize } from "./labelPlacement";
 
-type HtmlCalculatePosition = (
-  object: Object3D,
-  camera: Camera,
-  htmlSize: { width: number; height: number }
-) => number[];
+type HtmlCalculatePosition = (object: Object3D, camera: Camera, htmlSize: HtmlSize) => number[];
 
 export function TreeNodeMesh({ entity }: { entity: Entity }) {
   // HuwilpGroup guarantees that the traits are present.
@@ -31,7 +27,7 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
 
   const { handleMeshClick } = useActions(eventActions);
   const calculatePosition = useCallback<HtmlCalculatePosition>(function calculatePosition(
-    _htmlObject,
+    _,
     camera,
     htmlSize
   ) {

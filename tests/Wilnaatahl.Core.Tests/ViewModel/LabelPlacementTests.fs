@@ -16,6 +16,7 @@ let ``place centres the label below the projected node`` () =
 let ``place keeps the label below a node whose bottom reaches the canvas edge`` () =
     let bounds = { Left = 0.0; Right = 80.0; Top = 560.0; Bottom = 600.0 }
     let pixelsPerWorldUnit = 1.5
+    let scaleRoundingTolerance = 1e-12
 
     let actual = LabelPlacement.place bounds pixelsPerWorldUnit
 
@@ -23,5 +24,5 @@ let ``place keeps the label below a node whose bottom reaches the canvas edge`` 
         <@
             actual.X = 40.0
             && actual.Y = 608.0
-            && abs (actual.Scale - 0.01875) < 0.000000000001
+            && abs (actual.Scale - 0.01875) < scaleRoundingTolerance
         @>

@@ -14,32 +14,30 @@ export type ProjectedNodeBounds = {
  * `specs/names-and-detail-overlay.md`.
  */
 export type OverlayAnchor = {
-  /** Screen x of the node's left edge. */
-  nodeLeft: number;
-  /** Screen x of the node's right edge. */
-  nodeRight: number;
-  /** Screen y of the node's top edge. */
-  nodeTop: number;
-  /** Screen y of the node's bottom edge. */
-  nodeBottom: number;
+  /** Projected screen-space bounds of the node in canvas pixels. */
+  bounds: ProjectedNodeBounds;
   /** Canvas width in pixels. */
   canvasWidth: number;
   /** Canvas height in pixels. */
   canvasHeight: number;
 };
 
-// Projection is synchronous, so these scratch values can be reused without retaining results.
-const projectedBoundsBox = new Box3();
-const projectedBoundsCorners = Array.from({ length: 8 }, () => new Vector3());
-const projectedScreenPoint = { x: 0, y: 0 };
-
 /**
- * Converts normalized device coordinates (NDC) to canvas pixels, inverting y
- * because NDC grows upward while screen coordinates grow downward.
+ * Converts a point in normalized device coordinates (NDC) to canvas pixels.
  *
- * See https://threejs.org/docs/#api/en/math/Vector3.project.
+ * `Vector3.project(camera)` returns NDC: the camera's view volume squashed into a
+ * cube spanning -1..1 on every axis, with the origin at the centre of the viewport.
+ * Screen pixels instead run 0..width from the left and 0..height from the *top*.
+ * So each axis is rescaled from -1..1 to 0..1 and multiplied by the canvas
+ * dimension. The y term is negated first because NDC's y grows upward while the
+ * screen's grows downward.
+ *
+ * See https://threejs.org/docs/#api/en/math/Vector3.project and
+ * https://learnopengl.com/Getting-started/Coordinate-Systems for background.
  */
 function ndcToScreen(v: Vector3, width: number, height: number): { x: number; y: number } {
+  // One over the -1..1 span, then a shift of half a unit to move the origin from the
+  // centre to the edge. Equal by coincidence: the NDC span is twice the unit range.
   const NDC_TO_UNIT_SCALE = 0.5;
   const NDC_TO_UNIT_OFFSET = 0.5;
 
@@ -57,34 +55,36 @@ function readProjectedNodeBounds(
 ): ProjectedNodeBounds {
   const UPDATE_PARENTS = true;
   const UPDATE_CHILDREN = false;
+  // Three.js names these positionally; the call reads as (updateParents, updateChildren).
   object.updateWorldMatrix(UPDATE_PARENTS, UPDATE_CHILDREN);
   camera.updateMatrixWorld();
-  projectedBoundsBox.setFromObject(object);
-
-  const min = projectedBoundsBox.min;
-  const max = projectedBoundsBox.max;
-  projectedBoundsCorners[0].set(min.x, min.y, min.z);
-  projectedBoundsCorners[1].set(min.x, min.y, max.z);
-  projectedBoundsCorners[2].set(min.x, max.y, min.z);
-  projectedBoundsCorners[3].set(min.x, max.y, max.z);
-  projectedBoundsCorners[4].set(max.x, min.y, min.z);
-  projectedBoundsCorners[5].set(max.x, min.y, max.z);
-  projectedBoundsCorners[6].set(max.x, max.y, min.z);
-  projectedBoundsCorners[7].set(max.x, max.y, max.z);
+  const box = new Box3().setFromObject(object);
+  // Project all eight corners of the node's world-space box and take the
+  // screen-space min/max, so the anchor's left/right/top/bottom are edge-correct
+  // regardless of how the camera was orbited before selection (projecting only
+  // box.min/box.max could swap or collapse the edges under rotation).
+  const corners = [
+    new Vector3(box.min.x, box.min.y, box.min.z),
+    new Vector3(box.min.x, box.min.y, box.max.z),
+    new Vector3(box.min.x, box.max.y, box.min.z),
+    new Vector3(box.min.x, box.max.y, box.max.z),
+    new Vector3(box.max.x, box.min.y, box.min.z),
+    new Vector3(box.max.x, box.min.y, box.max.z),
+    new Vector3(box.max.x, box.max.y, box.min.z),
+    new Vector3(box.max.x, box.max.y, box.max.z),
+  ];
 
   let minX = Infinity;
   let maxX = -Infinity;
   let minY = Infinity;
   let maxY = -Infinity;
 
-  for (const corner of projectedBoundsCorners) {
-    const projected = ndcToScreen(corner.project(camera), canvasWidth, canvasHeight);
-    projectedScreenPoint.x = projected.x;
-    projectedScreenPoint.y = projected.y;
-    minX = Math.min(minX, projectedScreenPoint.x);
-    maxX = Math.max(maxX, projectedScreenPoint.x);
-    minY = Math.min(minY, projectedScreenPoint.y);
-    maxY = Math.max(maxY, projectedScreenPoint.y);
+  for (const corner of corners) {
+    const screen = ndcToScreen(corner.project(camera), canvasWidth, canvasHeight);
+    minX = Math.min(minX, screen.x);
+    maxX = Math.max(maxX, screen.x);
+    minY = Math.min(minY, screen.y);
+    maxY = Math.max(maxY, screen.y);
   }
 
   return { left: minX, right: maxX, top: minY, bottom: maxY };
@@ -113,10 +113,7 @@ export function projectAnchor(
   const bounds = readProjectedNodeBounds(object, camera, canvasWidth, canvasHeight);
 
   return {
-    nodeLeft: bounds.left,
-    nodeRight: bounds.right,
-    nodeTop: bounds.top,
-    nodeBottom: bounds.bottom,
+    bounds,
     canvasWidth,
     canvasHeight,
   };

@@ -7,6 +7,13 @@ const familyFixture = "tests/e2e/fixtures/desktop-family.json";
 const warningFixture = "tests/e2e/fixtures/desktop-warning.json";
 const invalidFixture = "tests/e2e/fixtures/desktop-invalid.json";
 
+type LabelRect = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
 declare global {
   var __WILNAATAHL_LABEL_LIFECYCLE_PROBE__:
     | {
@@ -43,13 +50,6 @@ function expectLabelsBelowNodes(snapshot: ObserverSnapshot) {
     );
   }
 }
-
-type LabelRect = {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-};
 
 function expectLabelRectsToMatch(actual: LabelRect, expected: LabelRect, description: string) {
   const tolerancePixels = 1;
@@ -91,6 +91,7 @@ async function startLabelLifecycleProbe(page: Page, personId: number) {
           firstVisible = readRect(current);
         }
       }
+      // Schedule the next browser frame asynchronously so sampling cannot grow the call stack.
       frame = requestAnimationFrame(sample);
     };
 
