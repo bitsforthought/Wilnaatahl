@@ -1,16 +1,15 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React from "react";
 import { Html } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import { Entity } from "koota";
 import { useActions, useTrait } from "koota/react";
-import type { Camera, Object3D } from "three";
-import { eventActions, NodeLabel, Size, PersonRef, useMeshRef } from "../ecs";
+import { eventActions, NodeLabel, PersonRef, Size, useLabelRef, useMeshRef } from "../ecs";
 import { nodeLabelText } from "../i18n/format";
 import { useLocale } from "../i18n/hooks";
-import { calculateLabelPosition, type HtmlSize } from "./labelPlacement";
-import { renderedLabelRegistry, replaceLabelRegistration } from "./labelOcclusion";
 
-type HtmlCalculatePosition = (object: Object3D, camera: Camera, htmlSize: HtmlSize) => number[];
+function calculatePosition(): [number, number] {
+  return [0, 0];
+}
 
 export function TreeNodeMesh({ entity }: { entity: Entity }) {
   // HuwilpGroup guarantees that the traits are present.
@@ -24,44 +23,9 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
   const label = nodeLabelText(labelView, locale);
   const hasConnectedEventTarget = useThree((state) => state.events.connected != null);
   const ref = useMeshRef(entity);
-  const labelRef = useRef<HTMLDivElement>(null);
-  const unregisterLabel = useRef<(() => void) | undefined>(undefined);
+  const labelRef = useLabelRef(entity);
 
   const { handleMeshClick } = useActions(eventActions);
-  const calculatePosition = useCallback<HtmlCalculatePosition>(function calculatePosition(
-    _,
-    camera,
-    htmlSize
-  ) {
-    return calculateLabelPosition(
-      ref.current,
-      camera,
-      htmlSize,
-      labelRef.current,
-      renderedLabelRegistry
-    );
-  }, []);
-
-  const setLabelRef = useCallback(
-    (element: HTMLDivElement | null) => {
-      labelRef.current = element;
-      unregisterLabel.current = replaceLabelRegistration(
-        unregisterLabel.current,
-        renderedLabelRegistry,
-        entity.id(),
-        ref.current,
-        element
-      );
-    },
-    [entity, ref]
-  );
-
-  useEffect(function disposeRenderedLabel() {
-    return () => {
-      unregisterLabel.current?.();
-      unregisterLabel.current = undefined;
-    };
-  }, []);
 
   return (
     <>
@@ -87,7 +51,7 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
               className="node-label"
               data-person-id={person.Id}
               data-node-entity-id={entity.id()}
-              ref={setLabelRef}
+              ref={labelRef}
             >
               {label}
             </div>

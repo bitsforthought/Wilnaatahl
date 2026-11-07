@@ -1,26 +1,11 @@
 import React, { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import { Not } from "koota";
 import { useHas, useQuery, useWorld } from "koota/react";
 import { Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
-import {
-  DragInFlight,
-  Hidden,
-  MeshRef,
-  PersonRef,
-  Selected,
-  runSystems,
-  useOverlayVisible,
-} from "../ecs";
+import { DragInFlight, MeshRef, Selected, runSystems, useOverlayVisible } from "../ecs";
 import type { ObserverSession } from "../testing/observer";
-import {
-  hideLabelsWithFSharp,
-  readRenderedNode,
-  renderedLabelRegistry,
-  runLabelOcclusionPass,
-} from "./labelOcclusion";
 import { HuwilpGroup } from "./HuwilpGroup";
 import { projectAnchor, type OverlayAnchor } from "./anchor";
 
@@ -102,17 +87,12 @@ export default function TreeScene({
   }, [camera, gl, world]);
 
   useFrame(function runFrame(_state, delta) {
-    runSystems({ world, delta });
-    const renderedNodes = Array.from(world.query(PersonRef, MeshRef, Not(Hidden))).map(
-      readRenderedNode
-    );
-    runLabelOcclusionPass({
-      registry: renderedLabelRegistry,
-      nodes: renderedNodes,
+    runSystems({
+      world,
+      delta,
       camera,
       canvasWidth,
       canvasHeight,
-      hideLabels: hideLabelsWithFSharp,
     });
     observerRef.current?.advanceFrame();
   });

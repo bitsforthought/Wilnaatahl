@@ -93,10 +93,10 @@ export function DetailOverlay({
     const { width, height } = cardRef.current.getBoundingClientRect();
 
     const position = OverlayPlacement_place(
-      anchor.bounds.left,
-      anchor.bounds.right,
-      anchor.bounds.top,
-      anchor.bounds.bottom,
+      anchor.bounds.Left,
+      anchor.bounds.Right,
+      anchor.bounds.Top,
+      anchor.bounds.Bottom,
       anchor.canvasWidth,
       anchor.canvasHeight,
       width,

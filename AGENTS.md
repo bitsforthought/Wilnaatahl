@@ -118,10 +118,21 @@ This convention does not apply to Sim Algyax/Gitxsanimx text.
   LineMesh). The rendering system in `src/ecs/rendering.ts` synchronizes Koota
   trait changes to Three.js meshes.
 - **Styling:** All styles in `src/style.css` (global CSS with light/dark mode).
-- **F# is authoritative — but that is a principle, not a law.** All business logic
-  and data structures originate in F# and are generated to TypeScript via Fable.
-  React components must use the F#-generated view model and ECS systems for state
-  and actions — do not reimplement domain logic in TypeScript.
+- **Prefer F# by default, not only for domain logic.** Write renderer-independent
+  rules, computations, and shared data structures in F#, and consume them through
+  Fable. Use TypeScript when direct dependence on native DOM, Three.js, or other
+  browser-library types makes it the appropriate adapter; do not proxy those APIs
+  into Fable solely to avoid TypeScript. Such an adapter should collect native
+  measurements, call F# for computations over plain values, and apply the result,
+  rather than treating its TypeScript caller as a reason to put the rules there.
+  React components must use the view model and ECS systems for state and actions.
+- **Language choice and ECS ownership are independent boundaries.** Either F# or
+  TypeScript can implement an ECS system. Native references may live in
+  TypeScript-only traits on the entities they belong to, as `MeshRef` does;
+  requiring native types does not justify a parallel registry for shared state.
+  Borrow camera/viewport values as rendering inputs when no persistent ECS state
+  is needed. Keep temporary measurements and derived results local to the call,
+  not in extra traits or caches just to cross the language boundary.
 - **Keep `.tsx` presentation-only.** JSX files may contain hook, state, props, and
   style wiring, but not arithmetic, string composition, branching, or I/O
   sequences that encode domain or layout logic. Move domain/layout logic to F#

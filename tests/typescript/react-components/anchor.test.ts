@@ -34,10 +34,10 @@ describe("projectAnchor", () => {
 
     expect(anchor.canvasWidth).toBe(800);
     expect(anchor.canvasHeight).toBe(600);
-    expect(anchor.bounds.left).toBeCloseTo(320);
-    expect(anchor.bounds.right).toBeCloseTo(480);
-    expect(anchor.bounds.top).toBeCloseTo(240);
-    expect(anchor.bounds.bottom).toBeCloseTo(360);
+    expect(anchor.bounds.Left).toBeCloseTo(320);
+    expect(anchor.bounds.Right).toBeCloseTo(480);
+    expect(anchor.bounds.Top).toBeCloseTo(240);
+    expect(anchor.bounds.Bottom).toBeCloseTo(360);
   });
 
   it("takes the min and max of all projected corners after rotation", () => {
@@ -58,10 +58,10 @@ describe("projectAnchor", () => {
     const anchor = projectAnchor(mesh, camera, 1000, 1000);
     const projectedHalfWidth = (Math.sqrt(2) * 3) / 10;
 
-    expect(anchor.bounds.left).toBeCloseTo((0.5 - projectedHalfWidth / 2) * 1000, 1);
-    expect(anchor.bounds.right).toBeCloseTo((0.5 + projectedHalfWidth / 2) * 1000, 1);
-    expect(anchor.bounds.top).toBeCloseTo((0.5 - projectedHalfWidth / 2) * 1000, 1);
-    expect(anchor.bounds.bottom).toBeCloseTo((0.5 + projectedHalfWidth / 2) * 1000, 1);
+    expect(anchor.bounds.Left).toBeCloseTo((0.5 - projectedHalfWidth / 2) * 1000, 1);
+    expect(anchor.bounds.Right).toBeCloseTo((0.5 + projectedHalfWidth / 2) * 1000, 1);
+    expect(anchor.bounds.Top).toBeCloseTo((0.5 - projectedHalfWidth / 2) * 1000, 1);
+    expect(anchor.bounds.Bottom).toBeCloseTo((0.5 + projectedHalfWidth / 2) * 1000, 1);
   });
 
   it("takes screen extrema after projecting a perspective-rotated box", () => {
@@ -82,10 +82,30 @@ describe("projectAnchor", () => {
     // These values were calculated independently from the eight transformed
     // vertices; keeping them literal prevents the test from copying the
     // implementation's Box3/corner traversal.
-    expect(anchor.bounds.left).toBeCloseTo(126.0204450431888);
-    expect(anchor.bounds.right).toBeCloseTo(689.8944339466748);
-    expect(anchor.bounds.top).toBeCloseTo(168.24677029037971);
-    expect(anchor.bounds.bottom).toBeCloseTo(639.9188535063894);
+    expect(anchor.bounds.Left).toBeCloseTo(126.0204450431888);
+    expect(anchor.bounds.Right).toBeCloseTo(689.8944339466748);
+    expect(anchor.bounds.Top).toBeCloseTo(168.24677029037971);
+    expect(anchor.bounds.Bottom).toBeCloseTo(639.9188535063894);
+  });
+
+  it("preserves the oblique perspective anchor used by label placement", () => {
+    const mesh = new Mesh(new BoxGeometry(2, 2, 2), new MeshBasicMaterial());
+    mesh.position.x = 1;
+    const camera = new PerspectiveCamera(
+      CAMERA_VERTICAL_FIELD_OF_VIEW,
+      CAMERA_ASPECT_RATIO,
+      CAMERA_NEAR,
+      CAMERA_FAR
+    );
+    camera.position.set(4, 3, 9);
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+
+    const anchor = projectAnchor(mesh, camera, 800, 600);
+
+    expect((anchor.bounds.Left + anchor.bounds.Right) / 2).toBeCloseTo(467.869, 2);
+    expect(anchor.bounds.Bottom).toBeCloseTo(394.131, 2);
   });
 
   it("reads positive perspective view depth and pixel scale", () => {
@@ -120,5 +140,29 @@ describe("projectAnchor", () => {
     camera.updateMatrixWorld();
 
     expect(readViewSpaceDepth(mesh, camera)).toBe(Infinity);
+  });
+
+  it("clamps perspective pixel scale at and behind the camera plane", () => {
+    const camera = new PerspectiveCamera(
+      CAMERA_VERTICAL_FIELD_OF_VIEW,
+      CAMERA_ASPECT_RATIO,
+      CAMERA_NEAR,
+      CAMERA_FAR
+    );
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+    const atCameraPlane = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial());
+    const justInFrontOfCameraPlane = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial());
+    justInFrontOfCameraPlane.position.z = -Number.EPSILON;
+    const behindCameraPlane = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial());
+    behindCameraPlane.position.z = 1;
+
+    const atCameraPlaneScale = readPixelsPerWorldUnit(atCameraPlane, camera, 600);
+    const justInFrontScale = readPixelsPerWorldUnit(justInFrontOfCameraPlane, camera, 600);
+    const behindCameraScale = readPixelsPerWorldUnit(behindCameraPlane, camera, 600);
+
+    expect(Number.isFinite(atCameraPlaneScale)).toBe(true);
+    expect(atCameraPlaneScale).toBe(justInFrontScale);
+    expect(atCameraPlaneScale).toBe(behindCameraScale);
   });
 });

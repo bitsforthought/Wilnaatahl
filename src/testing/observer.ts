@@ -154,7 +154,12 @@ function readNode(
   const renderedScale = mesh.getWorldScale(new Vector3());
   const rawProjectedBounds = projectNodeBounds(mesh, camera, canvas.width, canvas.height);
   const projectedBounds = Object.values(rawProjectedBounds).every(Number.isFinite)
-    ? rawProjectedBounds
+    ? {
+        left: rawProjectedBounds.Left,
+        right: rawProjectedBounds.Right,
+        top: rawProjectedBounds.Top,
+        bottom: rawProjectedBounds.Bottom,
+      }
     : null;
   const labelElement =
     typeof document === "undefined"

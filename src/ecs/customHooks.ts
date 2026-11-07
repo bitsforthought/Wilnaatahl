@@ -1,9 +1,30 @@
-import { RefObject, useLayoutEffect, useRef } from "react";
+import { RefCallback, RefObject, useCallback, useLayoutEffect, useRef } from "react";
 import { Mesh } from "three";
 import { Entity } from "koota";
 import { useQuery, useTrait, useWorld } from "koota/react";
 import { isViewing } from "../generated/Traits/ViewTraits";
-import { CurrentMode, MeshRef, Selected } from "./traits";
+import { CurrentMode, LabelRef, MeshRef, Selected } from "./traits";
+
+export function useLabelRef(entity: Entity): RefCallback<HTMLDivElement> {
+  const world = useWorld();
+
+  return useCallback(
+    (element: HTMLDivElement | null) => {
+      if (!world.has(entity)) {
+        return;
+      }
+
+      if (!element) {
+        entity.remove(LabelRef);
+        return;
+      }
+
+      element.dataset.labelMeasured = "false";
+      entity.add(LabelRef(element));
+    },
+    [entity, world]
+  );
+}
 
 // Custom React hook to dynamically attach a Mesh to an Entity via the MeshRef trait.
 export function useMeshRef(entity: Entity): RefObject<Mesh | null> {

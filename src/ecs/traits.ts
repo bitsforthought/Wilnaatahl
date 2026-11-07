@@ -9,6 +9,7 @@ import * as ViewTraits from "../generated/Traits/ViewTraits";
 
 // Used to connect entities that represent visible components to Three.js meshes.
 export const MeshRef = trait(() => new Mesh());
+export const LabelRef = trait(() => null as HTMLElement | null);
 
 // Unlike other events, these are not cleared by frame cleanup: they persist until
 // the view layer consumes and removes them.

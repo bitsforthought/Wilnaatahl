@@ -1,11 +1,5 @@
 import { Box3, Camera, Object3D, Vector3 } from "three";
-
-export type ProjectedNodeBounds = {
-  left: number;
-  right: number;
-  top: number;
-  bottom: number;
-};
+import { ProjectedNodeBounds } from "../generated/ViewModel/LabelPlacement";
 
 /**
  * The projected on-screen anchor of the selected node, in canvas pixels. It is
@@ -87,7 +81,7 @@ function readProjectedNodeBounds(
     maxY = Math.max(maxY, screen.y);
   }
 
-  return { left: minX, right: maxX, top: minY, bottom: maxY };
+  return new ProjectedNodeBounds(minX, maxX, minY, maxY);
 }
 
 export function projectNodeBounds(
