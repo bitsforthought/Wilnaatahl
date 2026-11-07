@@ -139,6 +139,14 @@ This convention does not apply to Sim Algyax/Gitxsanimx text.
   a trivial predicate over traits), when several consumers would otherwise repeat
   it, or when recomputing it per consumer is measurably expensive. TypeScript
   derivations need direct Vitest coverage.
+- **Shared mutable state is a last resort, not a performance default.** The ECS,
+  acting as the application's database, is the only default home for shared
+  mutable state. Elsewhere, keep mutable working values local to a call or owned
+  by an explicit instance; module-level scratch objects and caches hide data flow
+  and prevent reentrancy even in synchronous, single-threaded code. Do not move
+  scratch values into the ECS or share them for speculative allocation savings.
+  Shared mutable test state is also a last resort, permitted only when required
+  by the test framework or browser harness and isolated with explicit cleanup.
 - **Presentation formatting is a view-layer (TS) concern, not domain logic.**
   Locale-dependent **date/number formatting** belongs in the TypeScript view layer
   (e.g. `Intl.DateTimeFormat`), not F#. **Translatable language strings** come from

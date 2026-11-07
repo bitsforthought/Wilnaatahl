@@ -30,10 +30,10 @@ describe("projectAnchor", () => {
 
     expect(anchor.canvasWidth).toBe(800);
     expect(anchor.canvasHeight).toBe(600);
-    expect(anchor.nodeLeft).toBeCloseTo(320);
-    expect(anchor.nodeRight).toBeCloseTo(480);
-    expect(anchor.nodeTop).toBeCloseTo(240);
-    expect(anchor.nodeBottom).toBeCloseTo(360);
+    expect(anchor.bounds.left).toBeCloseTo(320);
+    expect(anchor.bounds.right).toBeCloseTo(480);
+    expect(anchor.bounds.top).toBeCloseTo(240);
+    expect(anchor.bounds.bottom).toBeCloseTo(360);
   });
 
   it("takes the min and max of all projected corners after rotation", () => {
@@ -54,10 +54,10 @@ describe("projectAnchor", () => {
     const anchor = projectAnchor(mesh, camera, 1000, 1000);
     const projectedHalfWidth = (Math.sqrt(2) * 3) / 10;
 
-    expect(anchor.nodeLeft).toBeCloseTo((0.5 - projectedHalfWidth / 2) * 1000, 1);
-    expect(anchor.nodeRight).toBeCloseTo((0.5 + projectedHalfWidth / 2) * 1000, 1);
-    expect(anchor.nodeTop).toBeCloseTo((0.5 - projectedHalfWidth / 2) * 1000, 1);
-    expect(anchor.nodeBottom).toBeCloseTo((0.5 + projectedHalfWidth / 2) * 1000, 1);
+    expect(anchor.bounds.left).toBeCloseTo((0.5 - projectedHalfWidth / 2) * 1000, 1);
+    expect(anchor.bounds.right).toBeCloseTo((0.5 + projectedHalfWidth / 2) * 1000, 1);
+    expect(anchor.bounds.top).toBeCloseTo((0.5 - projectedHalfWidth / 2) * 1000, 1);
+    expect(anchor.bounds.bottom).toBeCloseTo((0.5 + projectedHalfWidth / 2) * 1000, 1);
   });
 
   it("takes screen extrema after projecting a perspective-rotated box", () => {
@@ -78,9 +78,9 @@ describe("projectAnchor", () => {
     // These values were calculated independently from the eight transformed
     // vertices; keeping them literal prevents the test from copying the
     // implementation's Box3/corner traversal.
-    expect(anchor.nodeLeft).toBeCloseTo(126.0204450431888);
-    expect(anchor.nodeRight).toBeCloseTo(689.8944339466748);
-    expect(anchor.nodeTop).toBeCloseTo(168.24677029037971);
-    expect(anchor.nodeBottom).toBeCloseTo(639.9188535063894);
+    expect(anchor.bounds.left).toBeCloseTo(126.0204450431888);
+    expect(anchor.bounds.right).toBeCloseTo(689.8944339466748);
+    expect(anchor.bounds.top).toBeCloseTo(168.24677029037971);
+    expect(anchor.bounds.bottom).toBeCloseTo(639.9188535063894);
   });
 });

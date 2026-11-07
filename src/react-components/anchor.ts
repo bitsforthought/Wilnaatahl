@@ -1,5 +1,12 @@
 import { Box3, Camera, Object3D, Vector3 } from "three";
 
+export type ProjectedNodeBounds = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
+
 /**
  * The projected on-screen anchor of the selected node, in canvas pixels. It is
  * reprojected only when the selection, camera, or canvas changes, so an animating
@@ -7,14 +14,8 @@ import { Box3, Camera, Object3D, Vector3 } from "three";
  * `specs/names-and-detail-overlay.md`.
  */
 export type OverlayAnchor = {
-  /** Screen x of the node's left edge. */
-  nodeLeft: number;
-  /** Screen x of the node's right edge. */
-  nodeRight: number;
-  /** Screen y of the node's top edge. */
-  nodeTop: number;
-  /** Screen y of the node's bottom edge. */
-  nodeBottom: number;
+  /** Projected screen-space bounds of the node in canvas pixels. */
+  bounds: ProjectedNodeBounds;
   /** Canvas width in pixels. */
   canvasWidth: number;
   /** Canvas height in pixels. */
@@ -46,21 +47,17 @@ function ndcToScreen(v: Vector3, width: number, height: number): { x: number; y:
   };
 }
 
-/**
- * Projects every corner of an object's world-space bounding box into canvas
- * pixels. Taking extrema after projection keeps the screen-space bounds correct
- * when the object or camera is rotated.
- */
-export function projectAnchor(
+function readProjectedNodeBounds(
   object: Object3D,
   camera: Camera,
   canvasWidth: number,
   canvasHeight: number
-): OverlayAnchor {
-  // Three.js names these positionally; the call reads as (updateParents, updateChildren).
+): ProjectedNodeBounds {
   const UPDATE_PARENTS = true;
   const UPDATE_CHILDREN = false;
+  // Three.js names these positionally; the call reads as (updateParents, updateChildren).
   object.updateWorldMatrix(UPDATE_PARENTS, UPDATE_CHILDREN);
+  camera.updateMatrixWorld();
   const box = new Box3().setFromObject(object);
   // Project all eight corners of the node's world-space box and take the
   // screen-space min/max, so the anchor's left/right/top/bottom are edge-correct
@@ -90,11 +87,33 @@ export function projectAnchor(
     maxY = Math.max(maxY, screen.y);
   }
 
+  return { left: minX, right: maxX, top: minY, bottom: maxY };
+}
+
+export function projectNodeBounds(
+  object: Object3D,
+  camera: Camera,
+  canvasWidth: number,
+  canvasHeight: number
+): ProjectedNodeBounds {
+  return readProjectedNodeBounds(object, camera, canvasWidth, canvasHeight);
+}
+
+/**
+ * Projects every corner of an object's world-space bounding box into canvas
+ * pixels. Taking extrema after projection keeps the screen-space bounds correct
+ * when the object or camera is rotated.
+ */
+export function projectAnchor(
+  object: Object3D,
+  camera: Camera,
+  canvasWidth: number,
+  canvasHeight: number
+): OverlayAnchor {
+  const bounds = readProjectedNodeBounds(object, camera, canvasWidth, canvasHeight);
+
   return {
-    nodeLeft: minX,
-    nodeRight: maxX,
-    nodeTop: minY,
-    nodeBottom: maxY,
+    bounds,
     canvasWidth,
     canvasHeight,
   };

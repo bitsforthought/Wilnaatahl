@@ -26,6 +26,14 @@ generated changes here.
 
 ## Design necessity and evidence
 
+Apply `AGENTS.md`'s shared-mutable-state constraint: the ECS is the only default
+home for shared mutation. Flag module-level mutable scratch objects or caches
+that hide data flow and make calls non-reentrant; synchronous execution and
+speculative allocation savings do not justify them. Prefer call-local values or
+explicit instance ownership, not moving scratch state into the ECS. Shared
+mutable test state also needs a framework or browser-harness necessity and
+explicit isolation and cleanup.
+
 Before hardening a new abstraction or failure-handling subsystem, ask whether
 ownership, isolation, existing tooling, or deletion removes the problem. Report
 unnecessary machinery through its concrete maintenance or failure cost, not an

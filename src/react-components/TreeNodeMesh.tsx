@@ -1,18 +1,15 @@
-import React from "react";
+import React, { useCallback, useRef } from "react";
 import { Html } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import { Entity } from "koota";
 import { useActions, useTrait } from "koota/react";
+import type { Camera, Object3D } from "three";
 import { eventActions, NodeLabel, Size, PersonRef, useMeshRef } from "../ecs";
 import { nodeLabelText } from "../i18n/format";
 import { useLocale } from "../i18n/hooks";
+import { calculateLabelPosition, type HtmlSize } from "./labelPlacement";
 
-// Scales the HTML label so it tracks the apparent size of the node as the camera
-// moves. drei's <Html> handles the per-frame scaling internally by mutating the
-// wrapping div's CSS transform — no React state involved, so the label survives
-// the remount that selection triggers (HuwilpGroup splits selected vs unselected
-// entities into separate <TreeNodeMesh> lists). Tune by eye to taste.
-const labelDistanceFactor = 8;
+type HtmlCalculatePosition = (object: Object3D, camera: Camera, htmlSize: HtmlSize) => number[];
 
 export function TreeNodeMesh({ entity }: { entity: Entity }) {
   // HuwilpGroup guarantees that the traits are present.
@@ -26,8 +23,16 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
   const label = nodeLabelText(labelView, locale);
   const hasConnectedEventTarget = useThree((state) => state.events.connected != null);
   const ref = useMeshRef(entity);
+  const labelRef = useRef<HTMLDivElement>(null);
 
   const { handleMeshClick } = useActions(eventActions);
+  const calculatePosition = useCallback<HtmlCalculatePosition>(function calculatePosition(
+    _,
+    camera,
+    htmlSize
+  ) {
+    return calculateLabelPosition(ref.current, camera, htmlSize, labelRef.current);
+  }, []);
 
   return (
     <>
@@ -48,13 +53,15 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
           stable target before creating the portal.
         */}
         {label && hasConnectedEventTarget && (
-          <Html
-            position={[0, -0.5, 0]}
-            center
-            distanceFactor={labelDistanceFactor}
-            style={{ pointerEvents: "none" }}
-          >
-            <div className="node-label">{label}</div>
+          <Html calculatePosition={calculatePosition} style={{ pointerEvents: "none" }}>
+            <div
+              className="node-label"
+              data-person-id={person.Id}
+              data-node-entity-id={entity.id()}
+              ref={labelRef}
+            >
+              {label}
+            </div>
           </Html>
         )}
       </mesh>
