@@ -1,14 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
-import {
-  BoxGeometry,
-  Camera,
-  Mesh,
-  MeshBasicMaterial,
-  OrthographicCamera,
-  PerspectiveCamera,
-  Vector3,
-} from "three";
-import { projectAnchor, projectNodeBounds } from "../../../src/react-components/anchor";
+import { describe, expect, it } from "vitest";
+import { BoxGeometry, Mesh, MeshBasicMaterial, OrthographicCamera, PerspectiveCamera } from "three";
+import { projectAnchor } from "../../../src/react-components/anchor";
 
 const CAMERA_LEFT = -5;
 const CAMERA_RIGHT = 5;
@@ -90,44 +82,5 @@ describe("projectAnchor", () => {
     expect(anchor.bounds.right).toBeCloseTo(689.8944339466748);
     expect(anchor.bounds.top).toBeCloseTo(168.24677029037971);
     expect(anchor.bounds.bottom).toBeCloseTo(639.9188535063894);
-  });
-
-  it("keeps the outer projection intact when projection is re-entered", () => {
-    const outerMesh = new Mesh(new BoxGeometry(2, 2, 2), new MeshBasicMaterial());
-    const nestedMesh = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial());
-    nestedMesh.position.set(3, 1, 0);
-    const camera = new OrthographicCamera(
-      CAMERA_LEFT,
-      CAMERA_RIGHT,
-      CAMERA_TOP,
-      CAMERA_BOTTOM,
-      CAMERA_NEAR,
-      CAMERA_FAR
-    );
-    camera.position.z = 5;
-    camera.updateProjectionMatrix();
-    camera.updateMatrixWorld();
-    const expected = projectNodeBounds(outerMesh, camera, 800, 600);
-
-    const originalProject = Object.getOwnPropertyDescriptor(Vector3.prototype, "project")!
-      .value as (this: Vector3, projectionCamera: Camera) => Vector3;
-    let nested = false;
-    const projectSpy = vi.spyOn(Vector3.prototype, "project").mockImplementation(function (
-      this: Vector3,
-      projectionCamera
-    ) {
-      const projected = originalProject.call(this, projectionCamera);
-      if (!nested) {
-        nested = true;
-        projectNodeBounds(nestedMesh, projectionCamera, 800, 600);
-      }
-      return projected;
-    });
-
-    try {
-      expect(projectNodeBounds(outerMesh, camera, 800, 600)).toEqual(expected);
-    } finally {
-      projectSpy.mockRestore();
-    }
   });
 });

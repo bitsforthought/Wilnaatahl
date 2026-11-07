@@ -1,4 +1,4 @@
-import { OrthographicCamera, PerspectiveCamera, Vector3, type Camera, type Object3D } from "three";
+import { Vector3, type Camera, type Object3D } from "three";
 import {
   LabelPlacementModule_place,
   ProjectedNodeBounds as FSharpProjectedNodeBounds,
@@ -40,29 +40,19 @@ export function calculateLabelPosition(
 }
 
 function readPixelsPerWorldUnit(object: Object3D, camera: Camera, canvasHeight: number): number {
-  if (camera instanceof OrthographicCamera) {
-    return (canvasHeight * camera.zoom) / (camera.top - camera.bottom);
-  }
-
-  if (camera instanceof PerspectiveCamera) {
-    const viewSpaceCenter = new Vector3();
-    object.getWorldPosition(viewSpaceCenter);
-    viewSpaceCenter.applyMatrix4(camera.matrixWorldInverse);
-    // Perspective scale is measured at signed view-space depth; clamp non-positive
-    // depth to epsilon to avoid division by zero while keeping behind-camera
-    // labels finite.
-    const signedViewDepth = -viewSpaceCenter.z;
-    const viewSpaceDepth = Math.max(signedViewDepth, Number.EPSILON);
-    // The projection maps normalized device coordinates (NDC) across a full span.
-    // Three.js stores Matrix4 elements in column-major order; zero-based index 5
-    // is the row 1/column 1 vertical perspective scale (zoom / tan(fov / 2)).
-    // See https://threejs.org/docs/#api/en/cameras/PerspectiveCamera.
-    const verticalPerspectiveScaleIndex = 5;
-    const verticalPerspectiveScale =
-      camera.projectionMatrix.elements[verticalPerspectiveScaleIndex];
-    const fullNdcSpan = 2;
-    return (canvasHeight * verticalPerspectiveScale) / (fullNdcSpan * viewSpaceDepth);
-  }
-
-  return 1;
+  const viewSpaceCenter = new Vector3();
+  object.getWorldPosition(viewSpaceCenter);
+  viewSpaceCenter.applyMatrix4(camera.matrixWorldInverse);
+  // Front-facing points have negative camera-space z; positive z is behind the camera.
+  // Clamp at or behind the camera plane to a positive epsilon.
+  const signedViewDepth = -viewSpaceCenter.z;
+  const viewSpaceDepth = Math.max(signedViewDepth, Number.EPSILON);
+  // The projection maps normalized device coordinates (NDC) across a full span.
+  // Three.js stores Matrix4 elements in column-major order; zero-based index 5
+  // is the row 1/column 1 vertical perspective scale (zoom / tan(fov / 2)).
+  // See https://threejs.org/docs/#api/en/cameras/PerspectiveCamera.
+  const verticalPerspectiveScaleIndex = 5;
+  const verticalPerspectiveScale = camera.projectionMatrix.elements[verticalPerspectiveScaleIndex];
+  const fullNdcSpan = 2;
+  return (canvasHeight * verticalPerspectiveScale) / (fullNdcSpan * viewSpaceDepth);
 }
