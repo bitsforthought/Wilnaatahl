@@ -6,11 +6,12 @@ import {
   DragInFlight,
   Hidden,
   MeshRef,
+  NodeLabel,
   PersonRef,
   Position,
   Selected,
 } from "../ecs/traits";
-import { projectNodeBounds } from "../react-components/anchor";
+import { projectNodeBounds, readViewSpaceDepth } from "../react-components/anchor";
 
 export interface CssPoint {
   x: number;
@@ -29,6 +30,7 @@ export interface ObserverSnapshot {
     renderedPosition: { x: number; y: number; z: number };
     renderedQuaternion: { x: number; y: number; z: number; w: number };
     renderedScale: { x: number; y: number; z: number };
+    viewSpaceDepth: number;
     cssPosition: CssPoint;
     projectedBounds: {
       left: number;
@@ -42,6 +44,7 @@ export interface ObserverSnapshot {
       width: number;
       height: number;
     } | null;
+    labelState: "visible" | "occluded" | "unmeasured" | "unmounted" | "unlabeled";
   }>;
   camera: {
     position: { x: number; y: number; z: number };
@@ -128,6 +131,11 @@ function readPersonId(entity: Entity): number | undefined {
   return entity.get(PersonRef)?.Id;
 }
 
+function hasLabelContent(entity: Entity): boolean {
+  const label = entity.get(NodeLabel);
+  return label !== undefined && Object.values(label).some((value) => value != null);
+}
+
 function readNode(
   entity: Entity,
   camera: Camera,
@@ -153,6 +161,19 @@ function readNode(
       ? undefined
       : document.querySelector<HTMLElement>(`.node-label[data-node-entity-id="${entity.id()}"]`);
   const labelRect = labelElement?.getBoundingClientRect();
+  const labelState = !labelElement
+    ? hasLabelContent(entity)
+      ? "unmounted"
+      : "unlabeled"
+    : !labelRect ||
+        labelRect.width <= 0 ||
+        labelRect.height <= 0 ||
+        labelElement.dataset?.labelMeasured === "false"
+      ? "unmeasured"
+      : typeof getComputedStyle === "function" &&
+          getComputedStyle(labelElement).visibility === "hidden"
+        ? "occluded"
+        : "visible";
 
   return {
     personId,
@@ -165,6 +186,7 @@ function readNode(
       w: renderedQuaternion.w,
     },
     renderedScale: copyVector(renderedScale),
+    viewSpaceDepth: readViewSpaceDepth(mesh, camera),
     cssPosition: projectWorldToCss(renderedPosition, camera, canvas),
     projectedBounds,
     labelGeometry: labelRect
@@ -175,6 +197,7 @@ function readNode(
           height: labelRect.height,
         }
       : null,
+    labelState,
   };
 }
 

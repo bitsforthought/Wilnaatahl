@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { BoxGeometry, Mesh, MeshBasicMaterial, OrthographicCamera, PerspectiveCamera } from "three";
-import { projectAnchor } from "../../../src/react-components/anchor";
+import {
+  projectAnchor,
+  readPixelsPerWorldUnit,
+  readViewSpaceDepth,
+} from "../../../src/react-components/anchor";
 
 const CAMERA_LEFT = -5;
 const CAMERA_RIGHT = 5;
@@ -82,5 +86,39 @@ describe("projectAnchor", () => {
     expect(anchor.bounds.right).toBeCloseTo(689.8944339466748);
     expect(anchor.bounds.top).toBeCloseTo(168.24677029037971);
     expect(anchor.bounds.bottom).toBeCloseTo(639.9188535063894);
+  });
+
+  it("reads positive perspective view depth and pixel scale", () => {
+    const mesh = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial());
+    const camera = new PerspectiveCamera(
+      CAMERA_VERTICAL_FIELD_OF_VIEW,
+      CAMERA_ASPECT_RATIO,
+      CAMERA_NEAR,
+      CAMERA_FAR
+    );
+    camera.position.z = 5;
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+
+    expect(readViewSpaceDepth(mesh, camera)).toBeCloseTo(5);
+    expect(readPixelsPerWorldUnit(mesh, camera, 600)).toBeCloseTo(
+      (600 * camera.projectionMatrix.elements[5]) / 10
+    );
+  });
+
+  it("does not treat geometry behind the camera as an occluder", () => {
+    const mesh = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial());
+    mesh.position.z = 6;
+    const camera = new PerspectiveCamera(
+      CAMERA_VERTICAL_FIELD_OF_VIEW,
+      CAMERA_ASPECT_RATIO,
+      CAMERA_NEAR,
+      CAMERA_FAR
+    );
+    camera.position.z = 5;
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+
+    expect(readViewSpaceDepth(mesh, camera)).toBe(Infinity);
   });
 });

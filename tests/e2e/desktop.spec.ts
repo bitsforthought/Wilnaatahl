@@ -61,6 +61,71 @@ function expectLabelRectsToMatch(actual: LabelRect, expected: LabelRect, descrip
   expect(Math.abs(actual.top - expected.top), description).toBeLessThanOrEqual(tolerancePixels);
 }
 
+function findOcclusionEvidence(snapshot: ObserverSnapshot) {
+  for (const target of snapshot.nodes) {
+    if (target.labelState !== "occluded" || !target.labelGeometry) continue;
+    const targetLabel = target.labelGeometry;
+    for (const nearer of snapshot.nodes) {
+      if (
+        nearer.personId === target.personId ||
+        nearer.labelState !== "visible" ||
+        nearer.viewSpaceDepth >= target.viewSpaceDepth
+      ) {
+        continue;
+      }
+      const bounds = nearer.projectedBounds;
+      if (!bounds) continue;
+      const nearerBounds = {
+        left: snapshot.canvas.left + bounds.left,
+        right: snapshot.canvas.left + bounds.right,
+        top: snapshot.canvas.top + bounds.top,
+        bottom: snapshot.canvas.top + bounds.bottom,
+      };
+      const overlaps =
+        targetLabel.left < nearerBounds.right &&
+        nearerBounds.left < targetLabel.left + targetLabel.width &&
+        targetLabel.top < nearerBounds.bottom &&
+        nearerBounds.top < targetLabel.top + targetLabel.height;
+      if (overlaps) return { target, nearer };
+    }
+  }
+  return undefined;
+}
+
+type OcclusionEvidence = NonNullable<ReturnType<typeof findOcclusionEvidence>>;
+
+async function waitForVisiblePeople(
+  page: Page,
+  expectedPersonIds: readonly number[]
+): Promise<ObserverSnapshot> {
+  let latest = await readObserver(page);
+  await expect
+    .poll(
+      async () => {
+        latest = await readObserver(page);
+        return latest.nodes
+          .filter((node) => node.labelState === "visible")
+          .map((node) => node.personId)
+          .sort()
+          .join(",");
+      },
+      { timeout: 5_000, intervals: [50, 100, 200] }
+    )
+    .toBe(expectedPersonIds.join(","));
+  return latest;
+}
+
+async function orbitBy(page: Page, snapshot: ObserverSnapshot, delta: { x: number; y: number }) {
+  const start = {
+    x: snapshot.canvas.left + snapshot.canvas.width / 2,
+    y: snapshot.canvas.top + snapshot.canvas.height / 2,
+  };
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + delta.x, start.y + delta.y, { steps: 8 });
+  await page.mouse.up();
+}
+
 async function startLabelLifecycleProbe(page: Page, personId: number) {
   await page.evaluate((id) => {
     const selector = `.node-label[data-person-id="${id}"]`;
@@ -167,6 +232,59 @@ test("orbited labels remain below their projected node bounds", async ({ page })
   const after = await waitForFrameAfter(page, stable);
   expect(after.camera.position).not.toEqual(before.camera.position);
   expectLabelsBelowNodes(after);
+});
+
+test("orbiting can occlude a farther label and reversing the orbit restores it", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await importFixture(page, familyFixture);
+
+  const initial = await waitForStableObserver(page, { requireGeometry: true });
+  const initiallyVisible = initial.nodes
+    .filter((node) => node.labelState === "visible")
+    .map((node) => node.personId)
+    .sort();
+  expect(initiallyVisible.length).toBeGreaterThan(1);
+
+  const orbitDeltas = [
+    { x: 180, y: 0 },
+    { x: 180, y: 30 },
+    { x: 180, y: -30 },
+    { x: 180, y: 30 },
+    { x: 180, y: -30 },
+    { x: 180, y: 30 },
+  ];
+  const appliedDeltas: { x: number; y: number }[] = [];
+  let latest = initial;
+  let evidence: OcclusionEvidence | undefined;
+  for (const delta of orbitDeltas) {
+    await orbitBy(page, latest, delta);
+    latest = await waitForStableObserver(page, {
+      requireRenderedState: false,
+      requireGeometry: true,
+    });
+    appliedDeltas.push(delta);
+    evidence = findOcclusionEvidence(latest);
+    if (evidence) break;
+  }
+
+  expect(evidence).toBeDefined();
+  expect(evidence?.nearer.labelState).toBe("visible");
+  if (!evidence) throw new Error("Expected an occlusion evidence pair.");
+  await expect(
+    page.locator(`.node-label[data-person-id="${evidence.nearer.personId}"]`)
+  ).toBeVisible();
+
+  for (const delta of appliedDeltas.reverse()) {
+    await orbitBy(page, latest, { x: -delta.x, y: -delta.y });
+    latest = await waitForStableObserver(page, {
+      requireRenderedState: false,
+      requireGeometry: true,
+    });
+  }
+
+  await waitForVisiblePeople(page, initiallyVisible);
 });
 
 test("node labels declare non-selectability and stay unselectable during gestures", async ({
