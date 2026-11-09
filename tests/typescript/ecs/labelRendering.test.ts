@@ -1,11 +1,22 @@
 // @vitest-environment jsdom
 
 import { createWorld, type Entity, type World } from "koota";
-import { BoxGeometry, Mesh, MeshBasicMaterial, OrthographicCamera, PerspectiveCamera } from "three";
+import {
+  BoxGeometry,
+  Mesh,
+  MeshBasicMaterial,
+  MeshStandardMaterial,
+  OrthographicCamera,
+  PerspectiveCamera,
+} from "three";
 import { afterEach, describe, expect, test } from "vitest";
-import { Hidden, LabelRef, MeshRef, PersonRef } from "../../../src/ecs/traits";
-import { runLabelRendering } from "../../../src/ecs/labelRendering";
+import { Hidden, LabelRef, MeshRef, PersonRef, Position } from "../../../src/ecs/traits";
+import { renderLabels } from "../../../src/ecs/labelRendering";
+import { syncRenderingContext } from "../../../src/ecs/renderingContext";
+import { fromKootaWorld } from "../../../src/ecs/koota/kootaWrapper";
 import { Person_get_Empty } from "../../../src/generated/Model";
+import { runSystems as runGeneratedSystems } from "../../../src/generated/Systems/Runner";
+import { spawnControls } from "../../../src/generated/EntityLifeCycle";
 
 const canvasWidth = 800;
 const canvasHeight = 600;
@@ -50,7 +61,6 @@ function createLabel(width: number, height: number): HTMLElement {
   const label = document.createElement("div");
   Object.defineProperty(label, "offsetWidth", { configurable: true, value: width });
   Object.defineProperty(label, "offsetHeight", { configurable: true, value: height });
-  label.dataset.labelMeasured = "false";
   label.style.visibility = "hidden";
   return label;
 }
@@ -69,6 +79,16 @@ function spawnNode(world: World, mesh: Mesh, label?: HTMLElement): Entity {
   return entity;
 }
 
+function renderLabelFrame(
+  world: World,
+  camera: OrthographicCamera | PerspectiveCamera,
+  width: number,
+  height: number
+): void {
+  syncRenderingContext(world, camera, width, height);
+  renderLabels(fromKootaWorld(world));
+}
+
 describe("native label rendering", () => {
   let world: World | undefined;
 
@@ -82,18 +102,24 @@ describe("native label rendering", () => {
     const label = createLabel(40, 20);
     spawnNode(world, createMesh(), label);
 
-    runLabelRendering({
-      world,
-      camera: createCamera(),
-      canvasWidth: 100,
-      canvasHeight: 100,
-    });
+    renderLabelFrame(world, createCamera(), 100, 100);
 
-    expect(label.dataset.labelMeasured).toBe("true");
     expect(label.style.transform).toMatch(
       /^translate3d\(50px, 63(?:\.\d+)?px, 0px\) translateX\(-50%\) scale\(0\.0125\)$/
     );
     expect(label.style.visibility).toBe("visible");
+  });
+
+  test("fails clearly when projected nodes have no rendering context", () => {
+    const currentWorld = createWorld();
+    world = currentWorld;
+    spawnNode(currentWorld, createMesh(), createLabel(40, 20));
+
+    expect(() => renderLabels(fromKootaWorld(currentWorld))).toThrowError(
+      new Error(
+        "Cannot render labels without a camera reference and canvas dimensions in the rendering context."
+      )
+    );
   });
 
   test("keeps a mounted label hidden while its dimensions are unusable", () => {
@@ -101,14 +127,8 @@ describe("native label rendering", () => {
     const label = createLabel(0, 20);
     spawnNode(world, createMesh(), label);
 
-    runLabelRendering({
-      world,
-      camera: createCamera(),
-      canvasWidth: 100,
-      canvasHeight: 100,
-    });
+    renderLabelFrame(world, createCamera(), 100, 100);
 
-    expect(label.dataset.labelMeasured).toBe("false");
     expect(label.style.visibility).toBe("hidden");
   });
 
@@ -117,14 +137,8 @@ describe("native label rendering", () => {
     const label = createLabel(40, 0);
     spawnNode(world, createMesh(), label);
 
-    runLabelRendering({
-      world,
-      camera: createCamera(),
-      canvasWidth: 100,
-      canvasHeight: 100,
-    });
+    renderLabelFrame(world, createCamera(), 100, 100);
 
-    expect(label.dataset.labelMeasured).toBe("false");
     expect(label.style.visibility).toBe("hidden");
   });
 
@@ -137,37 +151,28 @@ describe("native label rendering", () => {
     spawnNode(world, target, targetLabel);
     spawnNode(world, nearer);
 
-    runLabelRendering({
-      world,
-      camera: createCamera(),
-      canvasWidth: 100,
-      canvasHeight: 100,
-    });
+    renderLabelFrame(world, createCamera(), 100, 100);
 
-    expect(targetLabel.dataset.labelMeasured).toBe("true");
     expect(targetLabel.style.visibility).toBe("hidden");
   });
 
   test("does not share label references between worlds with equal entity ids", () => {
     const firstWorld = createWorld();
     const secondWorld = createWorld();
-    const firstLabel = createLabel(40, 20);
-    const secondLabel = createLabel(40, 20);
-    spawnNode(firstWorld, createMesh(), firstLabel);
-    spawnNode(secondWorld, createMesh(), secondLabel);
+    try {
+      const firstLabel = createLabel(40, 20);
+      const secondLabel = createLabel(40, 20);
+      spawnNode(firstWorld, createMesh(), firstLabel);
+      spawnNode(secondWorld, createMesh(), secondLabel);
 
-    runLabelRendering({
-      world: firstWorld,
-      camera: createCamera(),
-      canvasWidth: 100,
-      canvasHeight: 100,
-    });
+      renderLabelFrame(firstWorld, createCamera(), 100, 100);
 
-    expect(firstLabel.style.visibility).toBe("visible");
-    expect(secondLabel.style.visibility).toBe("hidden");
-
-    firstWorld.destroy();
-    secondWorld.destroy();
+      expect(firstLabel.style.visibility).toBe("visible");
+      expect(secondLabel.style.visibility).toBe("hidden");
+    } finally {
+      firstWorld.destroy();
+      secondWorld.destroy();
+    }
   });
 
   test("hides a mounted label when its entity becomes hidden", () => {
@@ -176,21 +181,37 @@ describe("native label rendering", () => {
     const entity = spawnNode(world, createMesh(), label);
     const camera = createCamera();
 
-    runLabelRendering({
-      world,
-      camera,
-      canvasWidth: 100,
-      canvasHeight: 100,
-    });
+    renderLabelFrame(world, camera, 100, 100);
     expect(label.style.visibility).toBe("visible");
 
     entity.add(Hidden);
-    runLabelRendering({
-      world,
-      camera,
-      canvasWidth: 100,
-      canvasHeight: 100,
-    });
+    renderLabelFrame(world, camera, 100, 100);
+
+    expect(label.style.visibility).toBe("hidden");
+  });
+
+  test("hides a mounted label when its person reference is removed", () => {
+    world = createWorld();
+    const label = createLabel(40, 20);
+    const entity = spawnNode(world, createMesh(), label);
+    const camera = createCamera();
+
+    renderLabelFrame(world, camera, 100, 100);
+    entity.remove(PersonRef);
+    renderLabelFrame(world, camera, 100, 100);
+
+    expect(label.style.visibility).toBe("hidden");
+  });
+
+  test("hides a mounted label when its mesh reference is removed", () => {
+    world = createWorld();
+    const label = createLabel(40, 20);
+    const entity = spawnNode(world, createMesh(), label);
+    const camera = createCamera();
+
+    renderLabelFrame(world, camera, 100, 100);
+    entity.remove(MeshRef);
+    renderLabelFrame(world, camera, 100, 100);
 
     expect(label.style.visibility).toBe("hidden");
   });
@@ -215,12 +236,7 @@ describe("native label rendering", () => {
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
 
-    runLabelRendering({
-      world,
-      camera,
-      canvasWidth,
-      canvasHeight,
-    });
+    renderLabelFrame(world, camera, canvasWidth, canvasHeight);
 
     const transform = readLabelTransform(label);
     expect(transform.x).toBeCloseTo(467.869, 2);
@@ -238,12 +254,7 @@ describe("native label rendering", () => {
     spawnNode(world, mesh, label);
     const camera = createPerspectiveCamera();
 
-    runLabelRendering({
-      world,
-      camera,
-      canvasWidth,
-      canvasHeight,
-    });
+    renderLabelFrame(world, camera, canvasWidth, canvasHeight);
 
     const firstFrameTransform = readLabelTransform(label);
     expect(firstFrameTransform.x).toBeCloseTo(400);
@@ -252,16 +263,36 @@ describe("native label rendering", () => {
 
     camera.zoom = doubledCameraZoom;
     camera.updateProjectionMatrix();
-    runLabelRendering({
-      world,
-      camera,
-      canvasWidth,
-      canvasHeight,
-    });
+    renderLabelFrame(world, camera, canvasWidth, canvasHeight);
 
     const zoomedTransform = readLabelTransform(label);
     expect(zoomedTransform.x).toBeCloseTo(400);
     expect(zoomedTransform.y).toBeCloseTo(458);
     expect(zoomedTransform.scale).toBeCloseTo(1.5);
+  });
+
+  test("generated Runner renders labels after mesh positions are synchronized", () => {
+    world = createWorld();
+    const label = createLabel(40, 20);
+    const mesh = new Mesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial());
+    const node = world.spawn(
+      PersonRef(Person_get_Empty()),
+      MeshRef(mesh),
+      Position({ x: 0, y: 0, z: 0 }),
+      LabelRef(label)
+    );
+    const camera = createCamera();
+    syncRenderingContext(world, camera, 100, 100);
+    spawnControls(fromKootaWorld(world));
+
+    runGeneratedSystems(fromKootaWorld(world), 0);
+    const initialTransform = readLabelTransform(label);
+
+    node.set(Position, { x: 2, y: 0, z: 0 });
+    runGeneratedSystems(fromKootaWorld(world), 0);
+    const movedTransform = readLabelTransform(label);
+
+    expect(movedTransform.x).toBeGreaterThan(initialTransform.x);
+    expect(movedTransform.x).not.toBe(initialTransform.x);
   });
 });

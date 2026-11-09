@@ -7,8 +7,11 @@ import { eventActions, NodeLabel, PersonRef, Size, useLabelRef, useMeshRef } fro
 import { nodeLabelText } from "../i18n/format";
 import { useLocale } from "../i18n/hooks";
 
+// The native label writer applies the full-canvas translation.
+const htmlOrigin: [number, number] = [0, 0];
+
 function calculatePosition(): [number, number] {
-  return [0, 0];
+  return htmlOrigin;
 }
 
 export function TreeNodeMesh({ entity }: { entity: Entity }) {
@@ -47,12 +50,7 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
         */}
         {label && hasConnectedEventTarget && (
           <Html calculatePosition={calculatePosition} style={{ pointerEvents: "none" }}>
-            <div
-              className="node-label"
-              data-person-id={person.Id}
-              data-node-entity-id={entity.id()}
-              ref={labelRef}
-            >
+            <div className="node-label" data-person-id={person.Id} ref={labelRef}>
               {label}
             </div>
           </Html>

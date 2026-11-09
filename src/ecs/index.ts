@@ -1,6 +1,5 @@
 import { createActions, Entity, World } from "koota";
 import { Matrix4, Quaternion, Vector3 } from "three";
-import type { Camera } from "three";
 import { ThreeEvent } from "@react-three/fiber";
 import { FamilyGraph_FamilyGraph as FamilyGraph } from "../generated/Model";
 import { EntityId } from "../generated/Wilnaatahl.ECS/Types";
@@ -9,22 +8,9 @@ import { layoutNodes } from "../generated/Systems/Layout";
 import { runSystems as runFableSystems } from "../generated/Systems/Runner";
 import { spawnControls, spawnScene } from "../generated/EntityLifeCycle";
 import { fromKootaWorld } from "./koota/kootaWrapper";
-import { runLabelRendering } from "./labelRendering";
 
-export function runSystems(input: {
-  world: World;
-  delta: number;
-  camera: Camera;
-  canvasWidth: number;
-  canvasHeight: number;
-}) {
+export function runSystems(input: { world: World; delta: number }) {
   runFableSystems(fromKootaWorld(input.world), input.delta);
-  runLabelRendering({
-    world: input.world,
-    camera: input.camera,
-    canvasWidth: input.canvasWidth,
-    canvasHeight: input.canvasHeight,
-  });
 }
 
 export const worldActions = createActions((world: World) => {
@@ -60,8 +46,10 @@ export const eventActions = createActions((world: World) => {
 
 export { getLinePositions } from "./connectors";
 export { useLabelRef, useMeshRef, useOverlayVisible } from "./customHooks";
+export { syncRenderingContext } from "./renderingContext";
 export {
   Button,
+  CameraRef,
   CurrentLocale,
   CurrentMode,
   DragInFlight,
@@ -77,4 +65,5 @@ export {
   Position,
   SaveRequested,
   Selected,
+  WorldCanvasDimensions,
 } from "./traits";

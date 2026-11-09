@@ -130,8 +130,9 @@ This convention does not apply to Sim Algyax/Gitxsanimx text.
   TypeScript can implement an ECS system. Native references may live in
   TypeScript-only traits on the entities they belong to, as `MeshRef` does;
   requiring native types does not justify a parallel registry for shared state.
-  Borrow camera/viewport values as rendering inputs when no persistent ECS state
-  is needed. Keep temporary measurements and derived results local to the call,
+  Native rendering systems share the camera reference on a singleton entity and
+  canvas dimensions at World scope; the view synchronizes changed values before
+  `runSystems`. Keep temporary measurements and derived results local to the call,
   not in extra traits or caches just to cross the language boundary.
 - **Keep `.tsx` presentation-only.** JSX files may contain hook, state, props, and
   style wiring, but not arithmetic, string composition, branching, or I/O

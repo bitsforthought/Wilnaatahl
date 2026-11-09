@@ -4,7 +4,14 @@ import { OrbitControls } from "@react-three/drei";
 import { useHas, useQuery, useWorld } from "koota/react";
 import { Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
-import { DragInFlight, MeshRef, Selected, runSystems, useOverlayVisible } from "../ecs";
+import {
+  DragInFlight,
+  MeshRef,
+  Selected,
+  runSystems,
+  syncRenderingContext,
+  useOverlayVisible,
+} from "../ecs";
 import type { ObserverSession } from "../testing/observer";
 import { HuwilpGroup } from "./HuwilpGroup";
 import { projectAnchor, type OverlayAnchor } from "./anchor";
@@ -87,12 +94,10 @@ export default function TreeScene({
   }, [camera, gl, world]);
 
   useFrame(function runFrame(_state, delta) {
+    syncRenderingContext(world, camera, canvasWidth, canvasHeight);
     runSystems({
       world,
       delta,
-      camera,
-      canvasWidth,
-      canvasHeight,
     });
     observerRef.current?.advanceFrame();
   });

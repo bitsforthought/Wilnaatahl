@@ -120,9 +120,14 @@ describe("projectAnchor", () => {
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
 
-    expect(readViewSpaceDepth(mesh, camera)).toBeCloseTo(5);
-    expect(readPixelsPerWorldUnit(mesh, camera, 600)).toBeCloseTo(
-      (600 * camera.projectionMatrix.elements[5]) / 10
+    const expectedViewSpaceDepth = 5;
+    const canvasHeightPixels = 600;
+    const expectedPixelsPerWorldUnit = 115.25892761826996;
+
+    expect(readViewSpaceDepth(mesh, camera)).toBeCloseTo(expectedViewSpaceDepth);
+    expect(readPixelsPerWorldUnit(mesh, camera, canvasHeightPixels)).toBeCloseTo(
+      expectedPixelsPerWorldUnit,
+      8
     );
   });
 

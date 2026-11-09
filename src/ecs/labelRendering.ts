@@ -1,118 +1,123 @@
 import { Not, type Entity, type World } from "koota";
 import type { Camera, Object3D } from "three";
 import {
-  LabelPlacementModule_layoutLabels,
-  LabelRenderInput,
-  LabelRenderOutput,
+  CanvasDimensions,
+  LabelLayout,
+  LabelPlacementModule_layoutLabel,
   LabelSize,
+  ProjectedNode,
 } from "../generated/ViewModel/LabelPlacement";
 import {
   projectNodeBounds,
   readPixelsPerWorldUnit,
   readViewSpaceDepth,
 } from "../react-components/anchor";
-import { Hidden, LabelRef, MeshRef, PersonRef } from "./traits";
+import { IWorld, toKootaWorld } from "./koota/kootaWrapper";
+import { CameraRef, Hidden, LabelRef, MeshRef, PersonRef, WorldCanvasDimensions } from "./traits";
 
-export type LabelRenderingInput = {
-  world: World;
+type RenderingContext = {
   camera: Camera;
-  canvasWidth: number;
-  canvasHeight: number;
+  dimensions: CanvasDimensions;
 };
 
-type ReadLabelNode = {
-  id: number;
-  mesh: Object3D;
-  element: HTMLElement | undefined;
-  width: number | undefined;
-  height: number | undefined;
+type LabelRenderingFrame = RenderingContext & {
+  projectedNodes: ProjectedNode[];
 };
 
-function readLabelNode(entity: Entity): ReadLabelNode {
-  const mesh = entity.get(MeshRef)!;
+function readRenderingContext(world: World): RenderingContext {
+  const cameraEntity = world.query(CameraRef)[0];
+  const camera = cameraEntity?.get(CameraRef);
+  const dimensions = world.get(WorldCanvasDimensions);
 
-  const element = entity.get(LabelRef) ?? undefined;
-  const width = element?.offsetWidth;
-  const height = element?.offsetHeight;
-  const hasUsableSize =
-    width !== undefined &&
-    height !== undefined &&
-    Number.isFinite(width) &&
-    Number.isFinite(height) &&
-    width > 0 &&
-    height > 0;
+  if (!camera || !dimensions) {
+    throw new Error(
+      "Cannot render labels without a camera reference and canvas dimensions in the rendering context."
+    );
+  }
 
-  return {
-    id: entity.id(),
-    mesh,
-    element,
-    width: hasUsableSize ? width : undefined,
-    height: hasUsableSize ? height : undefined,
-  };
+  return { camera, dimensions };
 }
 
-function createRenderInput(
-  node: ReadLabelNode,
-  camera: Camera,
-  canvasWidth: number,
-  canvasHeight: number
-): LabelRenderInput {
-  const bounds = projectNodeBounds(node.mesh, camera, canvasWidth, canvasHeight);
-  const pixelsPerWorldUnit = readPixelsPerWorldUnit(node.mesh, camera, canvasHeight);
-  const labelSize =
-    node.width === undefined || node.height === undefined
-      ? undefined
-      : new LabelSize(node.width, node.height);
+function readLabelSize(element: HTMLElement | null | undefined): LabelSize | undefined {
+  if (!element) return undefined;
 
-  return new LabelRenderInput(
-    node.id,
-    bounds,
-    readViewSpaceDepth(node.mesh, camera),
-    pixelsPerWorldUnit,
-    labelSize
+  const width = element.offsetWidth;
+  const height = element.offsetHeight;
+  const hasUsableSize =
+    Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0;
+
+  return hasUsableSize ? new LabelSize(width, height) : undefined;
+}
+
+function readProjectedNode(
+  mesh: Object3D,
+  element: HTMLElement | null | undefined,
+  camera: Camera,
+  dimensions: CanvasDimensions
+): ProjectedNode {
+  return new ProjectedNode(
+    projectNodeBounds(mesh, camera, dimensions.Width, dimensions.Height),
+    readViewSpaceDepth(mesh, camera),
+    readPixelsPerWorldUnit(mesh, camera, dimensions.Height),
+    readLabelSize(element)
   );
 }
 
-function writeLabelOutput(
-  output: LabelRenderOutput,
-  nodesById: ReadonlyMap<number, ReadLabelNode>
-): void {
-  const node = nodesById.get(output.Id);
-  if (!node?.element) return;
-  const { element } = node;
-
+function applyLabelLayout(element: HTMLElement, layout: LabelLayout): void {
   // Translate by half the label width to centre it on the anchor; the top-centre
   // origin keeps that anchor fixed while the label scales.
-  element.style.transform = `translate3d(${output.Placement.X}px, ${output.Placement.Y}px, 0px) translateX(-50%) scale(${output.Placement.Scale})`;
-  element.style.visibility = output.Visible ? "visible" : "hidden";
-  element.dataset.labelMeasured =
-    node.width !== undefined && node.height !== undefined ? "true" : "false";
+  element.style.transform = `translate3d(${layout.Placement.X}px, ${layout.Placement.Y}px, 0px) translateX(-50%) scale(${layout.Placement.Scale})`;
+  element.style.visibility = layout.Visible ? "visible" : "hidden";
 }
 
-export function runLabelRendering(input: LabelRenderingInput): void {
-  const nodes: ReadLabelNode[] = [];
-  for (const entity of input.world.query(PersonRef, MeshRef, Not(Hidden))) {
-    nodes.push(readLabelNode(entity));
+function hideStaleLabel([element]: [HTMLElement | null | undefined], entity: Entity): void {
+  if (element && (entity.has(Hidden) || !entity.has(PersonRef) || !entity.has(MeshRef))) {
+    element.style.visibility = "hidden";
+  }
+}
+
+function readProjectedNodeForQuery(
+  frame: LabelRenderingFrame,
+  [mesh]: [Object3D],
+  entity: Entity,
+  index: number
+): void {
+  frame.projectedNodes[index] = readProjectedNode(
+    mesh,
+    entity.get(LabelRef),
+    frame.camera,
+    frame.dimensions
+  );
+}
+
+function layoutLabelForQuery(
+  frame: LabelRenderingFrame,
+  _state: unknown[],
+  entity: Entity,
+  index: number
+): void {
+  const element = entity.get(LabelRef);
+  if (!element) return;
+
+  const projectedNode = frame.projectedNodes[index];
+  const layout = LabelPlacementModule_layoutLabel(frame.projectedNodes, projectedNode);
+  applyLabelLayout(element, layout);
+}
+
+export function renderLabels(world: IWorld): IWorld {
+  const kootaWorld = toKootaWorld(world);
+  const query = kootaWorld.query(PersonRef, MeshRef, Not(Hidden));
+  if (query.length === 0) {
+    kootaWorld.query(LabelRef).readEach(hideStaleLabel);
+    return world;
   }
 
-  const nodesById = new Map<number, ReadLabelNode>();
-  const renderInputs: LabelRenderInput[] = [];
-  for (const node of nodes) {
-    nodesById.set(node.id, node);
-    renderInputs.push(createRenderInput(node, input.camera, input.canvasWidth, input.canvasHeight));
-  }
-
-  const outputs = LabelPlacementModule_layoutLabels(renderInputs);
-
-  for (const output of outputs) {
-    writeLabelOutput(output, nodesById);
-  }
-
-  const renderedIds = new Set(nodes.map((node) => node.id));
-  for (const entity of input.world.query(LabelRef)) {
-    const element = entity.get(LabelRef);
-    if (element && !renderedIds.has(entity.id())) {
-      element.style.visibility = "hidden";
-    }
-  }
+  const frame: LabelRenderingFrame = {
+    ...readRenderingContext(kootaWorld),
+    projectedNodes: [],
+  };
+  query.select(MeshRef).readEach(readProjectedNodeForQuery.bind(undefined, frame));
+  query.readEach(layoutLabelForQuery.bind(undefined, frame));
+  kootaWorld.query(LabelRef).readEach(hideStaleLabel);
+  return world;
 }

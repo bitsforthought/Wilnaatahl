@@ -1,3 +1,4 @@
+import type { Camera } from "three";
 import { Mesh } from "three";
 import { trait } from "koota";
 import { toKootaTagTrait, toKootaValueFactoryTrait, toKootaValueTrait } from "./koota/kootaWrapper";
@@ -6,10 +7,13 @@ import * as ConnectorTraits from "../generated/Traits/ConnectorTraits";
 import * as PeopleTraits from "../generated/Traits/PeopleTraits";
 import * as SpaceTraits from "../generated/Traits/SpaceTraits";
 import * as ViewTraits from "../generated/Traits/ViewTraits";
+import { CanvasDimensions } from "../generated/ViewModel/LabelPlacement";
 
 // Used to connect entities that represent visible components to Three.js meshes.
 export const MeshRef = trait(() => new Mesh());
 export const LabelRef = trait(() => null as HTMLElement | null);
+export const CameraRef = trait(() => null as unknown as Camera);
+export const WorldCanvasDimensions = trait(() => new CanvasDimensions(0, 0));
 
 // Unlike other events, these are not cleared by frame cleanup: they persist until
 // the view layer consumes and removes them.

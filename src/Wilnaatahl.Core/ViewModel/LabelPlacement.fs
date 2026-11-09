@@ -1,49 +1,82 @@
 namespace Wilnaatahl.ViewModel
 
-type ProjectedNodeBounds = { Left: float; Right: float; Top: float; Bottom: float }
+open System
 
-type internal ScreenRect = { Left: float; Right: float; Top: float; Bottom: float }
+[<Measure>]
+type cssPixel
 
-type internal LabelOcclusionInput = {
-    Id: int
-    Bounds: ProjectedNodeBounds
-    ViewSpaceDepth: float
-    LabelRect: ScreenRect option
+[<Measure>]
+type worldUnit
+
+/// The projected bounds of a node in CSS pixels. The origin is at the canvas
+/// top-left, so Y increases downward.
+type ProjectedNodeBounds = {
+    Left: float<cssPixel>
+    Right: float<cssPixel>
+    Top: float<cssPixel>
+    Bottom: float<cssPixel>
 }
 
-type LabelPlacement = { X: float; Y: float; Scale: float }
+/// The canvas dimensions in CSS pixels.
+type CanvasDimensions = { Width: float<cssPixel>; Height: float<cssPixel> }
 
-/// DOM dimensions before the placement scale is applied.
-type LabelSize = { Width: float; Height: float }
+/// The top-centre CSS-pixel anchor and dimensionless scale for one label.
+type LabelPlacement = { X: float<cssPixel>; Y: float<cssPixel>; Scale: float }
 
-/// Numeric measurements for one node in a single layout frame.
-type LabelRenderInput = {
-    Id: int
+/// DOM dimensions measured in CSS pixels before the placement scale is applied.
+type LabelSize = { Width: float<cssPixel>; Height: float<cssPixel> }
+
+/// Numeric measurements for one projected node in a single layout frame.
+type ProjectedNode = {
     Bounds: ProjectedNodeBounds
-    ViewSpaceDepth: float
-    PixelsPerWorldUnit: float
+    ViewSpaceDepth: float<worldUnit>
+    PixelsPerWorldUnit: float<cssPixel / worldUnit>
     LabelSize: LabelSize option
 }
 
-/// The placement and visibility derived for one node in a layout frame.
-type LabelRenderOutput = { Id: int; Placement: LabelPlacement; Visible: bool }
+/// The placement and visibility derived for one projected node.
+type LabelLayout = { Placement: LabelPlacement; Visible: bool }
 
 module LabelPlacement =
-    // The gap is a screen-pixel tuning value, not a product-level minimum.
-    let private labelGapPixels = 8.0
+    // The gap is a CSS-pixel tuning value, not a product-level minimum.
+    let private labelGapPixels = 8.0<cssPixel>
 
-    // This reference scale preserves the existing label size at the default viewport.
-    let private labelScalePerPixelPerWorldUnit = 0.0125
+    // This reference scale is world units per CSS pixel at the default viewport.
+    let private labelWorldUnitsPerCssPixel = 0.0125<worldUnit / cssPixel>
 
-    /// Places a label by its top-centre screen point and derives its scale from the
-    /// camera's pixels-per-world-unit measurement.
-    let internal place (bounds: ProjectedNodeBounds) pixelsPerWorldUnit = {
+    /// Places a label by its top-centre screen point and derives its dimensionless
+    /// scale from the camera's CSS-pixels-per-world-unit measurement.
+    let internal place
+        (bounds: ProjectedNodeBounds)
+        (pixelsPerWorldUnit: float<cssPixel / worldUnit>)
+        : LabelPlacement = {
         X = (bounds.Left + bounds.Right) / 2.0
         Y = bounds.Bottom + labelGapPixels
-        Scale = pixelsPerWorldUnit * labelScalePerPixelPerWorldUnit
+        Scale = pixelsPerWorldUnit * labelWorldUnitsPerCssPixel
     }
 
-    let private rectanglesOverlap (first: ScreenRect) (second: ProjectedNodeBounds) =
+    let private scaledLabelRect (placement: LabelPlacement) (labelSize: LabelSize) : ProjectedNodeBounds =
+        let width = labelSize.Width * placement.Scale
+        let height = labelSize.Height * placement.Scale
+
+        {
+            Left = placement.X - width / 2.0
+            Right = placement.X + width / 2.0
+            Top = placement.Y
+            Bottom = placement.Y + height
+        }
+
+    let private labelRect (placement: LabelPlacement) =
+        function
+        | Some labelSize when
+            placement.Scale > 0.0
+            && labelSize.Width > 0.0<cssPixel>
+            && labelSize.Height > 0.0<cssPixel>
+            ->
+            Some(scaledLabelRect placement labelSize)
+        | _ -> None
+
+    let private rectanglesOverlap (first: ProjectedNodeBounds) (second: ProjectedNodeBounds) =
         first.Left < second.Right
         && second.Left < first.Right
         && first.Top < second.Bottom
@@ -58,69 +91,31 @@ module LabelPlacement =
         && centreY >= container.Top
         && centreY <= container.Bottom
 
-    let private labelIsHiddenBy (nearerNode: LabelOcclusionInput) (targetNode: LabelOcclusionInput) =
-        nearerNode.ViewSpaceDepth < targetNode.ViewSpaceDepth
-        && (targetNode.LabelRect
-            |> Option.exists (fun labelRect -> rectanglesOverlap labelRect nearerNode.Bounds)
-            || targetNode.Bounds |> centreIsInside nearerNode.Bounds)
+    let private isFrontOfCamera (viewSpaceDepth: float<worldUnit>) =
+        let positiveInfinity =
+            LanguagePrimitives.FloatWithMeasure<worldUnit> Double.PositiveInfinity
 
-    let internal hiddenLabels (nodes: LabelOcclusionInput array) =
-        nodes
-        |> Array.choose (fun (targetNode: LabelOcclusionInput) ->
-            if nodes |> Array.exists (fun nearerNode -> labelIsHiddenBy nearerNode targetNode) then
-                Some targetNode.Id
-            else
-                None)
+        viewSpaceDepth > 0.0<worldUnit> && viewSpaceDepth <> positiveInfinity
 
-    let private scaledLabelRect placement labelSize =
-        let width = labelSize.Width * placement.Scale
-        let height = labelSize.Height * placement.Scale
+    /// Derives one label layout from the frame's projected-node snapshot.
+    let layoutLabel (projectedNodes: ProjectedNode array) (node: ProjectedNode) : LabelLayout =
+        let placement = place node.Bounds node.PixelsPerWorldUnit
+        let measuredLabelRect = node.LabelSize |> labelRect placement
+
+        // TODO(#151): benchmark this quadratic occlusion scan in browser scenes
+        // with 200+ nodes before considering a different algorithm.
+        let hiddenByNearerNode =
+            projectedNodes
+            |> Array.exists (fun nearerNode ->
+                nearerNode.ViewSpaceDepth < node.ViewSpaceDepth
+                && (measuredLabelRect
+                    |> Option.exists (fun labelRect -> rectanglesOverlap labelRect nearerNode.Bounds)
+                    || node.Bounds |> centreIsInside nearerNode.Bounds))
 
         {
-            Left = placement.X - width / 2.0
-            Right = placement.X + width / 2.0
-            Top = placement.Y
-            Bottom = placement.Y + height
-        }
-
-    let private labelRect placement =
-        function
-        | Some labelSize when placement.Scale > 0.0 && labelSize.Width > 0.0 && labelSize.Height > 0.0 ->
-            Some(scaledLabelRect placement labelSize)
-        | _ -> None
-
-    let private isFrontOfCamera viewSpaceDepth =
-        viewSpaceDepth > 0.0 && not (System.Double.IsInfinity viewSpaceDepth)
-
-    /// Derives placements and visibility without retaining measurements between frames.
-    let layoutLabels (inputs: LabelRenderInput array) =
-        let preparedInputs =
-            inputs
-            |> Array.map (fun input ->
-                let placement = place input.Bounds input.PixelsPerWorldUnit
-                let measuredLabelRect = input.LabelSize |> labelRect placement
-
-                let occlusionInput: LabelOcclusionInput = {
-                    Id = input.Id
-                    Bounds = input.Bounds
-                    ViewSpaceDepth = input.ViewSpaceDepth
-                    LabelRect = measuredLabelRect
-                }
-
-                input, placement, occlusionInput)
-
-        let hiddenIds =
-            preparedInputs
-            |> Array.map (fun (_, _, occlusionInput) -> occlusionInput)
-            |> hiddenLabels
-            |> Set.ofArray
-
-        preparedInputs
-        |> Array.map (fun (input, placement, occlusionInput) -> {
-            Id = input.Id
             Placement = placement
             Visible =
-                Option.isSome occlusionInput.LabelRect
-                && isFrontOfCamera input.ViewSpaceDepth
-                && (hiddenIds |> Set.contains input.Id |> not)
-        })
+                measuredLabelRect.IsSome
+                && isFrontOfCamera node.ViewSpaceDepth
+                && not hiddenByNearerNode
+        }

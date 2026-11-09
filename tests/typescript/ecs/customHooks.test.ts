@@ -109,14 +109,13 @@ describe("useLabelRef", () => {
     world?.destroy();
   });
 
-  test("attaches a mounted label, initializes the measurement state, and removes it on unmount", () => {
+  test("attaches a mounted label and removes it on unmount", () => {
     world = createWorld();
     const entity = world.spawn();
     const view = render(createElement(LabelRefWorldHarness, { world, entity }));
 
     const label = entity.get(LabelRef);
     expect(label).toBeInstanceOf(HTMLDivElement);
-    expect(label?.dataset.labelMeasured).toBe("false");
 
     view.unmount();
 
@@ -140,20 +139,24 @@ describe("useLabelRef", () => {
     const secondWorld = createWorld();
     const firstEntity = firstWorld.spawn();
     const secondEntity = secondWorld.spawn();
-    const firstView = render(
-      createElement(LabelRefWorldHarness, { world: firstWorld, entity: firstEntity })
-    );
-    const secondView = render(
-      createElement(LabelRefWorldHarness, { world: secondWorld, entity: secondEntity })
-    );
+    let firstView: { unmount: () => void } | undefined;
+    let secondView: { unmount: () => void } | undefined;
+    try {
+      firstView = render(
+        createElement(LabelRefWorldHarness, { world: firstWorld, entity: firstEntity })
+      );
+      secondView = render(
+        createElement(LabelRefWorldHarness, { world: secondWorld, entity: secondEntity })
+      );
 
-    expect(firstEntity.get(LabelRef)).not.toBe(secondEntity.get(LabelRef));
-
-    firstView.unmount();
-    secondView.unmount();
-    firstWorld.destroy();
-    secondWorld.destroy();
-    world = undefined;
+      expect(firstEntity.get(LabelRef)).not.toBe(secondEntity.get(LabelRef));
+    } finally {
+      firstView?.unmount();
+      secondView?.unmount();
+      firstWorld.destroy();
+      secondWorld.destroy();
+      world = undefined;
+    }
   });
 
   test("does not throw when a label callback arrives after entity destruction", () => {
@@ -181,22 +184,35 @@ describe("useLabelRef", () => {
   });
 
   test("does not remove a replacement world's label when an old ref unmounts", () => {
-    world = createWorld();
-    const oldEntity = world.spawn();
-    const view = render(createElement(LabelRefWorldHarness, { world, entity: oldEntity }));
+    const oldWorld = createWorld();
+    const oldEntity = oldWorld.spawn();
+    let view: { unmount: () => void } | undefined;
+    let replacementWorld: World | undefined;
+    let oldWorldDestroyed = false;
+    try {
+      world = oldWorld;
+      view = render(createElement(LabelRefWorldHarness, { world: oldWorld, entity: oldEntity }));
 
-    world.destroy();
-    world = undefined;
+      oldWorld.destroy();
+      oldWorldDestroyed = true;
+      world = undefined;
 
-    const replacementWorld = createWorld();
-    const replacementEntity = replacementWorld.spawn();
-    const replacementLabel = document.createElement("div");
-    replacementEntity.add(LabelRef(replacementLabel));
+      replacementWorld = createWorld();
+      const replacementEntity = replacementWorld.spawn();
+      const replacementLabel = document.createElement("div");
+      replacementEntity.add(LabelRef(replacementLabel));
 
-    expect(() => view.unmount()).not.toThrow();
-    expect(replacementEntity.get(LabelRef)).toBe(replacementLabel);
-
-    replacementWorld.destroy();
+      if (!view) throw new Error("Old-world label view was not rendered.");
+      const oldView = view;
+      expect(() => oldView.unmount()).not.toThrow();
+      view = undefined;
+      expect(replacementEntity.get(LabelRef)).toBe(replacementLabel);
+    } finally {
+      view?.unmount();
+      replacementWorld?.destroy();
+      if (!oldWorldDestroyed) oldWorld.destroy();
+      world = undefined;
+    }
   });
 });
 

@@ -12,7 +12,6 @@ import {
 import { layoutNodes } from "../../../src/generated/Systems/Layout";
 import { runSystems as runFableSystems } from "../../../src/generated/Systems/Runner";
 import { spawnControls, spawnScene } from "../../../src/generated/EntityLifeCycle";
-import { runLabelRendering } from "../../../src/ecs/labelRendering";
 
 vi.mock("koota", async (importOriginal) => ({
   ...(await importOriginal()),
@@ -46,10 +45,6 @@ vi.mock("../../../src/generated/Traits/Events", () => ({
   handlePointerMissed: vi.fn(),
 }));
 
-vi.mock("../../../src/ecs/labelRendering", () => ({
-  runLabelRendering: vi.fn(),
-}));
-
 describe("ecs bridge", () => {
   const world = { kind: "koota-world" };
   const wrappedWorld = { kind: "fsharp-world" };
@@ -63,37 +58,21 @@ describe("ecs bridge", () => {
 
   test("runSystems wraps the world and delegates the delta", () => {
     const deltaSeconds = 0.125;
-    const camera = { kind: "camera" };
-    const canvasWidth = 640;
-    const canvasHeight = 480;
     const callOrder: string[] = [];
     vi.mocked(runFableSystems).mockImplementation(() => {
       callOrder.push("fsharp");
-    });
-    vi.mocked(runLabelRendering).mockImplementation(() => {
-      callOrder.push("labels");
     });
 
     runSystems({
       world: world as never,
       delta: deltaSeconds,
-      camera: camera as never,
-      canvasWidth,
-      canvasHeight,
     });
 
     expect(fromKootaWorld).toHaveBeenCalledOnce();
     expect(fromKootaWorld).toHaveBeenCalledWith(world);
     expect(runFableSystems).toHaveBeenCalledOnce();
     expect(runFableSystems).toHaveBeenCalledWith(wrappedWorld, deltaSeconds);
-    expect(runLabelRendering).toHaveBeenCalledOnce();
-    expect(runLabelRendering).toHaveBeenCalledWith({
-      world,
-      camera,
-      canvasWidth,
-      canvasHeight,
-    });
-    expect(callOrder).toEqual(["fsharp", "labels"]);
+    expect(callOrder).toEqual(["fsharp"]);
   });
 
   test("world actions wrap once and delegate each action with the wrapped world", () => {

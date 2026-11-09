@@ -19,7 +19,6 @@ export function useLabelRef(entity: Entity): RefCallback<HTMLDivElement> {
         return;
       }
 
-      element.dataset.labelMeasured = "false";
       entity.add(LabelRef(element));
     },
     [entity, world]
