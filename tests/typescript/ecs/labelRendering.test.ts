@@ -230,7 +230,8 @@ describe("DOM label rendering", () => {
     const transform = readLabelTransform(label);
     expect(transform.x).toBeCloseTo(467.869, 2);
     expect(transform.y).toBeCloseTo(402.131, 2);
-    expect(transform.scale).toBeCloseTo(0.7271221135, 8);
+    // CSS serialization can round to six significant digits (six decimals here).
+    expect(transform.scale).toBeCloseTo(0.7271221135, 6);
   });
 
   test("reprojects and rescales a label across perspective zoom frames", () => {
