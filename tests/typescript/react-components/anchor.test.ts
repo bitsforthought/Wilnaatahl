@@ -110,17 +110,17 @@ describe("projectAnchor", () => {
 
   it("reads positive perspective view depth and pixel scale", () => {
     const mesh = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial());
+    const expectedViewSpaceDepth = 5;
     const camera = new PerspectiveCamera(
       CAMERA_VERTICAL_FIELD_OF_VIEW,
       CAMERA_ASPECT_RATIO,
       CAMERA_NEAR,
       CAMERA_FAR
     );
-    camera.position.z = 5;
+    camera.position.z = expectedViewSpaceDepth;
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
 
-    const expectedViewSpaceDepth = 5;
     const canvasHeightPixels = 600;
     const expectedPixelsPerWorldUnit = 115.25892761826996;
 

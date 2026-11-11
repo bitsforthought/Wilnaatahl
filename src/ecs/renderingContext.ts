@@ -1,7 +1,6 @@
 import type { Camera } from "three";
 import type { World } from "koota";
-import { CanvasDimensions } from "../generated/ViewModel/LabelPlacement";
-import { CameraRef, WorldCanvasDimensions } from "./traits";
+import { CameraRef, WorldCanvasDimensions, type CanvasDimensions } from "./traits";
 
 function syncCameraReference(world: World, camera: Camera): void {
   const cameraEntity = world.query(CameraRef)[0];
@@ -16,7 +15,7 @@ function syncCameraReference(world: World, camera: Camera): void {
 }
 
 function syncCanvasDimensions(world: World, width: number, height: number): void {
-  const dimensions = new CanvasDimensions(width, height);
+  const dimensions: CanvasDimensions = { Width: width, Height: height };
   if (!world.has(WorldCanvasDimensions)) {
     world.add(WorldCanvasDimensions(dimensions));
     return;

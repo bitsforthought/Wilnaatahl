@@ -29,6 +29,10 @@ legal meaning under Canada's _Indian Act_ that does not apply here and invites
 confusion. Prefer **"group"** (or a more precise domain term) when naming a
 partition or category.
 
+Use culturally sensitive, precise technical terms in agent-authored prose: prefer
+"browser APIs", "DOM references", or "Three.js rendering" over **"native"**.
+Preserve library-defined identifiers such as Fable's `nativeOnly`.
+
 ## Language
 
 Use Canadian English for agent-authored English text unless instructed
@@ -120,17 +124,18 @@ This convention does not apply to Sim Algyax/Gitxsanimx text.
 - **Styling:** All styles in `src/style.css` (global CSS with light/dark mode).
 - **Prefer F# by default, not only for domain logic.** Write renderer-independent
   rules, computations, and shared data structures in F#, and consume them through
-  Fable. Use TypeScript when direct dependence on native DOM, Three.js, or other
+  Fable. Use TypeScript when direct dependence on DOM, Three.js, or other
   browser-library types makes it the appropriate adapter; do not proxy those APIs
-  into Fable solely to avoid TypeScript. Such an adapter should collect native
+  into Fable solely to avoid TypeScript. Such an adapter should collect browser
   measurements, call F# for computations over plain values, and apply the result,
   rather than treating its TypeScript caller as a reason to put the rules there.
   React components must use the view model and ECS systems for state and actions.
 - **Language choice and ECS ownership are independent boundaries.** Either F# or
-  TypeScript can implement an ECS system. Native references may live in
+  TypeScript can implement an ECS system. DOM and Three.js references may live in
   TypeScript-only traits on the entities they belong to, as `MeshRef` does;
-  requiring native types does not justify a parallel registry for shared state.
-  Native rendering systems share the camera reference on a singleton entity and
+  requiring browser-library types does not justify a parallel registry for shared
+  state.
+  Rendering systems share the camera reference on a singleton entity and
   canvas dimensions at World scope; the view synchronizes changed values before
   `runSystems`. Keep temporary measurements and derived results local to the call,
   not in extra traits or caches just to cross the language boundary.

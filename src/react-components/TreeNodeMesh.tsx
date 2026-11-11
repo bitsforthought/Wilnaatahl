@@ -7,7 +7,10 @@ import { eventActions, NodeLabel, PersonRef, Size, useLabelRef, useMeshRef } fro
 import { nodeLabelText } from "../i18n/format";
 import { useLocale } from "../i18n/hooks";
 
-// The native label writer applies the full-canvas translation.
+/**
+ * Drei's default adds the projected node position to the outer Html wrapper. The ECS label
+ * system already applies full-canvas translation, so fixed [0, 0] prevents a double offset.
+ */
 const htmlOrigin: [number, number] = [0, 0];
 
 function calculatePosition(): [number, number] {

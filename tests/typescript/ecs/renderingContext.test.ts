@@ -51,6 +51,20 @@ describe("rendering context", () => {
     unsubscribeDimensions();
   });
 
+  test("reads canvas dimensions as detached value copies", () => {
+    world = createWorld();
+    syncRenderingContext(world, new PerspectiveCamera(), 800, 600);
+
+    const firstRead = world.get(WorldCanvasDimensions)!;
+    const secondRead = world.get(WorldCanvasDimensions)!;
+
+    expect(secondRead).not.toBe(firstRead);
+
+    Object.assign(firstRead, { Width: 1 });
+
+    expect(world.get(WorldCanvasDimensions)).toMatchObject({ Width: 800, Height: 600 });
+  });
+
   test("updates changed camera identity and dimensions", () => {
     world = createWorld();
     const firstCamera = new PerspectiveCamera();

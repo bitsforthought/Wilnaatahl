@@ -33,8 +33,11 @@ function labelsByPerson(scene: MinimalLabelScene): ReadonlyMap<number, LabelObse
   return new Map(scene.labels.map((label) => [label.personId, label]));
 }
 
-function measuredLabel(scene: MinimalLabelScene, personId: number): LabelObservation | undefined {
-  const label = scene.labels.find((candidate) => candidate.personId === personId);
+function measuredLabel(
+  labels: ReadonlyMap<number, LabelObservation>,
+  personId: number
+): LabelObservation | undefined {
+  const label = labels.get(personId);
   return label && label.rect.width > 0 && label.rect.height > 0 ? label : undefined;
 }
 
@@ -49,8 +52,9 @@ async function waitForMeasuredLabels(
         try {
           const scene = await readMinimalLabelScene(page);
           latest = scene;
+          const labels = labelsByPerson(scene);
           return personIds.every((personId) => {
-            const label = measuredLabel(scene, personId);
+            const label = measuredLabel(labels, personId);
             return label?.visible === true;
           });
         } catch {
@@ -75,7 +79,8 @@ async function waitForMountedMeasuredLabels(
         try {
           const scene = await readMinimalLabelScene(page);
           latest = scene;
-          return personIds.every((personId) => measuredLabel(scene, personId) !== undefined);
+          const labels = labelsByPerson(scene);
+          return personIds.every((personId) => measuredLabel(labels, personId) !== undefined);
         } catch {
           return false;
         }

@@ -1,7 +1,6 @@
 import { Not, type Entity, type World } from "koota";
 import type { Camera, Object3D } from "three";
 import {
-  CanvasDimensions,
   LabelLayout,
   LabelPlacementModule_layoutLabel,
   LabelSize,
@@ -13,7 +12,15 @@ import {
   readViewSpaceDepth,
 } from "../react-components/anchor";
 import { IWorld, toKootaWorld } from "./koota/kootaWrapper";
-import { CameraRef, Hidden, LabelRef, MeshRef, PersonRef, WorldCanvasDimensions } from "./traits";
+import {
+  CameraRef,
+  Hidden,
+  LabelRef,
+  MeshRef,
+  PersonRef,
+  WorldCanvasDimensions,
+  type CanvasDimensions,
+} from "./traits";
 
 type RenderingContext = {
   camera: Camera;

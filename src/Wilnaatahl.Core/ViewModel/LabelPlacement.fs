@@ -18,7 +18,7 @@ type ProjectedNodeBounds = {
 }
 
 /// The canvas dimensions in CSS pixels.
-type CanvasDimensions = { Width: float<cssPixel>; Height: float<cssPixel> }
+type CanvasDimensions = {| Width: float<cssPixel>; Height: float<cssPixel> |}
 
 /// The top-centre CSS-pixel anchor and dimensionless scale for one label.
 type LabelPlacement = { X: float<cssPixel>; Y: float<cssPixel>; Scale: float }
