@@ -185,6 +185,23 @@ The supported npm command facade is defined in `package.json`. See the README
 for setup and common commands, and `docs/build.md` for focused targets, CI mode,
 parallelism, and argument-forwarding syntax.
 
+## Agent skills
+
+### Issue tracker
+
+Track issues and specs in this repository's GitHub Issues. Before tracker
+operations, read `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five default triage labels. Before triaging, read
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use a single-context glossary and ADR layout. Before exploring domain concepts
+or decisions, read `docs/agents/domain.md`.
+
 ## Documentation ownership
 
 - `package.json` and `scripts/Build.fsx` define the executable build contract.
