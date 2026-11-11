@@ -31,6 +31,11 @@ type AppMode =
 /// one: nothing else stores the mode, and exactly one system writes it.
 let CurrentMode = refTrait (fun () -> Viewing)
 
+/// World-scoped canvas dimensions; the anonymous record keeps the generated type
+/// compatible with field-based ECS storage.
+let WorldCanvasDimensions =
+    valueTrait ({| Width = 0.0<cssPixel>; Height = 0.0<cssPixel> |}: CanvasDimensions)
+
 /// Whether the mode inspects nodes rather than manipulating them. This looks trivial, but it
 /// makes mode-testing in TypeScript substantially easier.
 let isViewing mode = mode = Viewing

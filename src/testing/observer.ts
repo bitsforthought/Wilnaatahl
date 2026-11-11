@@ -10,11 +10,47 @@ import {
   Position,
   Selected,
 } from "../ecs/traits";
-import { projectNodeBounds } from "../react-components/anchor";
+import { projectNodeBounds, readViewSpaceDepth } from "../react-components/anchor";
 
 export interface CssPoint {
   x: number;
   y: number;
+}
+
+export interface ObserverVector {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface ObserverQuaternion {
+  x: number;
+  y: number;
+  z: number;
+  w: number;
+}
+
+export interface ObserverBounds {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+export interface ObserverNode {
+  personId: number;
+  logicalPosition: ObserverVector;
+  renderedPosition: ObserverVector;
+  renderedQuaternion: ObserverQuaternion;
+  renderedScale: ObserverVector;
+  viewSpaceDepth: number;
+  cssPosition: CssPoint;
+  projectedBounds: ObserverBounds | null;
+}
+
+export interface ObserverCamera {
+  position: ObserverVector;
+  target: ObserverVector;
 }
 
 export interface ObserverSnapshot {
@@ -23,31 +59,9 @@ export interface ObserverSnapshot {
   mode: "view" | "move" | "unknown";
   dragging: boolean;
   selectedPersonIds: number[];
-  nodes: Array<{
-    personId: number;
-    logicalPosition: { x: number; y: number; z: number };
-    renderedPosition: { x: number; y: number; z: number };
-    renderedQuaternion: { x: number; y: number; z: number; w: number };
-    renderedScale: { x: number; y: number; z: number };
-    cssPosition: CssPoint;
-    projectedBounds: {
-      left: number;
-      right: number;
-      top: number;
-      bottom: number;
-    } | null;
-    labelGeometry: {
-      left: number;
-      top: number;
-      width: number;
-      height: number;
-    } | null;
-  }>;
-  camera: {
-    position: { x: number; y: number; z: number };
-    target: { x: number; y: number; z: number };
-  };
-  canvas: { left: number; top: number; width: number; height: number };
+  nodes: ObserverNode[];
+  camera: ObserverCamera;
+  canvas: CanvasRect;
 }
 
 export interface ObserverSession {
@@ -120,7 +134,7 @@ export function createObserverSession(options: ObserverSessionOptions): Observer
 
 let nextSession = 1;
 
-function copyVector(vector: { x: number; y: number; z: number }) {
+function copyVector(vector: ObserverVector): ObserverVector {
   return { x: vector.x, y: vector.y, z: vector.z };
 }
 
@@ -128,11 +142,7 @@ function readPersonId(entity: Entity): number | undefined {
   return entity.get(PersonRef)?.Id;
 }
 
-function readNode(
-  entity: Entity,
-  camera: Camera,
-  canvas: CanvasRect
-): ObserverSnapshot["nodes"][number] | undefined {
+function readNode(entity: Entity, camera: Camera, canvas: CanvasRect): ObserverNode | undefined {
   const personId = readPersonId(entity);
   const logicalPosition = entity.get(Position);
   const mesh = entity.get(MeshRef);
@@ -146,13 +156,13 @@ function readNode(
   const renderedScale = mesh.getWorldScale(new Vector3());
   const rawProjectedBounds = projectNodeBounds(mesh, camera, canvas.width, canvas.height);
   const projectedBounds = Object.values(rawProjectedBounds).every(Number.isFinite)
-    ? rawProjectedBounds
+    ? {
+        left: rawProjectedBounds.Left,
+        right: rawProjectedBounds.Right,
+        top: rawProjectedBounds.Top,
+        bottom: rawProjectedBounds.Bottom,
+      }
     : null;
-  const labelElement =
-    typeof document === "undefined"
-      ? undefined
-      : document.querySelector<HTMLElement>(`.node-label[data-node-entity-id="${entity.id()}"]`);
-  const labelRect = labelElement?.getBoundingClientRect();
 
   return {
     personId,
@@ -165,16 +175,9 @@ function readNode(
       w: renderedQuaternion.w,
     },
     renderedScale: copyVector(renderedScale),
+    viewSpaceDepth: readViewSpaceDepth(mesh, camera),
     cssPosition: projectWorldToCss(renderedPosition, camera, canvas),
     projectedBounds,
-    labelGeometry: labelRect
-      ? {
-          left: labelRect.left,
-          top: labelRect.top,
-          width: labelRect.width,
-          height: labelRect.height,
-        }
-      : null,
   };
 }
 
@@ -190,7 +193,7 @@ function readObserverSnapshot(
   camera.updateMatrixWorld();
   const nodes = Array.from(world.query(PersonRef, Not(Hidden)))
     .map((entity) => readNode(entity, camera, canvas))
-    .filter((node): node is ObserverSnapshot["nodes"][number] => node !== undefined);
+    .filter((node): node is ObserverNode => node !== undefined);
   const mode = world.get(CurrentMode);
   const target = readTarget();
 

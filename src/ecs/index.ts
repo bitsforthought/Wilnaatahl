@@ -45,15 +45,18 @@ export const eventActions = createActions((world: World) => {
 });
 
 export { getLinePositions } from "./connectors";
-export { useMeshRef, useOverlayVisible } from "./customHooks";
+export { useLabelRef, useMeshRef, useOverlayVisible } from "./customHooks";
+export { syncRenderingContext } from "./renderingContext";
 export {
   Button,
+  CameraRef,
   CurrentLocale,
   CurrentMode,
   DragInFlight,
   Elbow,
   Hidden,
   Line,
+  LabelRef,
   Size,
   MeshRef,
   NodeLabel,
@@ -62,4 +65,5 @@ export {
   Position,
   SaveRequested,
   Selected,
+  WorldCanvasDimensions,
 } from "./traits";

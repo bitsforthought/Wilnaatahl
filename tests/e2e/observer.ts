@@ -3,6 +3,25 @@ import type { ObserverSnapshot } from "../../src/testing/observer";
 
 const observerWaitTimeoutMs = 5_000;
 const observerPollIntervalsMs = [50, 100, 200];
+
+export interface LabelRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+export interface LabelObservation {
+  personId: number;
+  rect: LabelRect;
+  visible: boolean;
+}
+
+export interface MinimalLabelScene {
+  snapshot: ObserverSnapshot;
+  labels: LabelObservation[];
+}
+
 export async function readObserver(page: Page): Promise<ObserverSnapshot> {
   return page.evaluate(() => {
     const observer = globalThis.__WILNAATAHL_E2E_OBSERVER__;
@@ -11,12 +30,41 @@ export async function readObserver(page: Page): Promise<ObserverSnapshot> {
   });
 }
 
+export async function readMinimalLabelScene(page: Page): Promise<MinimalLabelScene> {
+  return page.locator(".node-label").evaluateAll((elements) => {
+    const observer = globalThis.__WILNAATAHL_E2E_OBSERVER__;
+    if (!observer) throw new Error("E2E observer is not registered.");
+
+    const labels = elements.map((element): LabelObservation => {
+      const htmlElement = element as HTMLElement;
+      const rect = htmlElement.getBoundingClientRect();
+      const styles = getComputedStyle(htmlElement);
+      return {
+        personId: Number(htmlElement.dataset.personId),
+        rect: {
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+        },
+        visible:
+          styles.visibility !== "hidden" &&
+          styles.display !== "none" &&
+          rect.width > 0 &&
+          rect.height > 0,
+      };
+    });
+
+    return { snapshot: observer.snapshot(), labels };
+  });
+}
+
 export async function waitForStableObserver(
   page: Page,
-  options: { requireRenderedState?: boolean; requireGeometry?: boolean } = {}
+  options: { requireRenderedState?: boolean; requireProjectedBounds?: boolean } = {}
 ): Promise<ObserverSnapshot> {
   const requireRenderedState = options.requireRenderedState ?? true;
-  const requireGeometry = options.requireGeometry ?? false;
+  const requireProjectedBounds = options.requireProjectedBounds ?? false;
   await expect
     .poll(() => page.evaluate(() => globalThis.__WILNAATAHL_E2E_OBSERVER__ !== undefined), {
       timeout: observerWaitTimeoutMs,
@@ -57,25 +105,15 @@ export async function waitForStableObserver(
           return 0;
         }
         if (latest.frame === previous.frame) return stableSamples;
-        const sameRenderedState =
-          JSON.stringify(latest.nodes) === JSON.stringify(previous.nodes) &&
-          JSON.stringify(latest.camera) === JSON.stringify(previous.camera) &&
-          latest.mode === previous.mode &&
-          latest.dragging === previous.dragging &&
-          JSON.stringify(latest.selectedPersonIds) === JSON.stringify(previous.selectedPersonIds) &&
-          JSON.stringify(latest.canvas) === JSON.stringify(previous.canvas);
-        stableSamples =
-          latest.frame > previous.frame &&
-          !latest.dragging &&
-          latest.mode !== "unknown" &&
-          latest.nodes.length > 0 &&
-          (!requireGeometry ||
-            latest.nodes.every(
-              (node) => node.projectedBounds !== null && node.labelGeometry !== null
-            )) &&
-          (!requireRenderedState || sameRenderedState)
-            ? stableSamples + 1
-            : 0;
+        const sameRenderedState = hasSameRenderedState(latest, previous);
+        const stableSample = isStableObserverSample(
+          latest,
+          previous,
+          requireRenderedState,
+          requireProjectedBounds,
+          sameRenderedState
+        );
+        stableSamples = stableSample ? stableSamples + 1 : 0;
         previous = latest;
         return stableSamples;
       },
@@ -84,6 +122,43 @@ export async function waitForStableObserver(
     .toBeGreaterThanOrEqual(2);
 
   return latest;
+}
+
+function hasSameRenderedState(current: ObserverSnapshot, previous: ObserverSnapshot): boolean {
+  return (
+    JSON.stringify(current.nodes) === JSON.stringify(previous.nodes) &&
+    JSON.stringify(current.camera) === JSON.stringify(previous.camera) &&
+    current.mode === previous.mode &&
+    current.dragging === previous.dragging &&
+    JSON.stringify(current.selectedPersonIds) === JSON.stringify(previous.selectedPersonIds) &&
+    JSON.stringify(current.canvas) === JSON.stringify(previous.canvas)
+  );
+}
+
+function hasFiniteProjectedBounds(snapshot: ObserverSnapshot): boolean {
+  return snapshot.nodes.every((node) => {
+    const bounds = node.projectedBounds;
+    return (
+      bounds !== null && Object.values(bounds).every((coordinate) => Number.isFinite(coordinate))
+    );
+  });
+}
+
+function isStableObserverSample(
+  current: ObserverSnapshot,
+  previous: ObserverSnapshot,
+  requireRenderedState: boolean,
+  requireProjectedBounds: boolean,
+  sameRenderedState: boolean
+): boolean {
+  return (
+    current.frame > previous.frame &&
+    !current.dragging &&
+    current.mode !== "unknown" &&
+    current.nodes.length > 0 &&
+    (!requireProjectedBounds || hasFiniteProjectedBounds(current)) &&
+    (!requireRenderedState || sameRenderedState)
+  );
 }
 
 export async function waitForNewObserverSession(

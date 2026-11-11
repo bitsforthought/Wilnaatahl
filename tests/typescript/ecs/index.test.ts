@@ -58,13 +58,21 @@ describe("ecs bridge", () => {
 
   test("runSystems wraps the world and delegates the delta", () => {
     const deltaSeconds = 0.125;
+    const callOrder: string[] = [];
+    vi.mocked(runFableSystems).mockImplementation(() => {
+      callOrder.push("fsharp");
+    });
 
-    runSystems({ world: world as never, delta: deltaSeconds });
+    runSystems({
+      world: world as never,
+      delta: deltaSeconds,
+    });
 
     expect(fromKootaWorld).toHaveBeenCalledOnce();
     expect(fromKootaWorld).toHaveBeenCalledWith(world);
     expect(runFableSystems).toHaveBeenCalledOnce();
     expect(runFableSystems).toHaveBeenCalledWith(wrappedWorld, deltaSeconds);
+    expect(callOrder).toEqual(["fsharp"]);
   });
 
   test("world actions wrap once and delegate each action with the wrapped world", () => {

@@ -22,10 +22,17 @@ module private TypeScriptSystems =
     [<Import("render", "../../ecs/rendering.ts")>]
     let render: IWorld -> IWorld = nativeOnly
 
+    /// Calls the label rendering system after mesh transforms are synchronized.
+    [<Import("renderLabels", "../../ecs/labelRendering.ts")>]
+    let renderLabels: IWorld -> IWorld = nativeOnly
+
 #else
 
     /// Unit test stub for rendering that does nothing.
     let render (world: IWorld) = world
+
+    /// Unit test stub for label rendering that does nothing.
+    let renderLabels (world: IWorld) = world
 
 #endif
 
@@ -43,6 +50,7 @@ let runSystems (world: IWorld) delta =
     //
     // Input is raised between frames. Resolve each target's EmitsIntent once before systems run;
     // every system shares this immutable list, and declaration mutations affect later snapshots.
+    // Mesh transforms must be applied before label projection reads their positions.
     let intents = world |> derivedIntents
 
     world
@@ -54,6 +62,7 @@ let runSystems (world: IWorld) delta =
     |> handleFileCommands intents
     |> move movementTracker
     |> render
+    |> renderLabels
     |> cleanupEvents
     |> ignore
 

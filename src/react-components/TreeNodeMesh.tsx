@@ -1,15 +1,21 @@
-import React, { useCallback, useRef } from "react";
+import React from "react";
 import { Html } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import { Entity } from "koota";
 import { useActions, useTrait } from "koota/react";
-import type { Camera, Object3D } from "three";
-import { eventActions, NodeLabel, Size, PersonRef, useMeshRef } from "../ecs";
+import { eventActions, NodeLabel, PersonRef, Size, useLabelRef, useMeshRef } from "../ecs";
 import { nodeLabelText } from "../i18n/format";
 import { useLocale } from "../i18n/hooks";
-import { calculateLabelPosition, type HtmlSize } from "./labelPlacement";
 
-type HtmlCalculatePosition = (object: Object3D, camera: Camera, htmlSize: HtmlSize) => number[];
+/**
+ * Drei's default adds the projected node position to the outer Html wrapper. The ECS label
+ * system already applies full-canvas translation, so fixed [0, 0] prevents a double offset.
+ */
+const htmlOrigin: [number, number] = [0, 0];
+
+function calculatePosition(): [number, number] {
+  return htmlOrigin;
+}
 
 export function TreeNodeMesh({ entity }: { entity: Entity }) {
   // HuwilpGroup guarantees that the traits are present.
@@ -23,16 +29,9 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
   const label = nodeLabelText(labelView, locale);
   const hasConnectedEventTarget = useThree((state) => state.events.connected != null);
   const ref = useMeshRef(entity);
-  const labelRef = useRef<HTMLDivElement>(null);
+  const labelRef = useLabelRef(entity);
 
   const { handleMeshClick } = useActions(eventActions);
-  const calculatePosition = useCallback<HtmlCalculatePosition>(function calculatePosition(
-    _,
-    camera,
-    htmlSize
-  ) {
-    return calculateLabelPosition(ref.current, camera, htmlSize, labelRef.current);
-  }, []);
 
   return (
     <>
@@ -54,12 +53,7 @@ export function TreeNodeMesh({ entity }: { entity: Entity }) {
         */}
         {label && hasConnectedEventTarget && (
           <Html calculatePosition={calculatePosition} style={{ pointerEvents: "none" }}>
-            <div
-              className="node-label"
-              data-person-id={person.Id}
-              data-node-entity-id={entity.id()}
-              ref={labelRef}
-            >
+            <div className="node-label" data-person-id={person.Id} ref={labelRef}>
               {label}
             </div>
           </Html>
