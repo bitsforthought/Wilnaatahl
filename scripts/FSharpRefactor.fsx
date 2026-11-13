@@ -62,27 +62,12 @@ module FSharpRefactor =
             failwith
                 "fsharprefactor.json must contain a \"rules\" object whose values are booleans or objects with a boolean \"enabled\"."
 
-    // Build outputs, restored packages and Fable-generated code are not authored here; fixing them would be
-    // overwritten or would rewrite third-party sources. Deliberately name-based so new projects need no registration.
-    let private skippedDirectoryNames =
-        set [ ".git"; "bin"; "obj"; "node_modules"; "fable_modules"; "generated" ]
-
-    let rec private filesUnder extensions directory =
-        seq {
-            yield!
-                Directory.EnumerateFiles directory
-                |> Seq.filter (fun path -> extensions |> Set.contains (Path.GetExtension path))
-
-            yield!
-                Directory.EnumerateDirectories directory
-                |> Seq.filter (fun child -> skippedDirectoryNames |> Set.contains (Path.GetFileName child) |> not)
-                |> Seq.collect (filesUnder extensions)
-        }
-
     /// Projects bring their compiled sources, so individual .fs/.fsi files are not separate inputs. Analyzing
     /// through the project also gives the tool typed compiler arguments, which many rules need to fire safely.
     let analysisInputs root =
-        filesUnder (set [ ".fsproj"; ".fsx" ]) root
+        let excluded = SkillOwnership.load root
+
+        SkillOwnership.filesUnder root excluded (set [ ".fsproj"; ".fsx" ]) root
         |> Seq.map (fun path -> Path.GetRelativePath(root, path))
         |> Seq.sort
         |> Seq.toList
@@ -135,6 +120,7 @@ module FSharpRefactor =
                 (Map [ ("FABLE_COMPILER", "true") ]))
 
     let run root mode =
+        let inputs = analysisInputs root
         // Both configuration files are checked before any analysis, so a bad edit cannot leave sources partly rewritten.
         Path.Combine(root, "fsharprefactor.json")
         |> File.ReadAllText
@@ -147,7 +133,7 @@ module FSharpRefactor =
             |> File.ReadAllText
             |> parsePerformanceCodes
 
-        analysisInputs root
+        inputs
         |> List.map (commonCommand root mode)
         |> List.iter ProcessExecution.runCommand
 
@@ -261,6 +247,9 @@ module RefactorSelfTest =
                 "src/generated/fable_modules/Library/Library.fsproj"
             ]
             |> List.iter writeFixture
+
+            writeFixture ".agents/skills/vendor/scripts/Vendor.fsx"
+            File.WriteAllText(Path.Combine(fixtureRoot, ".vendor-skills.ignore"), ".agents/skills/vendor/\n")
 
             assertEqual
                 "repository-root discovery doesn't include temporary self-test files"
