@@ -1,5 +1,5 @@
 #r "nuget: Fake.Core.Process, 6.1.4"
-#load "SkillOwnership.fsx"
+#load "RepositoryFileSelection.fsx"
 
 open System
 open System.ComponentModel
@@ -267,11 +267,11 @@ module BuildCommands =
         [ "Build"; "SelfTest"; "TestWithCoverageCheck" ] @ policyTargets
 
     let formattingCommands root mode =
-        let excluded = SkillOwnership.load root
+        let excluded = RepositoryFileSelection.load root
         let checkOnly = mode = Check
 
         let fSharpFiles =
-            SkillOwnership.filesUnder root excluded (set [ ".fs"; ".fsi"; ".fsx"; ".ml"; ".mli" ]) root
+            RepositoryFileSelection.filesUnder root excluded (set [ ".fs"; ".fsi"; ".fsx"; ".ml"; ".mli" ]) root
             |> Seq.map (fun path -> Path.GetRelativePath(root, path))
             |> Seq.sort
             |> Seq.toList
@@ -290,7 +290,7 @@ module BuildCommands =
                 "--ignore-path"
                 ".prettierignore"
                 "--ignore-path"
-                SkillOwnership.policyPath root
+                RepositoryFileSelection.policyPath root
             ]
 
         [
@@ -631,6 +631,9 @@ module BuildSelfTest =
             [ "Build"; "SelfTest"; "TestWithCoverageCheck"; "RewriteSource" ]
             (validateDependencies false)
 
+        temporaryDirectoryPath root $"repository-file-selection-{Guid.NewGuid():N}"
+        |> RepositoryFileSelection.SelfTest.runSelfTest
+
         let ownershipFixture =
             temporaryDirectoryPath root $"skill-ownership-{Guid.NewGuid():N}"
 
@@ -642,72 +645,14 @@ module BuildSelfTest =
 
         try
             fixtureFile ".vendor-skills.ignore" ".agents/skills/research/\n" |> ignore
-            let excluded = SkillOwnership.load ownershipFixture
             let vendor = fixtureFile ".agents/skills/research/SKILL.md" "malformed upstream"
             let owned = fixtureFile ".agents/skills/research-tools/SKILL.md" "malformed owned"
             let legacy = fixtureFile ".github/skills/legacy/SKILL.md" "---\nname: legacy\n---"
-
-            let namedLikeOutput =
-                fixtureFile ".github/skills/bin/SKILL.md" "---\nname: bin\n---"
 
             fixtureFile ".agents/skills/research/scripts/Probe.fsx" "let vendor=1" |> ignore
 
             let ownedScript =
                 fixtureFile ".agents/skills/research-tools/Probe.fsx" "let owned = 1"
-
-            assertEqual "vendor skill is excluded" true (SkillOwnership.isExcluded ownershipFixture excluded vendor)
-
-            assertEqual
-                "similarly named owned skill is governed"
-                false
-                (SkillOwnership.isExcluded ownershipFixture excluded owned)
-
-            assertEqual
-                "both roots discover only owned skills"
-                (set [ owned; legacy; namedLikeOutput ])
-                (SkillOwnership.skillFiles ownershipFixture excluded |> Set.ofArray)
-
-            assertEqual
-                "F# discovery excludes nested vendor scripts"
-                [ ownedScript ]
-                (SkillOwnership.filesUnder ownershipFixture excluded (set [ ".fsx" ]) ownershipFixture
-                 |> Seq.toList)
-
-            for invalid in
-                [
-                    ".agents/skills/*/"
-                    "! .agents/skills/research/"
-                    "/.agents/skills/research/"
-                    ".agents/skills/../"
-                    ".agents/skills/Research/"
-                    ".agents/skills/research"
-                    ".agents/skills/research/nested/"
-                    ".agents/skills/_research/"
-                    " .agents/skills/research/"
-                    ".agents/skills/research/ "
-                ] do
-                assertEqual
-                    $"invalid vendor policy is rejected: {invalid}"
-                    (Error "Vendor skill entries must be exact .agents/skills/<lowercase-name>/ directory paths.")
-                    (SkillOwnership.parse invalid)
-
-            assertEqual
-                "duplicate vendor directories have a distinct error"
-                (Error "Vendor skill directory entries must not be duplicated.")
-                (SkillOwnership.parse ".agents/skills/research/\n.agents/skills/research/")
-
-            assertEqual
-                "comments blank lines and CRLF are accepted"
-                (Ok(set [ ".agents/skills/research/"; ".agents/skills/vendor/" ]))
-                (SkillOwnership.parse "# Upstream\r\n\r\n  \r\n.agents/skills/research/\r\n.agents/skills/vendor/\r\n")
-
-            assertEqual "empty policy governs everything" (Ok Set.empty) (SkillOwnership.parse "")
-
-            assertEqual
-                "missing policy fails closed"
-                true
-                (failureFrom (fun () -> SkillOwnership.load (Path.Combine(ownershipFixture, "missing")) |> ignore)
-                 |> Option.isSome)
 
             fixtureFile ".vendor-skills.ignore" ".agents/skills/*/" |> ignore
 

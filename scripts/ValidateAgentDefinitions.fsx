@@ -33,7 +33,7 @@
 // are intentionally not in the allow-list and surface as warnings.
 
 #r "nuget: YamlDotNet, 16.3.0"
-#load "SkillOwnership.fsx"
+#load "RepositoryFileSelection.fsx"
 
 open System
 open System.IO
@@ -429,9 +429,9 @@ let validateText validate (text: string) : Finding list =
 
 let skillDefinitionResults root =
     root
-    |> SkillOwnership.load
-    |> SkillOwnership.skillFiles root
-    |> Array.map (fun file ->
+    |> RepositoryFileSelection.load
+    |> RepositoryFileSelection.skillFiles root
+    |> List.map (fun file ->
         let directory = Path.GetFileName(Path.GetDirectoryName file)
         file, (File.ReadAllText file |> validateText (Validation.Skill.validateSkill directory)))
 
@@ -877,7 +877,7 @@ tools: [0_x2a]
             write ".agents/skills/vendor/SKILL.md" "---\ninvalid: [\n---"
             write ".agents/skills/owned/SKILL.md" "---\nname: owned\n---"
 
-            root |> skillDefinitionResults |> Array.toList |> List.collect snd
+            root |> skillDefinitionResults |> List.collect snd
         finally
             Directory.Delete(root, true)
 
@@ -993,14 +993,19 @@ let agentResults =
 let skillResults =
     repoRoot
     |> skillDefinitionResults
-    |> Array.map (fun (file, findings) -> relative file, findings)
+    |> List.map (fun (file, findings) -> relative file, findings)
 
 let instructionResults =
     instructionFiles
     |> Array.map (fun file ->
         relative file, validateText Validation.Instruction.validateInstruction (File.ReadAllText file))
 
-let allResults = Array.concat [ agentResults; skillResults; instructionResults ]
+let allResults =
+    List.concat [
+        agentResults |> Array.toList
+        skillResults
+        instructionResults |> Array.toList
+    ]
 
 printfn "%s" (validationSummary agentFiles.Length skillResults.Length instructionFiles.Length)
 
@@ -1013,7 +1018,7 @@ for file, findings in allResults do
 
         printfn "  %-5s %s: %s" label file finding.Message
 
-let allFindings = allResults |> Array.toList |> List.collect snd
+let allFindings = allResults |> List.collect snd
 let totalErrors, totalWarnings = countBySeverity allFindings
 
 printfn "Result: %d error(s), %d warning(s)." totalErrors totalWarnings
