@@ -298,7 +298,7 @@ lean directly lowers cost. When working in this repo:
 ## Mandatory dev loop (definition of done)
 
 Detailed conventions live in path-scoped **custom instructions**
-(`.github/instructions/`), **skills** (`.github/skills/`), and specialized
+(`.github/instructions/`), **skills** (`.agents/skills/`), and specialized
 **agents** (`.github/agents/`). A change is not done until it has been through
 this loop:
 
@@ -424,7 +424,7 @@ or begin a sixth review round.
 | Synchronizing remaining layers of a partially merged PR stack                     | `stack-sync` skill                                             |
 | Cleaning up a fully merged PR stack                                               | `stack-cleanup` skill                                          |
 
-[fsharp-refactor-findings]: .github/skills/fsharp-refactor-findings/SKILL.md
+[fsharp-refactor-findings]: .agents/skills/fsharp-refactor-findings/SKILL.md
 
 Path-scoped custom instructions apply automatically when their `applyTo` pattern
 matches the files being changed. Set `excludeAgent` to `code-review` or
