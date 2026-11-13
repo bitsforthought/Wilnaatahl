@@ -10,15 +10,12 @@ all business rules and data structures.
 
 ## Gitxsan Terminology
 
-The domain uses Gitxsan terms as identifiers. Pluralization in Gitxsan does not
-follow the English `+s` convention, so use the correct plural form in identifiers
-rather than appending `s`:
+Before naming domain concepts, read [GLOSSARY.md](GLOSSARY.md) for canonical
+terms and definitions.
 
-- **Wilp** (singular) / **Huwilp** (plural) — a matrilineal House. E.g. a
-  `Map<WilpName, Wilp>` keyed by Wilp name should be named `HuwilpByName`, not
-  `WilpsByName`.
-- **Pdeek** (Clan) — each Wilp belongs to exactly one Pdeek (`LaxGibuu`/Wolf,
-  `LaxSkiik`/Eagle, `Ganeda`/Frog, `Giskaast`/Fireweed).
+The domain uses Gitxsan terms as identifiers. Use their correct plural forms
+rather than appending `s`: a `Map<WilpName, Wilp>` keyed by Wilp name should be
+named `HuwilpByName`, not `WilpsByName`.
 
 Sim Algyax (Gitxsanimx) is **not** a Canadian language. The Gitxsan nation
 precedes Canada by more than 10,000 years; do not frame the language or people as
@@ -41,6 +38,11 @@ and `behavior`. Preserve established identifiers, API names, and quoted text.
 This convention does not apply to Sim Algyax/Gitxsanimx text.
 
 ## Architecture & Data Flow
+
+For the rationale behind language responsibilities and state ownership, read
+[ADR 0001](docs/adr/0001-fsharp-shared-logic-typescript-adapters.md) and
+[ADR 0002](docs/adr/0002-ecs-shared-state-ownership.md) before changing those
+boundaries.
 
 - **Frontend:** React (TypeScript) in `src/react-components/` and `src/main.tsx`.
 - **Core Logic:** F# domain model, view model, ECS traits, entities, and systems
@@ -207,9 +209,13 @@ or decisions, read `docs/agents/domain.md`.
 - `package.json` and `scripts/Build.fsx` define the executable build contract.
 - README is a current quick-start guide for people setting up and using the
   repository.
+- `GLOSSARY.md` owns shared domain definitions; keep implementation details in
+  their relevant design or operational documents.
+- `docs/adr/` records consequential architectural and domain-model decisions
+  and their rationale, linking to detailed sources rather than replacing them.
 - `docs/` contains detailed current operational guidance.
-- `specs/` contains future requirements and design decisions that are not yet
-  implemented.
+- `specs/` contains feature requirements and detailed design explanations;
+  `specs/done/` retains design records for completed work.
 - `AGENTS.md`, skills, agents, and path instructions contain constraints for
   automated contributors; link to human documentation rather than copying its
   command manual.

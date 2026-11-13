@@ -9,6 +9,9 @@ and consumes files is in
 domain model and features built on the data are in
 [`specs/names-and-detail-overlay.md`](./names-and-detail-overlay.md).
 
+Shared domain definitions live in [GLOSSARY.md](../GLOSSARY.md); the sections below
+define their on-disk representation.
+
 ## Conventions
 
 - A file is a single JSON object with up to five top-level arrays: `people`,

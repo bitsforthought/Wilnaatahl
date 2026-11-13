@@ -55,15 +55,10 @@ extends is described in
 
 ## Terminology
 
-- **Name** — a heritable Gitxsan name, its own record with a unique id and text.
-- **Colonial name** — the Western/legal name, stored in `Person.ColonialName`
-  (the file's `name`), now optional.
-- **Wilp** / **Huwilp** — a matrilineal House (singular / plural).
-- **Birth Wilp** — the Wilp a person was born into, which can differ from their
-  current `Kinship` Wilp when they were adopted into another Wilp (the file's
-  `birthWilp`).
-- **Pdeeḵ** — Clan. Displayed to users in Gitxsan orthography, never as the DU
-  label (see [Kinship line](#kinship-line)).
+Shared domain definitions live in [GLOSSARY.md](../GLOSSARY.md).
+The persistence and model sections below distinguish file-local Name references
+from domain identity, and the [Kinship line](#kinship-line) describes display
+orthography.
 
 ---
 

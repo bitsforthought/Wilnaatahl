@@ -28,6 +28,10 @@ For the supported file format, see [`specs/json-parser.md`](specs/json-parser.md
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes and the
 validation gate that pull requests must pass.
 
+For domain vocabulary, see [GLOSSARY.md](GLOSSARY.md). Architectural decisions
+and their rationale are recorded in [docs/adr/](docs/adr/); detailed feature
+designs remain in [specs/](specs/).
+
 ## Development Instructions
 
 These instructions assume Windows 11 and PowerShell, but should be easily adaptable to other environments.
