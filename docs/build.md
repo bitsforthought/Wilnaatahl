@@ -81,6 +81,29 @@ it for `dotnet test`, and each test project builds as an executable. Coverage is
 extension, configured by the shared `tests/testconfig.json`. Running the tests
 from an IDE requires a test explorer that supports Microsoft Testing Platform.
 
+## Skill ownership
+
+Third-party skill folders are listed in `.vendor-skills.ignore`. Its
+entries are exact root-relative `.agents/skills/<lowercase-name>/` paths, one
+per line; blank lines and lines starting with `#` are allowed. Wildcards,
+negation, path traversal, and duplicate entries are rejected before source
+writers run.
+
+The same list governs Prettier, F# formatting/refactoring discovery, and skill
+frontmatter validation in local and CI flows. Entire listed folders are excluded,
+including references, metadata, and scripts. Unlisted skills in `.agents/skills`
+and `.github/skills` remain formatted and validated. Agents and path-specific
+instructions retain their existing validation.
+
+When adding a third-party skill, add its folder to the list before running
+repository gates. Update it through its upstream installer without editing the
+copied files, and remove the list entry when removing the skill. Project-owned
+skills need no registration. `skills-lock.json` remains installer metadata, not
+the ownership policy: it does not cover every installation channel.
+
+These exclusions preserve existing vendor files; they do not undo past edits or
+install/update skills. Upstream freshness checks are not part of validation.
+
 ## CI Mode
 
 Pass `--ci` through the quoted separator:

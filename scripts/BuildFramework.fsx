@@ -1,4 +1,5 @@
 #r "nuget: Fake.Core.Process, 6.1.4"
+#load "SkillOwnership.fsx"
 
 open System
 open System.ComponentModel
@@ -266,18 +267,35 @@ module BuildCommands =
         [ "Build"; "SelfTest"; "TestWithCoverageCheck" ] @ policyTargets
 
     let formattingCommands root mode =
+        let excluded = SkillOwnership.load root
         let checkOnly = mode = Check
+
+        let fSharpFiles =
+            SkillOwnership.filesUnder root excluded (set [ ".fs"; ".fsi"; ".fsx"; ".ml"; ".mli" ]) root
+            |> Seq.map (fun path -> Path.GetRelativePath(root, path))
+            |> Seq.sort
+            |> Seq.toList
 
         let fantomasArguments =
             if checkOnly then
-                [ "fantomas"; "--check"; "." ]
+                [ "fantomas"; "--check" ] @ fSharpFiles
             else
-                [ "fantomas"; "." ]
+                [ "fantomas" ] @ fSharpFiles
 
-        let prettierArguments = if checkOnly then [ "--check"; "." ] else [ "--write"; "." ]
+        let prettierArguments =
+            [ (if checkOnly then "--check" else "--write"); "." ]
+            @ [
+                "--ignore-path"
+                ".gitignore"
+                "--ignore-path"
+                ".prettierignore"
+                "--ignore-path"
+                SkillOwnership.policyPath root
+            ]
 
         [
-            dotnetCommand root fantomasArguments
+            if not (List.isEmpty fSharpFiles) then
+                dotnetCommand root fantomasArguments
             nodeCommand root "node_modules/prettier/bin/prettier.cjs" prettierArguments
         ]
 
@@ -613,21 +631,159 @@ module BuildSelfTest =
             [ "Build"; "SelfTest"; "TestWithCoverageCheck"; "RewriteSource" ]
             (validateDependencies false)
 
-        assertEqual
-            "CI format commands check without writing"
-            [
-                dotnetCommand root [ "fantomas"; "--check"; "." ]
-                nodeCommand root "node_modules/prettier/bin/prettier.cjs" [ "--check"; "." ]
-            ]
-            (formattingCommands root Check)
+        let ownershipFixture =
+            temporaryDirectoryPath root $"skill-ownership-{Guid.NewGuid():N}"
 
-        assertEqual
-            "local format commands write"
-            [
-                dotnetCommand root [ "fantomas"; "." ]
-                nodeCommand root "node_modules/prettier/bin/prettier.cjs" [ "--write"; "." ]
-            ]
-            (formattingCommands root Write)
+        let fixtureFile relativePath (text: string) =
+            let path = Path.GetFullPath(Path.Combine(ownershipFixture, relativePath))
+            Directory.CreateDirectory(Path.GetDirectoryName path) |> ignore
+            File.WriteAllText(path, text)
+            path
+
+        try
+            fixtureFile ".vendor-skills.ignore" ".agents/skills/research/\n" |> ignore
+            let excluded = SkillOwnership.load ownershipFixture
+            let vendor = fixtureFile ".agents/skills/research/SKILL.md" "malformed upstream"
+            let owned = fixtureFile ".agents/skills/research-tools/SKILL.md" "malformed owned"
+            let legacy = fixtureFile ".github/skills/legacy/SKILL.md" "---\nname: legacy\n---"
+
+            let namedLikeOutput =
+                fixtureFile ".github/skills/bin/SKILL.md" "---\nname: bin\n---"
+
+            fixtureFile ".agents/skills/research/scripts/Probe.fsx" "let vendor=1" |> ignore
+
+            let ownedScript =
+                fixtureFile ".agents/skills/research-tools/Probe.fsx" "let owned = 1"
+
+            assertEqual "vendor skill is excluded" true (SkillOwnership.isExcluded ownershipFixture excluded vendor)
+
+            assertEqual
+                "similarly named owned skill is governed"
+                false
+                (SkillOwnership.isExcluded ownershipFixture excluded owned)
+
+            assertEqual
+                "both roots discover only owned skills"
+                (set [ owned; legacy; namedLikeOutput ])
+                (SkillOwnership.skillFiles ownershipFixture excluded |> Set.ofArray)
+
+            assertEqual
+                "F# discovery excludes nested vendor scripts"
+                [ ownedScript ]
+                (SkillOwnership.filesUnder ownershipFixture excluded (set [ ".fsx" ]) ownershipFixture
+                 |> Seq.toList)
+
+            for invalid in
+                [
+                    ".agents/skills/*/"
+                    "! .agents/skills/research/"
+                    "/.agents/skills/research/"
+                    ".agents/skills/../"
+                    ".agents/skills/Research/"
+                    ".agents/skills/research"
+                    ".agents/skills/research/nested/"
+                    ".agents/skills/_research/"
+                    " .agents/skills/research/"
+                    ".agents/skills/research/ "
+                ] do
+                assertEqual
+                    $"invalid vendor policy is rejected: {invalid}"
+                    (Error "Vendor skill entries must be exact .agents/skills/<lowercase-name>/ directory paths.")
+                    (SkillOwnership.parse invalid)
+
+            assertEqual
+                "duplicate vendor directories have a distinct error"
+                (Error "Vendor skill directory entries must not be duplicated.")
+                (SkillOwnership.parse ".agents/skills/research/\n.agents/skills/research/")
+
+            assertEqual
+                "comments blank lines and CRLF are accepted"
+                (Ok(set [ ".agents/skills/research/"; ".agents/skills/vendor/" ]))
+                (SkillOwnership.parse "# Upstream\r\n\r\n  \r\n.agents/skills/research/\r\n.agents/skills/vendor/\r\n")
+
+            assertEqual "empty policy governs everything" (Ok Set.empty) (SkillOwnership.parse "")
+
+            assertEqual
+                "missing policy fails closed"
+                true
+                (failureFrom (fun () -> SkillOwnership.load (Path.Combine(ownershipFixture, "missing")) |> ignore)
+                 |> Option.isSome)
+
+            fixtureFile ".vendor-skills.ignore" ".agents/skills/*/" |> ignore
+
+            assertEqual
+                "formatting validates policy before producing writer commands"
+                (Some "Vendor skill entries must be exact .agents/skills/<lowercase-name>/ directory paths.")
+                (failureFrom (fun () -> formattingCommands ownershipFixture Write |> ignore)
+                 |> Option.map _.Message)
+
+            fixtureFile ".vendor-skills.ignore" ".agents/skills/research/\n" |> ignore
+
+            let ownedScriptRelative =
+                Path.Combine(".agents", "skills", "research-tools", "Probe.fsx")
+
+            assertEqual
+                "Fantomas check selects only owned F# inputs without writing"
+                (dotnetCommand ownershipFixture [ "fantomas"; "--check"; ownedScriptRelative ])
+                (formattingCommands ownershipFixture Check |> List.head)
+
+            assertEqual
+                "Fantomas write selects only owned F# inputs"
+                (dotnetCommand ownershipFixture [ "fantomas"; ownedScriptRelative ])
+                (formattingCommands ownershipFixture Write |> List.head)
+
+            File.Delete ownedScript
+
+            assertEqual
+                "no eligible F# inputs never invokes Fantomas with its root fallback"
+                [ "node" ]
+                (formattingCommands ownershipFixture Write |> List.map _.Executable)
+
+            let vendorYaml =
+                fixtureFile ".agents/skills/research/agents/openai.yaml" "invalid: ["
+
+            let vendorReference =
+                fixtureFile ".agents/skills/research/references/README.md" "#   upstream"
+
+            let ignoredByGit = fixtureFile "git-ignored.yaml" "invalid: ["
+            let ignoredByPrettier = fixtureFile "prettier-ignored.yaml" "invalid: ["
+            fixtureFile ".gitignore" "git-ignored.yaml\n" |> ignore
+            fixtureFile ".prettierignore" "prettier-ignored.yaml\n" |> ignore
+            fixtureFile ".prettierrc.json" "{\"tabWidth\":2}" |> ignore
+            File.WriteAllText(owned, "---\nname: research-tools\ndescription: Owned.\n---\n#   owned\n")
+            File.WriteAllText(legacy, "---\nname: legacy\ndescription: Owned.\n---\n#   legacy\n")
+            let protectedFiles = [ vendor; vendorYaml; vendorReference; ignoredByGit; ignoredByPrettier ]
+            let before = protectedFiles |> List.map File.ReadAllText
+
+            let prettierCommand mode =
+                formattingCommands ownershipFixture mode
+                |> List.last
+                |> fun command ->
+                    let tool = Path.Combine(root, "node_modules", "prettier", "bin", "prettier.cjs")
+
+                    {
+                        command with
+                            Arguments = tool :: List.tail command.Arguments
+                            RequiredFile = Some tool
+                    }
+
+            assertEqual "owned formatting violation fails check mode" 1 (prettierCommand Check |> runProcess)
+
+            assertEqual
+                "write mode formats owned files despite malformed upstream YAML"
+                0
+                (prettierCommand Write |> runProcess)
+
+            assertEqual "check mode passes after owned formatting" 0 (prettierCommand Check |> runProcess)
+
+            assertEqual
+                "vendor content and existing ignores are preserved"
+                before
+                (protectedFiles |> List.map File.ReadAllText)
+
+            assertEqual "owned neighbour is formatted" true (File.ReadAllText(owned).Contains "# owned\n")
+        finally
+            Directory.Delete(ownershipFixture, true)
 
         assertEqual
             "Fable compilation is followed by bridge generation without an embedded self-test"

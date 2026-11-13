@@ -33,6 +33,7 @@
 // are intentionally not in the allow-list and surface as warnings.
 
 #r "nuget: YamlDotNet, 16.3.0"
+#load "SkillOwnership.fsx"
 
 open System
 open System.IO
@@ -425,6 +426,14 @@ let validateText validate (text: string) : Finding list =
         }
       ]
     | Ok fields -> validate fields
+
+let skillDefinitionResults root =
+    root
+    |> SkillOwnership.load
+    |> SkillOwnership.skillFiles root
+    |> Array.map (fun file ->
+        let directory = Path.GetFileName(Path.GetDirectoryName file)
+        file, (File.ReadAllText file |> validateText (Validation.Skill.validateSkill directory)))
 
 let countBySeverity findings =
     let errors =
@@ -854,9 +863,30 @@ tools: [0_x2a]
             if Directory.Exists root then
                 Directory.Delete(root, true)
 
+    let ownedSkillFindings =
+        let root =
+            Path.Combine(Path.GetTempPath(), $"wilnaatahl-skill-test-{Guid.NewGuid()}")
+
+        let write relativePath (text: string) =
+            let path = Path.Combine(root, relativePath)
+            Directory.CreateDirectory(Path.GetDirectoryName path) |> ignore
+            File.WriteAllText(path, text)
+
+        try
+            write ".vendor-skills.ignore" ".agents/skills/vendor/\n"
+            write ".agents/skills/vendor/SKILL.md" "---\ninvalid: [\n---"
+            write ".agents/skills/owned/SKILL.md" "---\nname: owned\n---"
+
+            root |> skillDefinitionResults |> Array.toList |> List.collect snd
+        finally
+            Directory.Delete(root, true)
+
     printfn "Running self-test..."
 
     let results = [
+        check "owned skills in the shared root are validated without reading vendor YAML" ownedSkillFindings 1 0 [
+            "description"
+        ]
         check "valid agent has no findings" (agent validAgent) 0 0 []
         check "retired infer is an error" (agent inferAgent) 1 0 [ "retired" ]
         check "agent skills: is a warning" (agent skillsAgent) 0 1 [ "skills" ]
@@ -943,7 +973,6 @@ tools: [0_x2a]
 
 let repoRoot = Path.GetDirectoryName(Path.GetFullPath(__SOURCE_DIRECTORY__))
 let agentsDir = Path.Combine(repoRoot, ".github", "agents")
-let skillsDir = Path.Combine(repoRoot, ".github", "skills")
 let instructionsDir = Path.Combine(repoRoot, ".github", "instructions")
 
 let scriptArgs = fsi.CommandLineArgs |> Array.skip 1
@@ -952,8 +981,6 @@ if scriptArgs |> Array.contains "--self-test" then
     selfTest ()
 
 let agentFiles = definitionFiles agentsDir "*.md" SearchOption.TopDirectoryOnly
-
-let skillFiles = definitionFiles skillsDir "SKILL.md" SearchOption.AllDirectories
 
 let instructionFiles = instructionDefinitionFiles instructionsDir
 
@@ -964,10 +991,9 @@ let agentResults =
     |> Array.map (fun file -> relative file, validateText Validation.Agent.validateAgent (File.ReadAllText file))
 
 let skillResults =
-    skillFiles
-    |> Array.map (fun file ->
-        let directory = Path.GetFileName(Path.GetDirectoryName file)
-        relative file, validateText (Validation.Skill.validateSkill directory) (File.ReadAllText file))
+    repoRoot
+    |> skillDefinitionResults
+    |> Array.map (fun (file, findings) -> relative file, findings)
 
 let instructionResults =
     instructionFiles
@@ -976,7 +1002,7 @@ let instructionResults =
 
 let allResults = Array.concat [ agentResults; skillResults; instructionResults ]
 
-printfn "%s" (validationSummary agentFiles.Length skillFiles.Length instructionFiles.Length)
+printfn "%s" (validationSummary agentFiles.Length skillResults.Length instructionFiles.Length)
 
 for file, findings in allResults do
     for finding in findings do
