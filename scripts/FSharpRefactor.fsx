@@ -65,9 +65,9 @@ module FSharpRefactor =
     /// Projects bring their compiled sources, so individual .fs/.fsi files are not separate inputs. Analyzing
     /// through the project also gives the tool typed compiler arguments, which many rules need to fire safely.
     let analysisInputs root =
-        let excluded = SkillOwnership.load root
+        let excluded = RepositoryFileSelection.load root
 
-        SkillOwnership.filesUnder root excluded (set [ ".fsproj"; ".fsx" ]) root
+        RepositoryFileSelection.filesUnder root excluded (set [ ".fsproj"; ".fsx" ]) root
         |> Seq.map (fun path -> Path.GetRelativePath(root, path))
         |> Seq.sort
         |> Seq.toList
@@ -248,6 +248,8 @@ module RefactorSelfTest =
             ]
             |> List.iter writeFixture
 
+            // An otherwise eligible script makes the input-list assertion fail
+            // if vendor-directory exclusion is removed.
             writeFixture ".agents/skills/vendor/scripts/Vendor.fsx"
             File.WriteAllText(Path.Combine(fixtureRoot, ".vendor-skills.ignore"), ".agents/skills/vendor/\n")
 
@@ -258,7 +260,7 @@ module RefactorSelfTest =
                  |> List.exists (fun path -> path.Contains(Path.GetFileName fixtureRoot, StringComparison.Ordinal)))
 
             assertEqual
-                "filesystem discovery finds each project and authored script, skipping generated and dependency trees"
+                "filesystem discovery finds each project and authored script, skipping vendor, generated and dependency trees"
                 [
                     Path.Combine("App", "App.fsproj")
                     Path.Combine("tests", "Lib.Tests", "Lib.Tests.fsproj")
