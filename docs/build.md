@@ -101,6 +101,11 @@ copied files, and remove the list entry when removing the skill. Project-owned
 skills need no registration. `skills-lock.json` remains installer metadata, not
 the ownership policy: it does not cover every installation channel.
 
+Project-owned skills use `.agents/skills/<name>/SKILL.md` as their canonical
+location alongside installed third-party skills. Copilot CLI and Codex discover
+this location; Claude Code documents `.claude/skills` instead and requires a
+separate installation or adapter, which this repository does not provide.
+
 These exclusions preserve existing vendor files; they do not undo past edits or
 install/update skills. Upstream freshness checks are not part of validation.
 
