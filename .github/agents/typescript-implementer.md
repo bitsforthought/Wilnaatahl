@@ -22,10 +22,8 @@ Apply the `typescript-style` skill (named hot-path callbacks, imports at top, th
 React/Three.js and Koota `useTrait` rules). Keep `.tsx` limited to presentation
 wiring; put domain/layout logic in F# and browser-specific logic in tested `.ts`.
 Apply the `typescript-testing` skill when adding or modifying tests. TypeScript
-tests live under `tests/typescript` and use Vitest. Use
-`npm run fake "--" --target TestTypeScript` for the full TypeScript suite or
-`npm run fake "--" --target TestKoota` for the portable conformance subset during
-iteration; the final gate is `npm run validate`.
+tests live under `tests/typescript` and use Vitest. Apply `validate-change` for
+focused checks and the final validation gate.
 Then run the mandatory `adversarial-reviewer` panel exactly as specified by the
 `adversarial-code-review` skill before declaring the change complete.
 
