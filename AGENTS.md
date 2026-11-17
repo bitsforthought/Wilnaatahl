@@ -327,7 +327,7 @@ no build/test gate unless documentation checks exist. Prose/comment-only review
 fixes retain prior passing evidence and need only applicable formatting, link,
 or documentation checks; tool-consumed directives and configuration are not prose.
 Reuse valid evidence across handoffs rather than rerunning checks for a fresh
-report. Execution details belong in `tdd-coverage-loop`.
+report. Execution details belong in `validate-change`.
 
 ### Delivering a plan (outer loop)
 
@@ -413,7 +413,7 @@ or begin a sixth review round.
 | Writing/editing any `.fs` or `.fsx` file                                          | `fsharp-style` skill                                           |
 | Writing or strengthening F# tests                                                 | `fsharp-testing` skill                                         |
 | Writing or strengthening TypeScript tests                                         | `typescript-testing` skill                                     |
-| Running the build/test/coverage gate                                              | `tdd-coverage-loop` skill                                      |
+| Running the build/test/coverage gate                                              | `validate-change` skill                                        |
 | Handling fsharp-refactor findings or strict refactor-gate failures                | [fsharp-refactor-findings] skill                               |
 | Reviewing a change (the mandatory step)                                           | `adversarial-reviewer` agent / `adversarial-code-review` skill |
 | Changing build/CI/codegen infrastructure or the package-command facade            | `infra-scripts-fsharp` skill                                   |

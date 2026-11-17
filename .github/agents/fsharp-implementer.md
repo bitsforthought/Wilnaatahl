@@ -37,7 +37,7 @@ final review has passed:
    `internal` by default, spelled-out names).
 4. **REFACTOR.** Remove dead code deeply, tighten encapsulation, keep comments
    truthful.
-5. **Validate** with the full gate from the `tdd-coverage-loop` skill.
+5. **Validate** with the full gate from the `validate-change` skill.
    `dotnet test` alone is insufficient — Fable can emit invalid TS that only
    `npm run build` catches. Run `npm run validate` for the complete gate.
 6. **Mandatory multi-model adversarial review.** Run the `adversarial-reviewer`

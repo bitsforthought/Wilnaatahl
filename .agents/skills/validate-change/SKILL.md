@@ -1,13 +1,17 @@
 ---
-name: tdd-coverage-loop
+name: validate-change
 description: >-
-  The build/test/coverage validation gate for Wilnaatahl — the exact command
-  sequence to run before declaring any code change done, plus why each step is
-  required. Use whenever validating a change or deciding whether work is
-  complete.
+  Validate a Wilnaatahl change against its acceptance criteria and the
+  build/test/coverage gate. Use for focused checks, final validation, or
+  deciding whether existing validation evidence can be reused.
 ---
 
 # Validation gate (build, test, coverage, lint)
+
+Input: acceptance criteria and the candidate being checked. Output: the candidate
+identity, command, mode, result, and log path for each check. For uncommitted
+changes, identify the content as well as the base commit; `HEAD` alone is not
+the candidate.
 
 Run the full validation target before considering any code change complete:
 
@@ -25,8 +29,7 @@ Use `npm run validate "--" --ci` for the non-writing CI policy.
 
 - Check the acceptance criteria with focused tests and direct inspection before
   the full gate. A green build alone does not establish the requested behaviour.
-- Follow `AGENTS.md`'s validation scope and evidence-reuse policy. Record the
-  candidate, command, mode, result, and log path for each check.
+- Follow `AGENTS.md`'s validation scope and evidence-reuse policy.
 - Run both local and CI policy only when the change affects their differences or
   acceptance criteria require both. Capture performance baselines before edits,
   but defer repeated comparison measurements until correctness fixes are settled;
@@ -54,3 +57,7 @@ invalid TypeScript emitted by Fable, and TypeScript tests alone do not exercise
 the .NET implementation.
 
 Warnings fail the build. Fix them rather than suppressing their exit status.
+
+See [Build and Validation](../../../docs/build.md) for target details and
+argument forwarding. This skill establishes validation evidence, not review
+approval or permission to publish.
