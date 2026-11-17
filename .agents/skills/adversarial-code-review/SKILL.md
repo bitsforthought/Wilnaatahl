@@ -54,26 +54,11 @@ not clean. Keep clean reports short and omit implementation checklists.
 
 ## 1. Logic coverage vs line coverage
 
-The change can pass `coverage:check` and still be under-tested. For every unit
-touched, ask:
+Apply [shared testing standards](../../../docs/testing.md) and the language
+testing skill, including triggered references, to every changed contract. Report
+the concrete guarantee missing from its tests or RED evidence; a passing coverage
+gate does not resolve that finding. Also inspect these coverage escape routes:
 
-- Are all **equivalence classes** of input exercised, or only one happy path?
-- Are **boundaries** covered (empty/single/many, min/max, first/last, off-by-one)?
-- Is every **error/exception path** tested, asserting the **exact message** (not
-  just "it threw")? See the `fsharp-testing` skill for the contract.
-- Are tests **strong** — would each assertion actually fail if the code were
-  broken? Flag tautological assertions (checking a value didn't change when
-  nothing could have changed it).
-- **Implementation-echoing tests.** Flag expected values reconstructed from the
-  same declarations, graph builder, command table, or output strings as the code
-  under test. These tests agree with any coordinated mistake and protect no
-  independent behaviour. Require an observable repository contract and a
-  concrete regression mechanism.
-- **History-based tests.** Flag tests whose only purpose is to record
-  implementation or migration chronology, or preserve behaviour no longer
-  required. Tests should protect enduring contracts, including valid regression
-  and compatibility guarantees; Git records history.
-- For TypeScript tests, apply the `typescript-testing` skill in full.
 - Does any new `.tsx` contain computation rather than hook/state/props/style
   wiring? Because `.tsx` is excluded from the coverage denominator, arithmetic,
   string composition, branching, and I/O sequences there can evade the coverage
@@ -82,29 +67,6 @@ touched, ask:
   covers hand-written `src/**/*.ts` (excluding generated files and `vite-env`),
   so untested browser logic is a coverage and regression risk even when the
   aggregate gate passes.
-- For `internal` primitives of fundamental types (e.g. `FamilyGraph`), is there a
-  **direct** test, or only transitive coverage through callers?
-- **A RED test that only failed to compile was never RED.** Confirm new tests
-  fail for the right reason against a returning stub, not because a name is
-  missing.
-- **Imperative-style assertions.** Flag tests that unwrap a `Result`/`Option` with
-  an inline `match … | Ok x -> <assertions> | Error _ -> failwith …` and nest the
-  checks in the success branch, rather than asserting on the whole result in one
-  declarative `=!` (e.g. `f x =! Ok expectedLiteral`, or lifting the value via a
-  reusable unwrap-or-fail helper like `readBack`/`importOrFail` and asserting
-  directly). Also flag whole-value checks re-expressed as terse projections/tuples
-  where a plain expected literal would read more clearly — verbosity is fine when
-  it aids understanding. See the `fsharp-testing` skill.
-- **Repetitive facts that should be a `[<Theory>]` or `[<Property>]`.** Flag runs
-  of `[<Fact>]`s that differ only in one boolean/enum argument, or only in which
-  DU case they feed in. These are enumerated tables (`[<Theory>]` with
-  `TheoryData`) or, when the argument's contract is universal ("this flag affects
-  no field but one"), a single `[<Property>]`. Do not accept "the change didn't
-  introduce PBT" as a reason to skip the question — a diff that adds repetitive
-  facts must justify why a property or theory was rejected. Conversely, flag
-  properties whose **generator can't reach the interesting branch** (e.g. default
-  string generation where the behaviour turns on two strings colliding) and
-  properties **asserted more widely than they hold**.
 
 ## 2. F# idiom violations (C#-in-F#)
 

@@ -1,33 +1,25 @@
 ---
 name: typescript-testing
 description: >-
-  Testing conventions for Wilnaatahl TypeScript and React code — strict TDD,
-  Vitest matcher semantics, independent assertions, canonical defaults,
+  Testing conventions for Wilnaatahl TypeScript and React code — Vitest
+  matcher semantics, independent assertions, canonical defaults,
   reactive subscription boundaries, and geometry invariants. Use when writing,
   changing, or reviewing tests under tests/typescript/.
 ---
 
 # TypeScript testing
 
+Read [shared testing standards](../../../docs/testing.md) when authoring or
+reviewing tests; they own behavioural RED, logical coverage, independent
+expectations, and enduring contracts.
+
 TypeScript tests live under `tests/typescript/` and use Vitest. Mirror the source
 layout, keep the default Node environment for pure logic, and opt into jsdom with
 `// @vitest-environment jsdom` only for tests that require browser or React DOM
 behaviour.
 
-## Strict TDD
-
-Write the failing test first and observe it fail for the intended behavioural
-reason. A compile error does not prove the test can detect a broken
-implementation; add the smallest type-correct stub needed to reach a failing
-assertion before implementing the behaviour.
-
 ## Assertions
 
-- **Test enduring contracts, not chronology.** Do not keep tests whose only
-  purpose is to record implementation or migration history, or to preserve
-  behavior that is no longer required. Git records how the code changed; tests
-  should protect behaviour that callers are still promised. Retain regression or
-  compatibility tests when they verify a current contract.
 - **Choose matchers by contract.** `toBe` uses `Object.is`, so use it for primitive
   values and required reference identity. `toEqual` recursively compares values;
   `toStrictEqual` also pins strict shape and prototype semantics. Prefer one

@@ -21,7 +21,8 @@ generated files.
 Apply the `typescript-style` skill (named hot-path callbacks, imports at top, the
 React/Three.js and Koota `useTrait` rules). Keep `.tsx` limited to presentation
 wiring; put domain/layout logic in F# and browser-specific logic in tested `.ts`.
-Apply the `typescript-testing` skill when adding or modifying tests. TypeScript
+Apply upstream `tdd`, the [shared testing standards](../../docs/testing.md),
+and `typescript-testing` when adding or modifying tests. TypeScript
 tests live under `tests/typescript` and use Vitest. Apply `validate-change` for
 focused checks and the final validation gate.
 Then run the mandatory `adversarial-reviewer` panel exactly as specified by the
