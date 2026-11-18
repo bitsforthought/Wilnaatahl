@@ -29,7 +29,17 @@ Use `npm run validate "--" --ci` for the non-writing CI policy.
 
 - Check the acceptance criteria with focused tests and direct inspection before
   the full gate. A green build alone does not establish the requested behaviour.
-- Follow `AGENTS.md`'s validation scope and evidence-reuse policy.
+- Run the full gate on the stable completion candidate. Repeat after executable
+  code, tests, dependencies, build configuration, or tool-consumed instructions
+  change, or a failure/unresolved concern invalidates earlier evidence.
+- Documentation-only changes need no build/test gate unless documentation checks
+  exist. Prose/comment-only review fixes retain prior passing evidence and need
+  only applicable formatting, link, or documentation checks. Tool-consumed
+  directives and configuration are not prose.
+- Reuse evidence for unchanged candidate content across handoffs; record its
+  identity before and after generation/formatting. A commit can preserve checked
+  content, but changed or newly combined content needs applicable checks. This
+  skill does not certify review approval.
 - Run both local and CI policy only when the change affects their differences or
   acceptance criteria require both. Capture performance baselines before edits,
   but defer repeated comparison measurements until correctness fixes are settled;

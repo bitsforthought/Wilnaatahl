@@ -48,7 +48,8 @@ Agreement among panelists is not evidence that a requirement exists.
 For F# style feedback that conflicts with an enabled automatic rewrite, apply
 the precedence policy in the [findings skill](../fsharp-refactor-findings/SKILL.md).
 
-Follow the review-packet protocol in `AGENTS.md`. A clean result requires
+Follow the [review process](process.md) for committed packets and panel rounds.
+A clean result requires
 inspection of the complete supplied scope; missing evidence means incomplete,
 not clean. Keep clean reports short and omit implementation checklists.
 
@@ -174,7 +175,8 @@ failure or regression rather than duplicating that skill's checklist here.
   subscribers without diffing, so a system that writes a recomputed value every
   frame re-renders subscribed components at 60 fps. Flag writes in per-frame
   systems that aren't guarded on an actual change.
-- Does the evidence cover the candidate under `AGENTS.md`'s validation policy?
+- Does the evidence cover the candidate under
+  [`validate-change`'s scope and reuse policy](../validate-change/SKILL.md#scope-and-reuse)?
   Request additional checks only for a concrete uncovered failure mechanism.
   For code changes, .NET tests alone miss invalid TypeScript emitted by Fable.
 - For ECS tests: are they portable across the .NET mock and real Koota, and
@@ -182,25 +184,5 @@ failure or regression rather than duplicating that skill's checklist here.
 
 ## Multi-model use
 
-The review is a **multi-model** review and is **always** run — never skipped and
-never gated on how "risky" the change looks. Run this rubric under **several
-different models** (e.g. an Anthropic, an OpenAI, and a Google model) so the
-review does not share a single model's blind spots; running the same rubric three
-times on one model is not a substitute. **Wait for every panelist to report
-before consolidating, addressing findings, or committing** — do not act on a
-partial panel. The whole point of multi-model review is that any single model, or
-even the majority, can be wrong: a lone dissenter is often the one who caught the
-real bug, so a finding that lands after you think you're done still counts.
-Consolidate and deduplicate the findings across the **full** panel, then address
-every genuine issue. The first panel reviews the complete candidate diff. A fresh
-panel after a fix reviews the resolution delta: verify the stated finding is
-resolved and inspect the changed files for regressions caused by that resolution.
-Do not re-audit unchanged code or re-raise a rejected finding unless the delta
-provides new contrary evidence. An unresolved deferred finding stays in each
-delta packet with the files needed to adjudicate it, even when otherwise
-unchanged. Resolve each deferral as accepted or rejected before the final
-permitted review round. If any genuine finding remains unaddressed after the
-final permitted round, stop and raise it to the user for manual human review; do
-not declare the change done or begin a sixth review round. Iterate this
-address-and-re-solicit loop for **at most five rounds**, stopping as soon as a
-round surfaces no genuine findings. Only then is the change done.
+The coordinator must run the mandatory panel using [the process](process.md).
+Each reviewer is one read-only panelist, not a nested panel coordinator.

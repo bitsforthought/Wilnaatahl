@@ -1,69 +1,51 @@
 ---
 name: implement-plan
 description: >-
-  Implements an approved Wilnaatahl plan as a gh-stack: one fully validated,
-  reviewed, committed layer and PR per plan step. Use after plan approval, when
-  exiting plan mode to implement, or when resuming a partly implemented plan.
+  Implements an approved Wilnaatahl plan as a gh-stack, one validated and
+  reviewed layer and PR per step. Use after plan approval or to resume
+  a partly implemented stack plan.
 ---
 
 # Implement an approved plan
 
-Apply the mandatory dev loop in `AGENTS.md` separately to every plan step. Each
-step becomes one `gh stack` layer, commit, and PR.
+Read the [implementation lifecycle](../../../docs/agents/implementation.md).
+The primary session coordinates each layer's validation, commits, and review.
+Executors own assigned edits and focused checks. Use `gh-stack` for commands and
+stack design; publish each accepted layer before starting the next.
 
-The primary session coordinates the work and owns state-changing git and
-`gh stack` commands. Each step's executor owns its full quality loop, including
-adversarial review. The primary session verifies the report mechanically; it
-does not re-review or overrule the executor.
+## Plan and prepare
 
-Keep one owner for each edit scope and its quality loop; do not duplicate an
-assignment while an executor is active. Handoffs carry decisions, changed files,
-evidence paths, and unresolved findings, not transcripts or pasted diffs. Follow
-`AGENTS.md`'s pass-by-reference review-packet protocol. The coordinator checks
-reports without repeating a completed gate unless the candidate has changed or
-the evidence exposes an unresolved concern.
+Each bottom-up step needs one reviewable concern, observable acceptance criteria
+and approved test seams, a `<feature-slug>/<step-slug>` branch, and an executor:
+`fsharp-implementer`, `typescript-implementer`, or `primary` outside their scopes.
+Each step must leave the repository green. Derive missing mechanical details
+without changing scope and show the completed step list; obtain missing design
+or seam decisions before implementation.
 
-## Phases
+Primary-owned build/CI/coverage/codegen/facade work loads `infra-scripts-fsharp`,
+and `fsharp-style` for `.fs`/`.fsx`. Acceptance criteria name the regression each
+self-test protects and available platform/shell evidence; mark unavailable
+environments unverified.
 
-Run **Prepare**, then **Implement → Publish for each step in plan order**,
-resuming from recorded state when needed. Publish each step as soon as its
-implementation, validation, and review are complete, before starting the next
-step. This lets human reviewers review in parallel with implementation; it does
-not add an agent feedback loop. Do not poll for PR feedback, wait for approval,
-act on review comments, or monitor lower-layer merges while implementing the
-remaining steps. Human reviewers should expect feedback to be addressed only
-after the whole plan is implemented and the complete stack is published. Stop
-after publishing the last step. Monitoring, review responses, and merge
-maintenance are future phases; use the user-selected `pr-cleanup`, `stack-sync`,
-or `stack-cleanup` skill only when asked.
+On entry run `gh stack view --json` and `git status --short --branch`.
+Exit code 2 with no recorded stack means fresh work. Otherwise reconcile recorded
+state with Git/GitHub before continuing. For a fresh run:
 
-## Plan shape
+1. Require a clean worktree; preserve unrelated changes. Confirm
+   `gh stack --help`. Use `origin` explicitly for submit/rebase, without changing
+   global settings, remotes, or push defaults.
+2. Select the user/plan's delivery base; otherwise use `main`. Fetch `origin`,
+   check out that base, and fast-forward from its remote-tracking branch.
+   Stop on divergence or missing/ambiguous base. If a stack already exists,
+   ask whether to extend it or start another; do not silently adopt it.
+3. Record the delivery base and ordered steps in session state and todos, with
+   each step depending on the one below it. The first PR targets that base,
+   not an assumed `main`.
 
-Order steps from the bottom of the stack upward. Every step needs:
+## State and recovery
 
-- one reviewable concern that leaves the repository green;
-- a `<feature-slug>/<step-slug>` branch name;
-- observable acceptance criteria, including tests;
-- an executor: `fsharp-implementer` for F# core work,
-  `typescript-implementer` for the TypeScript/React layer, or `primary` for work
-  outside those scopes, such as documentation, instructions, skills, or scripts.
-
-A primary-owned step that changes build, CI, coverage, code-generation
-infrastructure, or the package-command facade must load
-`infra-scripts-fsharp`. It must also load `fsharp-style` when changing `.fs` or
-`.fsx`. Its acceptance criteria must identify the repository behaviour each
-self-test protects and the available native platform or shell evidence for any
-portability claim; unavailable environments remain explicitly unverified.
-
-Put foundations below their dependants. Consult the `gh-stack` stack-design
-reference when the layers are unclear. If the plan lacks required details,
-derive them without changing scope and show the completed step list before
-starting. One step still gets one layer.
-
-## State
-
-Track progress in the session database, but treat git and GitHub as
-authoritative:
+Keep session-local state; Git/GitHub establish contents and publication, not
+review approval:
 
 ```sql
 CREATE TABLE IF NOT EXISTS stack_steps (
@@ -72,159 +54,130 @@ CREATE TABLE IF NOT EXISTS stack_steps (
   branch TEXT NOT NULL UNIQUE,
   executor TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
-    -- pending | implementing | committed | published | blocked
   pr_number INTEGER,
-  notes TEXT
+  review_base TEXT,
+  candidate_sha TEXT,
+  accepted_sha TEXT,
+  evidence_path TEXT
 );
 ```
 
-Future phases should add structured state rather than encode it in `notes`.
+`review_base` pins the parent tip; the review packet also records the actual
+merge-base. `evidence_path` points to validation, panel, and ledger records.
 
-On every entry:
+| State          | Required evidence / next action                                                            |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| `pending`      | No layer implementation begun                                                              |
+| `implementing` | Assigned edits/focused checks in progress                                                  |
+| `candidate`    | Branch tip equals `candidate_sha`; completion review still pending                         |
+| `reviewed`     | Tip equals both candidate and accepted SHAs; evidence accepts this parent/base and content |
+| `published`    | Reviewed candidate also has an OPEN, non-draft PR and verified `origin/<branch>` upstream  |
+| `blocked`      | Failure or unresolved finding recorded; no automatic publication                           |
 
-1. Run `gh stack view --json` and `git status --short --branch`.
-2. If `stack_steps` is absent, treat exit code 2 from `gh stack view` as a fresh
-   run and start Prepare.
-3. A step is `committed` only when its branch is in the stack and contains the
-   reviewed commit for that step.
-4. A step is `published` only when its PR exists,
-   `gh pr view <number> --json state,isDraft,url` reports `OPEN` and
-   `isDraft: false`, and its branch tracks `origin/<branch>` as its upstream.
-   Get the PR number from `branches[].pr.number`; verify the upstream as
-   described in Upstream tracking.
-   On resume, repair a missing upstream before treating a previously published
-   step as inconsistent. Do not resubmit just to restore branch tracking.
-5. For an interrupted `implementing` step, show the status and diff stat. Ask
-   whether to resume its changes or discard them and redispatch the executor.
-   Never commit incomplete work.
+Use the table on resume:
 
-Stop and ask if recorded and actual state otherwise disagree.
+- Inspect an interrupted `implementing` step's status/diff and ask whether to
+  resume its edits. Do not discard changes or commit incomplete work.
+- A `candidate` commit resumes completion validation/review as needed, never
+  publication. Reconcile a recorded tip mismatch rather than reset the branch.
+- Reuse `reviewed` evidence only when the branch tip, pinned parent, validation
+  and complete panel records still match. Changed parent/content invalidates
+  acceptance; return to candidate completion.
+- Repair a missing upstream for a published PR without resubmitting it.
+- If an old table lacks columns, add nullable evidence columns with `ALTER TABLE`.
+  A legacy `committed` state is not proof of review: accept it as `reviewed` only
+  after verifying its recorded candidate/base and full evidence, otherwise record
+  `candidate` and obtain the missing checks/review. Stop and ask on other
+  unexplained state or branch/PR mismatches.
 
-## Prepare
+For each PR use `gh pr view <number> --json state,isDraft,url`; read its number
+from `branches[].pr.number` in `gh stack view --json`.
 
-1. Require a clean worktree; do not move or discard unrelated changes.
-2. Confirm `gh stack --help` works and follow the `gh-stack` skill's
-   non-interactive and remote rules. Do not change git configuration except to
-   set per-branch upstream tracking as described in Upstream tracking. Do not
-   change global settings, remotes, or push defaults.
-3. Fetch `origin`, check out the trunk (`main` unless specified), and run
-   `git merge --ff-only`. Stop if it cannot fast-forward. If already in a stack,
-   ask whether to extend it or start another.
-4. Insert the steps into `stack_steps` and `todos`, with each step depending on
-   the one below it.
+## Implement and complete each layer
 
-## Implement
+1. **Create.** First layer:
+   `gh stack init --base <delivery-base> <branch>`. Later layers:
+   `gh stack top`, then `gh stack add <branch>`, only after the previous layer
+   is published. Confirm the branch, pin its parent tip, set `implementing`.
+2. **Dispatch synchronously.** For `primary`, edit in this session. Otherwise
+   send the task, acceptance criteria, approved seams and context pointers to the
+   executor. Require the lifecycle's candidate report and prohibit state-changing
+   Git/stack commands. Infrastructure reports also identify each self-test's
+   protected regression and platform evidence.
+3. **Check the handoff.** Match files, decisions and focused-check evidence to
+   the worktree; ensure no unauthorized commits. Return omissions to the same
+   executor. After two unresolved follow-ups or an executor block, mark blocked,
+   leave incomplete edits uncommitted, and stop.
+4. **Complete as coordinator.** Apply the shared lifecycle: validation, local
+   candidate commit, mandatory review, and assigned fixes/refactoring followed
+   by validation/commit/delta review. Update `candidate_sha` and state `candidate`
+   after every checkpoint commit; only set `accepted_sha` and `reviewed` once
+   final evidence is complete. Use `commit-messages` and `git commit -F`, staging
+   only in-scope changes, including any authorized baseline change.
+5. **Publish** this layer using the procedure below, before creating its successor.
 
-Process steps in position order. Finish publishing a step before creating its
-successor. For each step:
+Keep one owner per edit scope. Reports and review packets pass paths/decisions,
+not duplicated logs; do not repeat already valid checks simply for a new report.
 
-1. **Create the layer.** Run `gh stack init <branch>` for the first step, or
-   `gh stack top` then `gh stack add <branch>` for later steps. For later steps,
-   require the preceding step to be `published`. Confirm the branch and set the
-   step to `implementing`.
-2. **Dispatch the executor synchronously.** For a `primary` step, do the work in
-   the current session. Provide the task, acceptance criteria, relevant
-   lower-layer context, and the parent branch as the review base. Require the
-   executor to:
-   - complete its full loop, including all review rounds;
-   - avoid staging, committing, switching branches, and other state-changing
-     git or `gh stack` commands;
-   - report changed files, decisions or deviations, the final output tail for
-     `npm run validate`, and review rounds, models, and finding counts;
-   - for infrastructure changes, report the regression protected by each new
-     self-test, distinguish repository policy from dependency behaviour, and list
-     the native platform/shell checks run or explicitly left unverified;
-   - report `blocked`, not `done`, if a genuine finding remains.
-3. **Check the report.** Confirm it says `done`, includes the required passing
-   results, and matches the worktree: no new commits and only in-scope files
-   changed. Return omissions or failures to the same executor. After two
-   unresolved follow-ups, or an executor-reported block, mark the step
-   `blocked`, leave it uncommitted, and stop. Do not re-review or overrule the
-   executor.
-4. **Commit.** Stage only the reported files, including a coverage-baseline
-   update, and compare the staged file list with the report. Commit with the
-   `commit-messages` skill and `git commit -F`. Record the review summary in
-   `notes` and set the step to `committed`. Then publish this step before
-   creating its successor, except when committing a lower-layer repair; follow
-   the repair procedure below before publishing the updated stack.
+## Publish
 
-If a later step exposes a lower-layer problem, keep the fix in its owning
-layer. Never switch with uncommitted changes: finish the current step or ask the
-user. Then check out the owning layer, redispatch its executor using that
-layer's parent as the review base, then apply Implement steps 3–4 to check and
-commit the fix. Mark the repaired step `committed`; do not publish it yet. Run
-`gh stack rebase --upstack --remote origin`, return with `gh stack top`, and run
-the full gate on each rebased layer. Stop on failure. Then run
-`gh stack submit --remote origin --auto --open` to push the repaired and rebased
-layers, run Upstream tracking for affected plan branches, update affected PR
-bodies if their scope changed, and verify each affected PR is still `OPEN` and
-not a draft. Record the repaired steps as `published` before proceeding. Never
-place a lower-layer concern above it.
+1. Verify the step is `reviewed` with matching base, branch tip and evidence;
+   earlier layers must be published. Require no in-scope pending edits.
+   Run `gh stack view --json` and require no `needsRebase`.
+2. Run `gh stack submit --remote origin --auto --open`. Exit 9 blocks progression:
+   report stacked PRs unavailable without changing repository settings.
+3. Read stack JSON again to find the PR; reconcile interrupted submission against
+   existing PRs rather than creating duplicates. Verify upstreams as below.
+4. Apply the `pr` skill to a session-file body and use `gh pr edit --body-file`.
+   Include purpose/dependency, acceptance criteria, validation and review summary,
+   not the ledger. Say human feedback is addressed after the complete stack is
+   implemented and published.
+5. Verify the expected PR base, OPEN state and `isDraft: false` (use `gh pr ready`
+   if needed). Mark published and report the URL. Only then begin the next layer.
 
-## Upstream tracking
+Do not poll for human review, act on PR comments, or monitor lower-layer merges
+during implementation. Stop after publishing the last layer. Review responses,
+merging, and cleanup are separately requested phases.
 
-Use `origin` as the submission remote: it is fetched in Prepare and must exist.
-Pass `--remote origin` to every `gh stack submit` and `gh stack rebase` command.
-After a successful submit, set and verify upstreams for every plan branch pushed
-to `origin`. On resume, repair missing upstreams for previously published plan
-branches without submitting again. Do not change push defaults or other
-configuration to select the remote.
+### Upstream tracking
 
-For each branch, inspect `git config --get branch.<branch>.remote` and
-`git config --get branch.<branch>.merge`. If both return exit status 1 because
-the keys are unset, run
-`git branch --set-upstream-to=origin/<branch> <branch>`. If both succeed with
-values `origin` and `refs/heads/<branch>`, leave them unchanged. If only one key
-is set, either value differs, or either command fails for another reason, stop
-and ask rather than overwriting the configuration. Finally, require
-`git rev-parse --abbrev-ref --symbolic-full-name "<branch>@{upstream}"` to
-return `origin/<branch>`; if it fails, stop rather than treating the upstream as
-unset. Upstream setup does not require another push or PR update.
+For each submitted branch, inspect
+`git config --get branch.<branch>.remote` and
+`git config --get branch.<branch>.merge`. If both exit 1, set
+`git branch --set-upstream-to=origin/<branch> <branch>`.
+If both succeed, require `origin` and `refs/heads/<branch>`; if only one is unset,
+values differ, or another error occurs, stop rather than overwrite configuration.
+Verify `git rev-parse --abbrev-ref --symbolic-full-name "<branch>@{upstream}"`
+returns `origin/<branch>`. Upstream repair does not require another push.
 
-## Publish each step
+## Lower-layer repairs
 
-Run this procedure immediately after committing each step, before starting its
-successor:
+Keep a discovered lower-layer defect in its owning branch. Never switch with
+uncommitted edits: finish the current work or ask the user. Check out the owner,
+dispatch its fix, then complete it against its parent using the shared lifecycle.
+Do not publish the repaired layer separately while descendants still need repair.
 
-1. Run `gh stack view --json`. Require the current step's branch to be present
-   and have no `needsRebase`. Earlier plan steps must be `published`; later
-   steps may not have branches yet.
-2. Run `gh stack submit --remote origin --auto --open`. On exit code 9, report
-   that stacked PRs are unavailable; do not change repository settings or
-   continue to the next step.
-3. Run `gh stack view --json` again and map the current branch to
-   `branches[].pr.number`. If publication was interrupted, reconcile against
-   this existing PR rather than creating a duplicate; `submit` updates branches
-   that already have PRs.
-4. Run Upstream tracking for the current branch and any earlier published plan
-   branches missing an upstream.
-5. Use `gh pr edit` with a session-folder body file describing this step's
-   purpose, dependency, acceptance criteria, validation, and review summary.
-   State that human feedback is expected to be addressed after the full plan is
-   implemented and the complete stack is published. Do not include the full
-   ledger.
-6. Run `gh pr view <number> --json state,isDraft,url`. Require `OPEN`; if it is
-   still a draft, run `gh pr ready <number>` and recheck. Record the number, set
-   the step to `published`, and report its URL. Only then start the next step.
+Before rebasing, record the affected suffix in a session-local repair record.
+Run `gh stack rebase --upstack --remote origin`. For every rebased descendant,
+invalidate old accepted SHAs and complete its new candidate against its new parent
+with validation and review; changing the combination can change behaviour.
+Use pinned before/after evidence for a scoped delta review when valid.
+Stop on conflict or failed gate/review. Keep the affected suffix unpublished until
+all layers are accepted, then submit it with the explicit remote, verify upstreams
+and PR bases/readiness, update changed bodies, and mark the repaired steps
+published.
 
-On resume, first inspect the stack order. If a `committed` plan step has any
-stack branch above it, treat it as an interrupted lower-layer repair: check out
-that step, resume the repair procedure at
-`gh stack rebase --upstack --remote origin`, rerun the full gate on each rebased
-layer, then submit and verify the updated stack. Do not run ordinary
-publication or start another step until the repair is published.
-Otherwise, publish a `committed` step before creating its successor. If the PR
-was created before the interruption, reconcile its number and state from the
-stack rather than creating another. Repair missing upstreams for previously
-published branches using Upstream tracking without resubmitting them.
-Publication failures stop progression; do not continue implementing later
-steps while a committed step remains unpublished.
+On resume with an open repair record, reconcile actual refs and restore the
+unfinished suffix checks before normal publication; do not rebase already
+reconciled commits blindly. Without a recorded repair, a reviewed lower layer
+with descendants is not an ordinary publish: reconcile the repair and affected
+acceptance first. Never move a lower-layer concern to the top just for convenience.
 
 ## Guardrails
 
-- Do not merge PRs or change repository settings.
-- After publication, use follow-up commits rather than amending. Let `gh stack`
-  perform its own force-with-lease pushes; never force-push manually.
-- Stop on blocked work, unclear scope or state, or a rebase conflict that
-  requires a behavioural decision.
+- Never merge PRs or change repository settings in this workflow.
+- Use follow-up commits after publication, not amendments. Let `gh stack` perform
+  its own force-with-lease operations; never force-push manually.
+- Stop on unclear scope, recovery mismatch, rebase conflict, or genuine findings
+  unresolved within the review process's round limit.
 - Keep discoveries outside the approved plan as suggested follow-ups.
