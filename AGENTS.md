@@ -299,7 +299,7 @@ lean directly lowers cost. When working in this repo:
 
 When authoring or reviewing tests, read [testing standards](docs/testing.md)
 and apply the language testing skill, including its triggered references.
-These local contracts supplement upstream `tdd`; both authors and reviewers
+These local contracts supplement the `tdd` skill; both authors and reviewers
 use the same standards.
 
 Detailed conventions live in path-scoped **custom instructions**

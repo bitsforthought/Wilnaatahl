@@ -1,18 +1,14 @@
 # Fixtures and test data
 
-Use xUnit class fixtures for repetitive setup, with construction in the
-constructor and cleanup through `IDisposable` (`TrackingTests`, `PeopleTests`).
-Module functions are appropriate for minimal setup. Shared mutable state still
-requires framework/harness necessity and explicit isolation.
-
-Use stable `TestData.testPeopleAndParents`, not application seed data from
-`Initial.peopleAndParents`. Share recurring fixture shapes through `TestData.fs`.
-Search sibling tests and shared modules before adding a helper. Declare helpers
-at the widest scope that uses them: hoist an existing local helper when a second
-test needs it, rather than copying it or leaving equivalent sequences factored
-in one test and expanded in another. Parameterize the varying value
-(`dragNodeTo node x`) instead of closing over one entity. Reuse helpers such as
-`TestData.on year month day` instead of reconstructing optional dates inline.
+- Use xUnit class fixtures for repetitive setup, with construction in the
+  constructor and cleanup through `IDisposable` (`TrackingTests`, `PeopleTests`).
+- Use module functions for minimal setup.
+- Shared mutable state requires framework/harness necessity and explicit isolation.
+- Use stable `TestData.testPeopleAndParents`, not application seed data from
+  `Initial.peopleAndParents`.
+- Share recurring fixture shapes through `TestData.fs`.
+- Reuse helpers such as `TestData.on year month day` instead of reconstructing
+  optional dates inline.
 
 Never coin a Gitxsan Name, Wilp, or Pdeeḵ for filler. Names are hereditary
 property. Use easily understood English nicknames (`Tinker`, `Sparks`, `The Mayor`,

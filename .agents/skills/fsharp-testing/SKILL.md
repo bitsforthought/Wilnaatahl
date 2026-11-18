@@ -2,14 +2,14 @@
 name: fsharp-testing
 description: >-
   F# test assertions, test forms, fixtures, and runtime selection. Use when
-  writing or reviewing tests in Wilnaatahl.Core.Tests or Wilnaatahl.ECS.Tests.
+  writing or reviewing F# tests.
 ---
 
 # F# testing
 
 Read [shared testing standards](../../../docs/testing.md) when authoring or
 reviewing tests; they own test-first evidence, logical coverage, and the
-intentional internal-seam and checked-fake exceptions to upstream `tdd`.
+intentional internal-seam and checked-fake exceptions to the `tdd` skill.
 
 ## Select the runtime
 

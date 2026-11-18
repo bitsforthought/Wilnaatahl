@@ -26,7 +26,7 @@ final review has passed:
    an established, well-maintained library first, mindful that production F#
    compiles through Fable and so needs a Fable-compatible option. Hand-roll only
    when none fits, and say why.
-2. **RED.** Apply upstream `tdd` together with the
+2. **RED.** Apply the `tdd` skill together with the
    [shared testing standards](../../docs/testing.md) and `fsharp-testing`,
    reading its references when their conditions apply.
 3. **GREEN.** Implement the smallest change that makes the test pass, writing

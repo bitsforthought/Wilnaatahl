@@ -1,7 +1,7 @@
 # Testing standards
 
 Authors and reviewers use these standards together with the relevant
-`fsharp-testing` or `typescript-testing` skill. Use upstream `tdd` for behavioural
+`fsharp-testing` or `typescript-testing` skill. Use the `tdd` skill for behavioural
 test design and vertical red/green slices. The local contracts below take
 precedence over its public-only seam and blanket owned-double restrictions.
 
@@ -24,6 +24,8 @@ returns the question to the coordinator. `to-spec` already provides that step.
 Exercise behaviour through intentional interfaces rather than internal call
 counts or copies of implementation formulas. Expected values come from an
 independent oracle: a worked example, specification, or known-good literal.
+When testing that an API passes a value through unchanged, compare the received
+value directly with the supplied fixture input.
 Every assertion must detect a plausible broken implementation, not merely
 restate an assigned input or an unchanged value nothing could have changed.
 
@@ -54,6 +56,13 @@ for owned code: its contract is checked against real Koota. See
 This does not justify tests that merely assert interactions with internal
 collaborators. The F# testing skill selects the app versus conformance suite
 and its runtime restrictions.
+
+## Shared test helpers
+
+Search sibling tests and shared modules before adding a helper. Keep a helper
+local until another test needs it, then hoist it to their nearest shared scope
+rather than copying it or repeating its setup inline. Parameterize values that
+vary between tests rather than closing over one fixture.
 
 ## Review evidence
 

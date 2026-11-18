@@ -76,8 +76,6 @@ runSystems world frameDeltaSeconds
 ```
 
 In tests, apply the [shared testing standards](../../docs/testing.md).
-Reusing named fixture inputs in an assertion is appropriate when the contract
-is exact forwarding.
 
 ## Write comments that stay true
 

@@ -1,7 +1,7 @@
 # Test forms and generators
 
-Use a theory for facts varying a boolean, enum, or DU constructor over a fixed
-table. If the contract is universal ("only this field changes"), state it as a
+Use a theory for a fixed table of cases, regardless of argument types.
+If the contract is universal ("only this field changes"), state it as a
 property instead. A test echoing implementation steps often hides an invariant:
 look for idempotence, inverse/round-trip laws, or metamorphic relationships.
 
