@@ -61,8 +61,15 @@ and its runtime restrictions.
 
 Search sibling tests and shared modules before adding a helper. Keep a helper
 local until another test needs it, then hoist it to their nearest shared scope
-rather than copying it or repeating its setup inline. Parameterize values that
-vary between tests rather than closing over one fixture.
+rather than copying it or repeating its setup inline.
+
+## Test data
+
+Never coin a Gitxsan Name, Wilp, or Pdeeḵ for filler. Names are hereditary
+property. Use easily understood English nicknames (`Tinker`, `Sparks`, `The Mayor`,
+`Lefty`, `Doc`) and opaque Wilp tokens (`"H"`, `"L"`, `"MM"`). Avoid
+Gitxsan-sounding coinages and animal/clan imagery. A real Gitxsan spelling that
+is itself the subject of a parser test is not filler.
 
 ## Review evidence
 
