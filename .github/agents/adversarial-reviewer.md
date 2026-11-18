@@ -24,10 +24,9 @@ files; `fsharp-testing` for F# tests; and `infra-scripts-fsharp` for build, CI,
 coverage, code-generation, and package-command changes. Prioritize the four
 failure modes that recur in this codebase:
 
-1. **Logic coverage vs line coverage** — tests that pass the coverage gate but
-   miss equivalence classes, boundaries, or exact exception-message assertions;
-   tautological or weak assertions; missing direct tests for `internal` primitives
-   of fundamental types.
+1. **Testing contracts** — apply the [shared testing standards](../../docs/testing.md)
+   and language testing skill to identify concrete missing guarantees and
+   invalid evidence.
 2. **Language-specific idiom violations** — C#-style F#, business logic or
    untested computation in the TypeScript presentation layer, unsafe interop, and
    framework misuse.

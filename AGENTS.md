@@ -297,6 +297,11 @@ lean directly lowers cost. When working in this repo:
 
 ## Mandatory dev loop (definition of done)
 
+When authoring or reviewing tests, read [testing standards](docs/testing.md)
+and apply the language testing skill, including its triggered references.
+These local contracts supplement the `tdd` skill; both authors and reviewers
+use the same standards.
+
 Detailed conventions live in path-scoped **custom instructions**
 (`.github/instructions/`), **skills** (`.agents/skills/`), and specialized
 **agents** (`.github/agents/`). A change is not done until it has been through

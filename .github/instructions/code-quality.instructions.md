@@ -75,10 +75,7 @@ let frameDeltaSeconds = 1.0 / 60.0
 runSystems world frameDeltaSeconds
 ```
 
-In tests, preserve independent evidence. Reusing named fixture inputs in an
-assertion is appropriate when the contract is exact forwarding, but do not calculate
-an expected result with the same formula or traversal as the implementation under
-test.
+In tests, apply the [shared testing standards](../../docs/testing.md).
 
 ## Write comments that stay true
 
