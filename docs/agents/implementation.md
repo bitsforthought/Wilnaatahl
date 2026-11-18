@@ -2,7 +2,7 @@
 
 Read this before implementing or dispatching work through `implement-plan`,
 `implement`, or `implement-spec`. It owns local completion responsibilities and
-explicitly adapts upstream workflow defaults; upstream files remain unchanged.
+explicitly adapts the implementation skills' defaults; vendor files remain unchanged.
 
 ## Agree the work
 
@@ -28,7 +28,7 @@ does not become a stack just because it has an approved design. Use
 
 ## Implement a candidate
 
-Apply upstream `tdd` with the local testing standards and relevant language
+Apply the `tdd` skill with the local testing standards and relevant language
 skill. Run focused tests and type checks during iteration. Specialized
 implementer agents own edits and these checks, not independent completion panels.
 For changes without executable behaviour, use applicable instruction/document
@@ -44,7 +44,7 @@ checks merely because a different agent reads the report.
 For `implement-spec`, each ticket implementer runs focused checks and commits
 its ticket checkpoint before merging the latest integration tip. Resolve any
 conflicts, recheck the combined candidate, commit any remaining resolutions or
-fixes, and report the final commit from a clean worktree. Preserve the upstream
+fixes, and report the final commit from a clean worktree. Preserve `implement-spec`'s
 isolated-worktree and merger roles. A merger integrates only committed ticket
 work; return a dirty handoff to its owner. Ticket checks do not replace the
 integrated gate.
@@ -76,11 +76,11 @@ changes. Its process owns model diversity, rounds and the finding ledger.
 On an unresolved failure, stop and report blocked rather than declaring success.
 Use `validate-change` for evidence validity and reuse after fixes.
 
-### Adapting upstream implementation skills
+### Adapting Matt's implementation skills
 
 In this repository, the automatic `code-review` call in `implement` and
 `implement-spec` is fulfilled by the owned completion panel above, **instead of**
-a second automatic Standards/Spec review. Do not invoke that upstream skill merely
+a second automatic Standards/Spec review. Do not invoke that skill merely
 to satisfy the automatic step. An explicit user request for Matt's `code-review`
 still invokes that skill with its own inputs and output; it does not remove the
 mandatory completion requirement for newly implemented work.
@@ -89,7 +89,7 @@ For `implement`, commit the candidate **before** its review stage. Its final
 "Commit your work" instruction is already satisfied when no changes remain;
 do not make an empty commit or amend the reviewed checkpoint.
 
-For `implement-spec`, integration pushes and the upstream draft PR may precede
+For `implement-spec`, integration pushes and the draft PR may precede
 completion; they are work-in-progress, not accepted publication. Keep the PR a
 draft and tickets unresolved until the full gate and panel accept the assembled
 candidate. Its fresh remediation implementer fixes the panel's accepted findings;

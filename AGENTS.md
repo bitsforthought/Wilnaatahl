@@ -304,8 +304,8 @@ use the same standards.
 
 Before implementing or dispatching work through `implement-plan`, `implement`,
 or `implement-spec`, read the [implementation lifecycle](docs/agents/implementation.md).
-It explicitly adapts upstream workflow defaults without editing vendor files.
-Apply upstream `tdd` with local testing standards, and `validate-change` for
+It adapts the implementation skills' defaults without editing vendor files.
+Apply the `tdd` skill with local testing standards, and `validate-change` for
 validation evidence. Specialized implementers return candidates; the coordinator
 owns completion validation, candidate commits, and review.
 
@@ -315,7 +315,7 @@ Use the [review process](.agents/skills/adversarial-code-review/process.md) for
 packets, panel rounds, findings, and acceptance evidence. A local candidate
 commit is not completion or permission to publish. The implementation lifecycle
 owns boundary selection and automatic-review substitution; an explicitly
-requested upstream `code-review` remains available.
+requested `code-review` skill remains available.
 
 ### Delivering a plan (outer loop)
 
