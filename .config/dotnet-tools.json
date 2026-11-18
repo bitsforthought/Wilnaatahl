@@ -24,7 +24,7 @@
       "rollForward": false
     },
     "fsharp-refactor": {
-      "version": "0.8.52",
+      "version": "0.8.57",
       "commands": [
         "fsharp-refactor"
       ],
