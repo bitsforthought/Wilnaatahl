@@ -24,7 +24,8 @@ Apply the `tdd` skill, [testing standards](../../docs/testing.md), and
 `typescript-testing`, including triggered references, for changed tests.
 Work at approved seams; return new seam decisions to the coordinator.
 
-Own assigned edits and focused checks. Report **candidate** or **blocked**
+When working for a separate coordinator, own the assigned edits and focused checks.
+Report **candidate** or **blocked**
 with changed files, decisions/deviations, evidence paths, and unresolved concerns.
 The coordinator owns completion validation and review, assigning fixes and
 refactoring as needed; do not launch another panel or duplicate its gate.

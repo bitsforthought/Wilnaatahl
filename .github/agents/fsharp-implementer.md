@@ -23,7 +23,8 @@ Apply the `tdd` skill with [testing standards](../../docs/testing.md)
 and `fsharp-testing`, including triggered references. Work at the approved seams
 and return newly discovered seam decisions to the coordinator.
 
-Own the assigned edits and focused checks. Report **candidate** or **blocked**
+When working for a separate coordinator, own the assigned edits and focused checks.
+Report **candidate** or **blocked**
 with changed files, decisions/deviations, check evidence paths, and unresolved
 concerns. Do not launch a completion panel or repeat the coordinator's full gate.
 The coordinator also assigns review fixes and refactoring when required.
