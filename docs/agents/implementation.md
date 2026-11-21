@@ -102,35 +102,15 @@ Stop and report **blocked** if a required check or review remains unresolved.
 
 ## Squash before pushing
 
-You own this step. After the panel accepts the change, combine this work's
-unpublished implementation and review-fix commits into one commit. Use
-[`commit-messages`](../../.agents/skills/commit-messages/SKILL.md) to describe
-the whole change, not the sequence of review fixes. Reuse a single checkpoint
-when there is nothing to combine.
+**Squash** this work's unpublished checkpoints into one commit using
+[`commit-messages`](../../.agents/skills/commit-messages/SKILL.md).
+Reuse the existing tip for zero or one checkpoint.
 
-If the reviewed checkpoint already equals the tip to preserve, there are no
-unpublished checkpoints. Reuse that tip with the unchanged review base and
-acceptance criteria, without squashing or creating a commit. Still complete
-the publication checks; a reviewed draft or restacked branch may need readiness
-or a tool-managed push.
-
-Keep previously pushed commits unchanged during this squash. For a follow-up to
-a published PR, the new commit follows the last-pushed tip; it does not replace
-the whole PR. Tool-managed stack rebases remain a separate operation.
-This is a local history operation, not a GitHub PR merge.
-Require a clean worktree and confirm the remote tip has not changed.
-Preserve unrelated work and stop on a conflicting commit range or remote update.
-
-When unpublished checkpoints follow the preserved tip, verify before pushing:
-
-- The publication commit has exactly the reviewed checkpoint's Git tree.
-- Its parent is the recorded tip to preserve.
-- The review base and acceptance criteria are unchanged.
-
-Record the reviewed SHA, publication SHA and the applicable tip/tree checks with the
-validation and review evidence. Reuse that evidence when all checks match:
-only history and the commit message changed. Changed content or review base
-returns to validation and review, rather than inheriting approval.
+**Verify** a clean worktree, unchanged remote tip, and the exact reviewed tree.
+With unpublished checkpoints, the publication commit's parent must be the
+recorded tip to preserve. Record reviewed and publication SHAs with completion
+evidence; reuse it only while content, review base, and acceptance criteria
+remain unchanged.
 
 ### Adapting Matt Pocock's implementation skills
 

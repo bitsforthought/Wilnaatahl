@@ -36,8 +36,7 @@ or `main` when none is specified.
 Fetch `origin` and fast-forward the local base; stop on divergence or ambiguity.
 An existing stack must match the plan; ask before extending an unrelated one.
 
-Track progress with the harness's session state and todos, not a prescribed
-database schema. Record each step's branch, parent, PR, completion evidence,
+Track progress by recording each step's branch, parent, PR, completion evidence,
 and whether it is being implemented, awaiting review, reviewed, or published.
 A commit alone does not establish review or publication.
 
