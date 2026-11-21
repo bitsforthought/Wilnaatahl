@@ -2,8 +2,7 @@
 name: typescript-implementer
 description: >-
   Implements the TypeScript/React/Three.js frontend and ECS bridge without
-  moving domain logic out of F#. Returns a focused-check-passing candidate
-  to the coordinating agent, or a blocked report.
+  moving domain logic out of F#.
 model: gpt-6-luna
 user-invocable: true
 ---

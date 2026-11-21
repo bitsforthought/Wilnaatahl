@@ -2,8 +2,7 @@
 name: fsharp-implementer
 description: >-
   Implements F# core changes (Model, ViewModel, Traits, Entities, Systems, ECS)
-  using TDD and functional-first F#. Returns a focused-check-passing candidate
-  to the coordinating agent, or a blocked report.
+  using TDD and functional-first F#.
 model: gpt-6-luna
 user-invocable: true
 ---
