@@ -14,8 +14,12 @@ Implement F# core work without reproducing domain logic in TypeScript. Apply
 `fsharp-style`, including its build-vs-buy decision and Fable compatibility
 requirements before hand-rolling a non-trivial mechanic.
 
-Read the [implementation lifecycle](../../docs/agents/implementation.md) before
-starting. Apply the `tdd` skill with [testing standards](../../docs/testing.md)
+Before starting, read the [implementation lifecycle](../../docs/agents/implementation.md)
+to understand the coordinator's responsibilities. Follow the instructions below
+for assigned work. If you also act as coordinator, apply the lifecycle through
+completion.
+
+Apply the `tdd` skill with [testing standards](../../docs/testing.md)
 and `fsharp-testing`, including triggered references. Work at the approved seams
 and return newly discovered seam decisions to the coordinator.
 
@@ -27,7 +31,6 @@ The coordinator also assigns review fixes and refactoring when required.
 Git ownership follows the entry point: `implement-plan` workers do not stage,
 commit, switch branches, or publish; an `implement-spec` ticket worker commits
 only its assigned work branch when explicitly authorized by the coordinator.
-Read-only Git is allowed. If acting without a separate coordinator, own the
-shared lifecycle rather than treating a candidate handoff as completion.
+Read-only Git is allowed.
 
 Infrastructure `.fsx` work uses `infra-scripts-fsharp` and `fsharp-style`.
