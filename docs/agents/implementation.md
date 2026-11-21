@@ -1,103 +1,118 @@
 # Implementation lifecycle
 
-Read this before implementing or dispatching work through `implement-plan`,
-`implement`, or `implement-spec`. It owns local completion responsibilities and
-explicitly adapts the implementation skills' defaults; vendor files remain unchanged.
+This document is for the **coordinator**: the agent running `implement-plan`,
+`implement`, or `implement-spec`. Read it before starting work. You assign edits,
+check the complete change, commit it, and organize its review.
+An **implementer** makes assigned changes and runs focused checks. You may do
+that work yourself instead of assigning it to another agent.
 
-## Agree the work
+These rules adapt Matt Pocock's implementation skills without changing the
+vendored files.
 
-The coordinating agent identifies acceptance criteria, completion boundary,
-Git-operation owners, and review base before dispatch. The coordinator may
-implement directly or delegate bounded edits; only one agent owns an edit scope.
+## Choose when to complete the review
 
-| Entry point      | Completion boundary                                    | Git ownership                                                                                                                                            |
-| ---------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `implement-plan` | Each layer before publishing it and beginning the next | Primary session; workers return uncommitted changes                                                                                                      |
-| `implement`      | The standalone task                                    | Agent running the skill                                                                                                                                  |
-| `implement-spec` | The assembled integration candidate                    | Coordinator owns integration branch; explicitly authorize ticket implementers to commit their work branches and merger agents to integrate those commits |
+| Skill            | Review is required for                                | Who changes Git state                                                                                                                           |
+| ---------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `implement-plan` | Each layer before publishing it and starting the next | You; implementers return uncommitted changes                                                                                                    |
+| `implement`      | The complete standalone task                          | You                                                                                                                                             |
+| `implement-spec` | The integration branch after all tickets are merged   | You own the integration branch; explicitly authorize ticket implementers to commit their work branches and merger agents to merge those commits |
 
-Use the spec/plan's Testing Decisions and [testing standards](../testing.md).
-The coordinator obtains missing seam approval before test authoring. Changes to
-an agreed seam return to the coordinator for confirmation, not a second
-interview by a worker. `to-spec` already supplies seam agreement; `grill-with-docs`
-can inform it. Do not invent a separate approval artifact.
+Use the skill the user requested. An approved spec does not become a stack plan
+when the user asks for `implement-spec`.
 
-Choose the requested entry point: a supplied spec executed with `implement-spec`
-does not become a stack just because it has an approved design. Use
-`implement-plan` for an approved stack plan.
+## Assign the work
 
-## Implement a candidate
+Before assigning edits, identify the acceptance criteria, review base, and Git
+owners in the table above. Assign each edit scope to one implementer.
 
-Apply the `tdd` skill with the local testing standards and relevant language
-skill. Run focused tests and type checks during iteration. Specialized
-implementer agents own edits and these checks, not independent completion panels.
-For changes without executable behaviour, use applicable instruction/document
-checks rather than inventing a behavioural test.
+Use the spec or plan's Testing Decisions and [testing standards](../testing.md).
+Obtain any missing approval for test seams before test authoring. Reuse approval
+for an existing seam; an implementer returns a proposed new or changed seam to you for
+confirmation. `to-spec` already provides this agreement. `grill-with-docs` can
+help prepare it; no separate approval document is required.
 
-A worker reports **candidate** or **blocked**, with changed files, decisions,
-focused commands/results and evidence paths (including meaningful RED for changed
-behaviour), and unresolved concerns. Keep handoffs sparse and pass references,
-not duplicated logs. The coordinator checks the report against the actual scope;
-return omissions to the same worker. Reuse valid evidence rather than rerunning
-checks merely because a different agent reads the report.
+Read these references for work you do yourself; pass them to assigned implementers:
 
-For `implement-spec`, each ticket implementer runs focused checks and commits
-its ticket checkpoint before merging the latest integration tip. Resolve any
-conflicts, recheck the combined candidate, commit any remaining resolutions or
-fixes, and report the final commit from a clean worktree. Preserve `implement-spec`'s
-isolated-worktree and merger roles. A merger integrates only committed ticket
-work; return a dirty handoff to its owner. Ticket checks do not replace the
-integrated gate.
+| Work                                                      | Required guidance                                                                                    |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Behavioural changes                                       | [`tdd`](../../.agents/skills/tdd/SKILL.md) and [testing standards](../testing.md)                    |
+| F# source or scripts                                      | [`fsharp-style`](../../.agents/skills/fsharp-style/SKILL.md)                                         |
+| F# tests                                                  | [`fsharp-testing`](../../.agents/skills/fsharp-testing/SKILL.md), including its triggered references |
+| TypeScript or React source                                | [`typescript-style`](../../.agents/skills/typescript-style/SKILL.md)                                 |
+| TypeScript tests                                          | [`typescript-testing`](../../.agents/skills/typescript-testing/SKILL.md)                             |
+| Build, CI, coverage, code generation, or package commands | [`infra-scripts-fsharp`](../../.agents/skills/infra-scripts-fsharp/SKILL.md)                         |
 
-## Complete the boundary
+Require focused tests and type checks during implementation. For changes without
+executable behaviour, require the applicable instruction or document checks,
+not an invented behavioural test. Implementers do not run separate completion
+reviews.
 
-The coordinator performs this sequence on the entire completion candidate:
+Require a report marked **candidate** (ready for your checks, not complete) or
+**blocked**. It must list changed files, decisions, focused commands and results,
+evidence paths, and unresolved concerns. Changed behaviour needs meaningful RED
+evidence. Check the report against the actual change; return omissions to the
+same implementer. Pass paths, not copied logs. Reuse unchanged check results
+according to [`validate-change`](../../.agents/skills/validate-change/SKILL.md#scope-and-reuse).
 
-1. Apply `validate-change`. Inspect any formatting/refactoring output before
-   accepting the result; identify the tested content, not merely its old `HEAD`.
-2. Stage only in-scope changes, inspect the staged diff, and commit using
-   `commit-messages`. If the complete candidate is already committed, reuse its
-   tip rather than create an empty checkpoint. A local candidate commit is a
-   review checkpoint, not completion. Require all in-scope changes to be
-   committed before review; preserve unrelated user changes without including
-   or discarding them.
-3. Pin base and candidate SHAs and coordinate the `adversarial-reviewer` panel
-   using its [review process](../../.agents/skills/adversarial-code-review/process.md).
-4. Assign accepted fixes and justified refactoring to the responsible implementer.
-   Refactoring is outside the TDD red/green loop, during review remediation.
-   Keep dead-code removal deep, comments truthful, and encapsulation appropriate.
-   Collect focused evidence, validate the revised candidate as required, then
-   make a follow-up commit before the next delta review.
-5. Declare completion or publish only with passing validation and resolved review
-   evidence for the final candidate and review base.
+### Ticket branches in `implement-spec`
 
-The panel is mandatory regardless of perceived risk, including instruction-only
-changes. Its process owns model diversity, rounds and the finding ledger.
-On an unresolved failure, stop and report blocked rather than declaring success.
-Use `validate-change` for evidence validity and reuse after fixes.
+Keep its separate worktrees and merger agents. Require each ticket implementer
+to pass its focused checks and commit its work before merging the latest integration
+tip. After the merge, it must resolve conflicts, recheck the combined change,
+commit fixes, and report the final commit from a clean worktree.
+Merger agents merge only committed ticket work. If its worktree still has
+uncommitted changes, return the ticket to its implementer. Ticket checks do not
+replace validation of the complete integration branch.
 
-### Adapting Matt's implementation skills
+## Validate, commit, and review
 
-In this repository, the automatic `code-review` call in `implement` and
-`implement-spec` is fulfilled by the owned completion panel above, **instead of**
-a second automatic Standards/Spec review. Do not invoke that skill merely
-to satisfy the automatic step. An explicit user request for Matt's `code-review`
-still invokes that skill with its own inputs and output; it does not remove the
-mandatory completion requirement for newly implemented work.
+Apply these steps to the complete task, layer, or integration branch named above:
 
-For `implement`, commit the candidate **before** its review stage. Its final
-"Commit your work" instruction is already satisfied when no changes remain;
-do not make an empty commit or amend the reviewed checkpoint.
+1. Run [`validate-change`](../../.agents/skills/validate-change/SKILL.md).
+   Inspect formatting and refactoring output. Record the checked content,
+   including generated changes; the old `HEAD` alone does not identify it.
+2. Stage only in-scope changes, inspect the staged diff, and commit with
+   [`commit-messages`](../../.agents/skills/commit-messages/SKILL.md).
+   Reuse an already-committed tip instead of creating an empty commit.
+   All in-scope changes must be committed before review. Preserve unrelated
+   user changes without adding or discarding them.
+3. Record the base and commit SHAs. Run the mandatory multi-model
+   `adversarial-reviewer` panel using the
+   [review process](../../.agents/skills/adversarial-code-review/process.md).
+4. Assign accepted fixes and required refactoring to the responsible implementer.
+   Refactoring takes place during review fixes, outside the TDD red/green loop.
+   Remove dead code and its unused supporting types, keep comments accurate,
+   and preserve appropriate visibility. Collect focused results, validate the
+   changed content as required, and make a follow-up commit before reviewing
+   the fixes and regressions they caused.
+5. Declare completion or publish only when validation passes and the review
+   accepts the final commit against its recorded base. A local commit alone
+   does not authorize publication.
 
-For `implement-spec`, integration pushes and the draft PR may precede
-completion; they are work-in-progress, not accepted publication. Keep the PR a
-draft and tickets unresolved until the full gate and panel accept the assembled
-candidate. Its fresh remediation implementer fixes the panel's accepted findings;
-the coordinator then validates, commits, and obtains the required delta review.
-No per-ticket completion panels or full gates are required solely because a
-ticket uses a specialized implementer. Any integration, conflict resolution, or
-fix changing the final candidate requires applicable validation/review evidence
-for that new content.
+The review is required even for small or instruction-only changes.
+The [review process](../../.agents/skills/adversarial-code-review/process.md)
+defines model selection, rounds, and how to record findings.
+Stop and report **blocked** if a required check or review remains unresolved.
 
-Validation-only requests use `validate-change` on the existing candidate; they
-do not initiate TDD, a seam interview, a commit, or a new completion review.
+### Adapting Matt Pocock's implementation skills
+
+Replace the automatic `code-review` step in `implement` and `implement-spec`
+with this repository's multi-model review. Do not run a second automatic
+Standards/Spec review. An explicit user request for the
+[`code-review` skill](../../.agents/skills/code-review/SKILL.md) still runs that
+skill; it does not replace the required review of newly implemented work.
+
+For `implement`, commit **before** review. Its final commit instruction is
+already satisfied if no changes remain; do not create an empty commit or amend
+the reviewed commit.
+
+For `implement-spec`, allow integration pushes and a draft PR before all work
+is complete. Keep the PR draft and tickets unresolved until the complete branch
+passes validation and review. Assign accepted findings to its fresh remediation
+implementer, then validate, commit, and review the fixes. Individual tickets do
+not need full validation or completion panels solely because they use specialized
+implementers. Integration or conflict-resolution changes need validation and
+review results for the changed content.
+
+For a validation-only request, use `validate-change` on the existing change.
+Do not start implementation, seam approval, commits, or a new completion review.
