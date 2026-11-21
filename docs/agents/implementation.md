@@ -3,8 +3,8 @@
 This document is for the **coordinator**: the agent running `implement-plan`,
 `implement`, or `implement-spec`. Read it before starting work. You assign edits,
 check the complete change, commit it, and organize its review.
-An **implementer** makes assigned changes and runs focused checks. You may do
-that work yourself instead of assigning it to another agent.
+An **implementer** makes assigned changes and runs focused checks. When running the
+`implement` skill, you may do that work yourself instead of assigning it to another agent.
 
 These rules adapt Matt Pocock's implementation skills without changing the
 vendored files.
@@ -24,6 +24,11 @@ when the user asks for `implement-spec`.
 
 Before assigning edits, identify the acceptance criteria, review base, and Git
 owners in the table above. Assign each edit scope to one implementer.
+Record the tip to preserve: the last-pushed commit, or the starting parent for
+a new branch. For a tool-managed stack repair, use the
+[repair guidance](../../.agents/skills/implement-plan/references/recovery.md#repair-a-lower-layer)
+to identify its rebased equivalent.
+Stop if that range would include unrelated local commits.
 
 Use the spec or plan's Testing Decisions and [testing standards](../testing.md).
 Obtain any missing approval for test seams before test authoring. Reuse approval
@@ -85,14 +90,47 @@ Apply these steps to the complete task, layer, or integration branch named above
    and preserve appropriate visibility. Collect focused results, validate the
    changed content as required, and make a follow-up commit before reviewing
    the fixes and regressions they caused.
-5. Declare completion or publish only when validation passes and the review
-   accepts the final commit against its recorded base. A local commit alone
-   does not authorize publication.
+5. After validation passes and review accepts the final checkpoint, prepare
+   one publication commit using [Squash before pushing](#squash-before-pushing).
+   Declare completion or publish only after its verification passes.
+   A local commit alone does not authorize publication.
 
 The review is required even for small or instruction-only changes.
 The [review process](../../.agents/skills/adversarial-code-review/process.md)
 defines model selection, rounds, and how to record findings.
 Stop and report **blocked** if a required check or review remains unresolved.
+
+## Squash before pushing
+
+You own this step. After the panel accepts the change, combine this work's
+unpublished implementation and review-fix commits into one commit. Use
+[`commit-messages`](../../.agents/skills/commit-messages/SKILL.md) to describe
+the whole change, not the sequence of review fixes. Reuse a single checkpoint
+when there is nothing to combine.
+
+If the reviewed checkpoint already equals the tip to preserve, there are no
+unpublished checkpoints. Reuse that tip with the unchanged review base and
+acceptance criteria, without squashing or creating a commit. Still complete
+the publication checks; a reviewed draft or restacked branch may need readiness
+or a tool-managed push.
+
+Keep previously pushed commits unchanged during this squash. For a follow-up to
+a published PR, the new commit follows the last-pushed tip; it does not replace
+the whole PR. Tool-managed stack rebases remain a separate operation.
+This is a local history operation, not a GitHub PR merge.
+Require a clean worktree and confirm the remote tip has not changed.
+Preserve unrelated work and stop on a conflicting commit range or remote update.
+
+When unpublished checkpoints follow the preserved tip, verify before pushing:
+
+- The publication commit has exactly the reviewed checkpoint's Git tree.
+- Its parent is the recorded tip to preserve.
+- The review base and acceptance criteria are unchanged.
+
+Record the reviewed SHA, publication SHA and the applicable tip/tree checks with the
+validation and review evidence. Reuse that evidence when all checks match:
+only history and the commit message changed. Changed content or review base
+returns to validation and review, rather than inheriting approval.
 
 ### Adapting Matt Pocock's implementation skills
 
@@ -103,11 +141,13 @@ Standards/Spec review. An explicit user request for the
 skill; it does not replace the required review of newly implemented work.
 
 For `implement`, commit **before** review. Its final commit instruction is
-already satisfied if no changes remain; do not create an empty commit or amend
-the reviewed commit.
+already satisfied by the verified publication commit if no changes remain;
+do not create an empty extra commit.
 
 For `implement-spec`, allow integration pushes and a draft PR before all work
-is complete. Keep the PR draft and tickets unresolved until the complete branch
+is complete. Update the last-pushed tip after each authorized draft push; those
+commits are outside the later squash range.
+Keep the PR draft and tickets unresolved until the complete branch
 passes validation and review. Assign accepted findings to its fresh remediation
 implementer, then validate, commit, and review the fixes. Individual tickets do
 not need full validation or completion panels solely because they use specialized

@@ -20,14 +20,19 @@ diffs or transcripts. Reviewers must be able to inspect the whole scope without
 shell/Git access.
 
 Use the pinned tree rather than mutable working copies. Keep the candidate
-unchanged during a round. A changed candidate or base needs matching validation
-and review evidence before acceptance. An unreadable packet or uninspected change
+unchanged during a round. Changed content or review base needs matching validation
+and review evidence before acceptance. After review, use the lifecycle's
+verification for a same-tree squash. An unreadable packet or uninspected change
 means **incomplete**, not clean; supply missing material to that panelist.
 
 ## Panel and outcomes
 
-Run the `adversarial-reviewer` agent under several different models, for example
-an Anthropic, an OpenAI, and a Google model. One model repeated is not diversity.
+The coordinator chooses the panel models automatically; do not ask the user to
+choose them. Use three supported models from different families: one Anthropic,
+one OpenAI, and one Google. Honour explicit user model preferences while keeping
+that diversity. If a model is unavailable or cannot return a complete review,
+choose another supported model from the same family.
+Run each as one `adversarial-reviewer`.
 Wait for every panelist before consolidating or fixing findings; a lone dissenter
 may have found the real defect. A failed/incomplete panelist is not a clean vote:
 obtain the missing inspection evidence before accepting the round.
@@ -51,7 +56,11 @@ five rounds total. Resolve all deferrals as accepted or rejected before the fina
 round ends. A genuine finding unresolved after round five blocks completion:
 raise it to the user for human review rather than begin round six or declare done.
 
-Record the accepted base/candidate SHAs, validation evidence, complete panel
-results, ledger path and round count. This record, not a branch name or Git commit
-alone, authorizes completion. Keep review artifacts outside the repository unless
-the user requests otherwise.
+Record the accepted base and reviewed commit SHAs, validation evidence, complete
+panel results, ledger path and round count. The
+[implementation lifecycle](../../../docs/agents/implementation.md#squash-before-pushing)
+then defines squashing unpublished checkpoints and verifying the publication
+commit against that reviewed content. Record both commit SHAs and the verification;
+a changed SHA caused only by that verified squash does not require another panel.
+This evidence, not a branch name or Git commit alone, authorizes completion.
+Keep review artifacts outside the repository unless the user requests otherwise.

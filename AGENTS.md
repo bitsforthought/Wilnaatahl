@@ -332,6 +332,10 @@ those agents' scopes).
 
 ## Committing and source hygiene
 
+- Before pushing completed work, follow the
+  [lifecycle's squash step](docs/agents/implementation.md#squash-before-pushing)
+  to combine its unpublished review checkpoints into one commit. This does not
+  permit rewriting previously pushed commits.
 - **Do not amend a commit after its branch has been pushed by default.** Add a
   follow-up commit so collaborators who fetched the published tip can
   fast-forward normally. This also applies to the layer that owns a stacked-PR
