@@ -84,8 +84,9 @@ the concrete rationale and trade-offs in the PR.
 
 ## Validate the result
 
-Run focused checks, then follow the [validation gate](../validate-change/SKILL.md)
-and [adversarial review](../adversarial-code-review/SKILL.md). Confirm the intended
+Run focused checks and return evidence through the
+[implementation lifecycle](../../../docs/agents/implementation.md); the coordinator
+owns completion validation and review. Confirm the intended
 finding disappears without changing unrelated policy or behaviour. A changed
 coverage percentage after a refactoring or reversion is not permission to lower
 a ratchet; explain the measurement and obtain approval for a baseline reduction.

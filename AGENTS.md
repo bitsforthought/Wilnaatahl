@@ -302,90 +302,40 @@ and apply the language testing skill, including its triggered references.
 These local contracts supplement the `tdd` skill; both authors and reviewers
 use the same standards.
 
-Detailed conventions live in path-scoped **custom instructions**
-(`.github/instructions/`), **skills** (`.agents/skills/`), and specialized
-**agents** (`.github/agents/`). A change is not done until it has been through
-this loop:
+Before implementing or dispatching work through `implement-plan`, `implement`,
+or `implement-spec`, read the [implementation lifecycle](docs/agents/implementation.md).
+It adapts the implementation skills' defaults without editing vendor files.
+Apply the `tdd` skill with local testing standards, and `validate-change` for
+validation evidence. Specialized implementers return candidates; the coordinator
+owns completion validation, candidate commits, and review.
 
-```
-plan (tests before implementation, never batched to the end)
-  → RED   (test compiles, runs, and fails for the right reason against a stub)
-  → GREEN (smallest idiomatic-F# change that passes)
-  → REFACTOR (deep dead-code removal, truthful comments)
-  → npm run validate       (build, lint, full suites once with coverage, ratchets)
-  → MANDATORY multi-model adversarial review  (run the `adversarial-reviewer`
-    agent under several different models — e.g. an Anthropic, an OpenAI, and a
-    Google model — never skipped, never gated on perceived risk; WAIT for every
-    panelist to report before consolidating — a late/lone dissenter often caught
-    the real bug)
-  → address every genuine finding, re-validate, re-solicit a fresh pass
-    (iterate ≤ 5 rounds, stopping early once a round is clean) → only then "done"
-```
-
-The adversarial review is **not optional** and **not something to wait to be
-prompted for** — it is part of every change.
-
-Run the full gate on the stable code candidate and repeat it after executable
-code, tests, dependencies, or build configuration change, or when a failure or
-unresolved concern invalidates earlier evidence. Documentation-only changes need
-no build/test gate unless documentation checks exist. Prose/comment-only review
-fixes retain prior passing evidence and need only applicable formatting, link,
-or documentation checks; tool-consumed directives and configuration are not prose.
-Reuse valid evidence across handoffs rather than rerunning checks for a fresh
-report. Execution details belong in `validate-change`.
+Every completion boundary requires the mandatory multi-model
+`adversarial-reviewer` panel on committed changes, regardless of perceived risk.
+Use the [review process](.agents/skills/adversarial-code-review/process.md) for
+packets, panel rounds, findings, and acceptance evidence. A local candidate
+commit is not completion or permission to publish. The implementation lifecycle
+owns boundary selection and automatic-review substitution; an explicitly
+requested `code-review` skill remains available.
 
 ### Delivering a plan (outer loop)
 
 After plan approval, use `implement-plan`: each step becomes one reviewed,
-committed `gh stack` layer and PR. Each executor completes the mandatory dev
-loop; the primary session owns state-changing git operations and publishes each
-completed layer before starting the next.
+committed `gh stack` layer and PR. The primary session owns completion and
+state-changing Git operations, and publishes each accepted layer before starting
+the next. An explicitly requested `implement-spec` instead uses its integration
+branch and the shared completion lifecycle.
 
 Write plans bottom-up. Each step must stand alone, leave the repository green,
 and name its branch, acceptance criteria, and executor
 (`fsharp-implementer`, `typescript-implementer`, or `primary` for work outside
 those agents' scopes).
 
-### Review scope and re-review protocol
-
-The reviewing agent (the primary agent, or an `implement-plan` executor)
-prepares each packet: the generated diff and status from its base, intended
-behaviour, load-bearing invariants, and validation run. Re-review packets also
-identify the finding, changed files, and claimed resolution.
-
-Save the machine-generated diff, status, and supporting evidence in temporary
-files under the session folder, outside the repository. Include added/untracked
-files in the review scope and materialize their contents or patches too.
-Pass reviewers file paths and a short scope summary, not pasted diffs, logs, or
-transcripts. Reviewers must be able to read the packet without shell or Git
-access. Refresh it for each round and keep the candidate unchanged during review.
-An unreadable packet or uninspected in-scope change is an incomplete review,
-not a clean result; supply the missing evidence to that panelist before
-consolidating. Apply the review skill's evidence and finding criteria.
-
-The first panel reviews the complete candidate diff against the full rubric.
-After fixing a finding, the next panel is a delta review: verify that resolution
-and inspect the changed files for regressions it caused. Do not re-audit
-unchanged code or re-raise a rejected finding unless the delta provides new
-contrary evidence. Include every unresolved deferred finding and the files
-needed to adjudicate it in the delta packet, even when they are otherwise
-unchanged.
-
-The reviewing agent maintains a session-local outcome ledger. For each finding,
-record the reviewer/model, classification, decision
-(accepted, rejected, or deferred), evidence, and the code or test resolving an
-accepted finding. A deferred genuine finding blocks completion and remains in
-each later packet until it is accepted or rejected with evidence. Use the ledger
-to consolidate the panel and scope re-reviews. Do not commit the ledger or create
-repository tracking files unless the user explicitly asks. Resolve every
-deferred finding as accepted or rejected no later than the final permitted review
-round; the five-round cap does not permit declaring a change done with one open.
-If any genuine finding remains unaddressed after the final permitted round, stop
-and raise it to the user for manual human review; do not declare the change done
-or begin a sixth review round.
-
 ## Committing and source hygiene
 
+- Before pushing completed work, follow the
+  [lifecycle's squash step](docs/agents/implementation.md#squash-before-pushing)
+  to combine its unpublished review checkpoints into one commit. This does not
+  permit rewriting previously pushed commits.
 - **Do not amend a commit after its branch has been pushed by default.** Add a
   follow-up commit so collaborators who fetched the published tip can
   fast-forward normally. This also applies to the layer that owns a stacked-PR
