@@ -16,16 +16,15 @@ regenerate Fable output instead of editing `src/generated`.
 Keep TSX presentation-only and browser-specific computations in tested TS.
 
 Before starting, read the [implementation lifecycle](../../docs/agents/implementation.md)
-to understand the coordinator's responsibilities. Follow the instructions below
-for assigned work. If you also act as coordinator, apply the lifecycle through
-completion.
+to understand the coordinator's responsibilities.
 
 Apply the `tdd` skill, [testing standards](../../docs/testing.md), and
 `typescript-testing`, including triggered references, for changed tests.
 Work at approved seams; return new seam decisions to the coordinator.
 
-When working for a separate coordinator, own the assigned edits and focused checks.
-Report **candidate** or **blocked**
+## When working for a separate coordinator
+
+Own assigned edits and focused checks. Report **candidate** or **blocked**
 with changed files, decisions/deviations, evidence paths, and unresolved concerns.
 The coordinator owns completion validation and review, assigning fixes and
 refactoring as needed; do not launch another panel or duplicate its gate.
@@ -33,3 +32,8 @@ refactoring as needed; do not launch another panel or duplicate its gate.
 Git ownership follows the entry point: no state-changing Git as an
 `implement-plan` worker; commit only the assigned `implement-spec` work branch
 when explicitly authorized. Read-only Git is allowed.
+
+## When coordinating the task yourself
+
+Follow the implementation lifecycle through completion rather than ending with
+a candidate handoff.
