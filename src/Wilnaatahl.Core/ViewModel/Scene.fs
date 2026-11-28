@@ -131,6 +131,8 @@ module Scene =
                         TopLeftWidth = 0.0<l>
                         TopRightWidth = 0.0<l>
                         Followers = []
+                        LeftFrontier = [ 0.0<l> ]
+                        RightFrontier = [ 0.0<l> ]
                     }
                 else
                     childBoxArray |> attachHorizontally |> reframe Reframe.w2l

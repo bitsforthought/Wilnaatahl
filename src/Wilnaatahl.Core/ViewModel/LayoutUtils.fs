@@ -108,6 +108,14 @@ and CompositeLayoutBox<[<Measure>] 'u> = {
     /// Collection of LayoutBoxes that are logically "contained" within this box and follow its origin at
     /// a given offset.
     Followers: (LayoutBox<'u> * LayoutVector<'u>) list
+
+    /// List of horizontal non-negative distances from the left edge of the box to the left edges of its nested boxes,
+    /// used for layout calculations. The list is ordered from the topmost nested box to the bottommost nested box.
+    LeftFrontier: float<'u> list
+
+    /// List of horizontal non-negative distances from the right edge of the box to the right edges of its nested boxes,
+    /// used for layout calculations. The list is ordered from the topmost nested box to the bottommost nested box.
+    RightFrontier: float<'u> list
 }
 
 /// Options that control how two boxes are vertically attached.
@@ -171,6 +179,9 @@ module LayoutBox =
         // so box is a no-op upcast and unbox is a cast that always succeeds).
         unbox (box layoutBox)
 
+    let private reframeFrontier (_: ReframeWitness<'from, 'into>) (frontier: float<'from> list) : float<'into> list =
+        unbox (box frontier) // Same technique as above for zero-copy reframing of frontiers.
+
     /// Visits a LayoutBox and all its nested boxes, if any. The given callbacks are invoked for leaf and
     /// composite boxes, respectively. Each callback also takes a position for the box, which is taken
     /// from composite box followers, or the initial position passed in for the root box.
@@ -182,8 +193,14 @@ module LayoutBox =
 
         recurse (rootBox, initialPosition)
 
+    /// Gets the left and right frontiers of a box. For leaf boxes, these are just singleton lists with zero offsets on the x-axis.
+    let private getFrontiers box =
+        match box.Payload with
+        | LeafBox _ -> [ 0.0<_> ], [ 0.0<_> ]
+        | CompositeBox composite -> composite.LeftFrontier, composite.RightFrontier
+
     /// Creates a new box followed by all the given boxes that lays them out horizontally,
-    /// in the order given from left to right (lower to highers X co-ordinate), aligned to
+    /// in the order given from left to right (lower to higher X co-ordinates), aligned to
     /// the highest Y co-ordinate of the tallest box and sized to the deepest Z size.
     let attachHorizontally (boxes: LayoutBox<w>[]) : LayoutBox<w> =
         // Base case is that there is just one box, in which case we return it.
@@ -246,10 +263,15 @@ module LayoutBox =
 
                 boxes[0] |> getCornerWidths, boxes[boxes.Length - 1] |> getCornerWidths
 
+            let (leftmostFrontier, _), (rightmostFrontier, _) =
+                getFrontiers boxes[0], getFrontiers boxes[boxes.Length - 1]
+
             createComposite size connectX {
                 TopLeftWidth = leftmostCornerWidth
                 TopRightWidth = rightmostCornerWidth
                 Followers = followers
+                LeftFrontier = leftmostFrontier
+                RightFrontier = rightmostFrontier
             }
 
     /// Attaches two boxes vertically, taking into account possible skew on the X axis.
@@ -314,8 +336,19 @@ module LayoutBox =
                 min upperFollowerOffset.X (composite.TopLeftWidth * l2w),
                 min upperRightOffset (composite.TopRightWidth * l2w)
 
+        let leftFrontier, rightFrontier =
+            let lowerLeftFrontier, lowerRightFrontier = getFrontiers lowerBox
+            let upperLeftFrontier, upperRightFrontier = getFrontiers upperBox
+
+            (upperLeftFrontier |> reframeFrontier Reframe.u2w)
+            @ (lowerLeftFrontier |> reframeFrontier Reframe.l2w),
+            (upperRightFrontier |> reframeFrontier Reframe.u2w)
+            @ (lowerRightFrontier |> reframeFrontier Reframe.l2w)
+
         createComposite size connectX {
             TopLeftWidth = topLeftWidth
             TopRightWidth = topRightWidth
             Followers = followers
+            LeftFrontier = leftFrontier
+            RightFrontier = rightFrontier
         }

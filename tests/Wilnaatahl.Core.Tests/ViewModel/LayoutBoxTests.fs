@@ -50,7 +50,14 @@ let ``createComposite creates correct LayoutBox`` () =
     let size = { X = 1.0<w>; Y = 2.0<w>; Z = 3.0<w> }
     let connectX = 0.5<w>
 
-    let composite = { TopLeftWidth = 0.1<w>; TopRightWidth = 0.2<w>; Followers = [] }
+    let composite = {
+        TopLeftWidth = 0.1<w>
+        TopRightWidth = 0.2<w>
+        Followers = []
+        LeftFrontier = []
+        RightFrontier = []
+    }
+
     let expected = { Size = size; ConnectX = connectX; Payload = CompositeBox composite }
 
     let actual = createComposite size connectX composite
